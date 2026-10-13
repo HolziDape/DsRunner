@@ -20,14 +20,18 @@ from .imaging import open_image
 from .names import thumbnail_file_name
 from .net import HttpClient
 
-# art types in the order of the default preference
 ART_TYPES = ("title", "snap", "boxart")
 ART_TYPE_LABELS = {"title": "Titelbild", "snap": "Screenshot", "boxart": "Cover (Boxart)"}
+# fallbacks after the preferred type: a snap is a random game scene (a level map, a menu ...), the
+# box is the better replacement for a missing title screen (e.g. "Up" has no title in libretro)
+FALLBACK_ORDER = ("title", "boxart", "snap")
+# tile images: the box first, it is close to square and made to be recognized at a glance
+TILE_ORDER = ("boxart", "title", "snap")
 
 
 def type_order(preferred: str) -> list[str]:
-    """Preferred type first, the others as fallback (screens before boxart)."""
-    return [preferred] + [art_type for art_type in ART_TYPES if art_type != preferred]
+    """Preferred type first, the others as fallback (title, then boxart, snap last)."""
+    return [preferred] + [art_type for art_type in FALLBACK_ORDER if art_type != preferred]
 
 
 @dataclass

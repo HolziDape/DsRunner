@@ -90,7 +90,48 @@ game (
 \tserial "AMPP"
 \trom ( name "Mario Party DS (Europe) (En,Fr,De,Es,It).nds" size 33554432 crc 33333333 serial "AMPP" )
 )
+game (
+\tname "Pokemon - Black Version (USA, Europe) (NDSi Enhanced)"
+\tregion "USA"
+\tserial "IRBO"
+\trom ( name "Pokemon - Black Version (USA, Europe) (NDSi Enhanced).nds" size 268435456 crc 4F6E5580 serial "IRBO" )
+)
+game (
+\tname "Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced)"
+\tregion "USA"
+\tserial "IREO"
+\trom ( name "Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced).nds" size 536870912 crc D4427FD1 serial "IREO" )
+)
+game (
+\tname "Plants vs. Zombies (Europe) (En,Fr,De,Es,It,Nl) (MSL)"
+\tregion "Europe"
+\tserial "BWBY"
+\trom ( name "Plants vs. Zombies (Europe) (En,Fr,De,Es,It,Nl) (MSL).nds" size 67108864 crc 50FA9E93 serial "BWBY" )
+)
+game (
+\tname "Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (USA)"
+\tregion "USA"
+\tserial "TATE"
+\trom ( name "Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (USA).nds" size 33554432 crc D9D7E611 serial "TATE" )
+)
+game (
+\tname "Up (Europe) (Fr,De,Nl)"
+\tregion "Europe"
+\tserial "CUYX"
+\trom ( name "Up (Europe) (Fr,De,Nl).nds" size 33554432 crc DCD56D67 serial "CUYX" )
+)
 '''
+
+# the games of the owner's bug report: (file name, header title, game code, banner title)
+REPORTED_GAMES = [
+    ("Pokemon - Black Version (DSi Enhanced)(USA) (E)(SweeTnDs).nds", "POKEMON B", "IRBO",
+     "Pokémon Black Version\nNintendo"),
+    ("Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced) [b].nds", "POKEMON B2", "IREO",
+     "Pokémon Black Version 2\nNintendo"),
+    ("Plants vs. Zombies (Europe) (En,Fr,De,Es,It,Nl) (MSL).nds", "PVZDS", "BWBY", "Plants vs. Zombies\nPopCap"),
+    ("Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (USA).nds", "ADVENTURETIM", "TATE",
+     "Adventure Time™ HIK!\nD3Publisher"),
+]
 
 DAT_GB = '''clrmamepro (
 \tname "Nintendo - Game Boy"

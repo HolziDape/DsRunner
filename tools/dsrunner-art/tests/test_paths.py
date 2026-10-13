@@ -5,7 +5,8 @@ from pathlib import Path
 
 from tests.helpers import gba_rom, nds_rom, write
 
-from dsrunnerart.sdcard import art_path, art_path_for_entry, read_library_path, scan, skip_drive
+from dsrunnerart.sdcard import (ART_FOLDER, TILE_FOLDER, Entry, art_path, art_path_for_entry, read_library_path, scan,
+                                skip_drive, tile_path_for_entry)
 
 
 def request_art_reference(folder_path: str, file_name: str, is_folder: bool):
@@ -91,6 +92,45 @@ class ArtPathTests(unittest.TestCase):
     def test_skip_drive(self):
         self.assertEqual(skip_drive("fat:/Games"), "/Games")
         self.assertEqual(skip_drive("/Games"), "/Games")
+
+
+class TilePathTests(unittest.TestCase):
+    """Tile images: the artwork rule with /_dsrunner/tiles as root, games only."""
+
+    def test_examples(self):
+        cases = [
+            ("/Games/NDS/Mario Kart DS.nds", "/_dsrunner/tiles/Games/NDS/Mario Kart DS.bmp"),
+            ("fat:/Games/GBA/Rennen/Golden Sun.gba", "/_dsrunner/tiles/Games/GBA/Rennen/Golden Sun.bmp"),
+            ("/Games/NDS/Pokemon Platin.v1.2.nds", "/_dsrunner/tiles/Games/NDS/Pokemon Platin.v1.2.bmp"),
+            ("/Games/NDS/Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced) [b].nds",
+             "/_dsrunner/tiles/Games/NDS/Pokemon - Black Version 2 (USA, Europe) (NDSi Enhanced) [b].bmp"),
+            ("/game.nds", "/_dsrunner/tiles/game.bmp"),
+        ]
+        for path, expected in cases:
+            with self.subTest(path=path):
+                self.assertEqual(tile_path_for_entry(path, False), expected)
+                # same rule as the artworks, only the root differs
+                self.assertEqual(expected.replace(TILE_FOLDER, ART_FOLDER, 1), art_path_for_entry(path, False))
+
+    def test_folders_have_no_tile(self):
+        self.assertIsNone(tile_path_for_entry("/Games/NDS", True))
+        entry = Entry("/Games/NDS", Path("x"), True, 0)
+        self.assertIsNone(entry.tile_sd_path)
+        self.assertEqual(entry.art_sd_path, "/_dsrunner/art/Games/NDS.bmp")
+
+    def test_length_limit(self):
+        # 16 + 10 + 1 + n + 4 >= 256 fails -> n = 224 is the longest name that fits
+        self.assertIsNotNone(tile_path_for_entry("/Games/NDS/" + "a" * 224 + ".nds", False))
+        self.assertIsNone(tile_path_for_entry("/Games/NDS/" + "a" * 225 + ".nds", False))
+
+    def test_entry_keys(self):
+        game = Entry("/Games/NDS/Mario Kart DS.nds", Path("x"), False, 1, ["NDS"])
+        self.assertEqual(game.tile_sd_path, "/_dsrunner/tiles/Games/NDS/Mario Kart DS.bmp")
+        self.assertEqual(game.stem, "Mario Kart DS")
+        self.assertEqual(game.relative_key, "games/nds/mario kart ds")
+        folder = Entry("/Games/Spiele v2.0", Path("x"), True, 0)
+        self.assertEqual(folder.stem, "Spiele v2.0")
+        self.assertEqual(folder.relative_key, "games/spiele v2.0")
 
 
 class LibraryTests(unittest.TestCase):
