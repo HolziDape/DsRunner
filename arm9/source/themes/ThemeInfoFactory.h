@@ -9,6 +9,6 @@ public:
 
     std::unique_ptr<ThemeInfo> CreateFallbackTheme() const
     {
-        return std::make_unique<ThemeInfo>("", ThemeType::Material, "Fallback", "", "", Rgb<8,8,8>(138, 217, 255), false);
+        return std::make_unique<ThemeInfo>("dsrunner", ThemeType::DsRunner, "DsRunner", "", "", Rgb<8,8,8>(76, 194, 255), true);
     }
 };

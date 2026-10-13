@@ -9,6 +9,7 @@
 #include "gui/IVramManager.h"
 #include "themes/material/MaterialColorScheme.h"
 #include "../Theme/IRomBrowserViewFactory.h"
+#include "StatusBarView.h"
 #include "RomBrowserTopScreenView.h"
 
 RomBrowserTopScreenView::RomBrowserTopScreenView(
@@ -19,10 +20,12 @@ RomBrowserTopScreenView::RomBrowserTopScreenView(
     : _viewModel(std::move(viewModel))
     , _themeFileIconFactory(themeFileIconFactory)
     , _fileInfoView(romBrowserViewFactory->CreateFileInfoView())
+    , _statusBarView(StatusBarView::CreateShared())
     , _showCover(displayMode->ShowCoverOnTopScreen())
     , _coverPosition(romBrowserViewFactory->GetTopCoverPosition())
 {
     AddChildTail(_fileInfoView.GetPointer());
+    AddChildTail(_statusBarView.GetPointer());
 }
 
 void RomBrowserTopScreenView::InitVram(const VramContext& vramContext)
