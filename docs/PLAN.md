@@ -2,6 +2,17 @@
 
 Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](https://github.com/LNH-team/pico-launcher) (Zlib) + [Pico Loader](https://github.com/LNH-team/pico-loader) (Plattform `M3DS`)
 
+## Status
+
+| Phase | Stand |
+|---|---|
+| 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
+| 1 Design-System | ⏳ als Nächstes |
+| 2 Konsolen-Ebene | ⏳ als Nächstes |
+| 3–9 | offen |
+
+**Test auf dem DS (13.10.2026):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Erwartete Lücken (Theme, Ansicht, Startordner, GBA) sind den Phasen unten zugeordnet.
+
 ## Ziel
 
 Ein eigener Launcher als Ersatz für YSMenu:
@@ -15,7 +26,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 
 - Pico Launcher und Pico Loader v1.3.0 / v1.7.1 laufen auf der Karte. Getestet: Start über YSMenu, Spiele, Speichern.
 - `HolziDape/DsRunner` enthält die Historie von Pico Launcher. Remote `upstream` = LNH-team/pico-launcher (`develop`).
-- Build: `skylyrac/blocksds:slim-v1.16.0` (Docker in WSL), `make` → `LAUNCHER.nds`. Die CI aus dem Original ist vorhanden.
+- Build: `skylyrac/blocksds:slim-v1.16.0` (Docker in WSL), `./build.sh` → `DsRunner.nds`, `./build.sh package` → SD-Paket (Details: [DEVELOPMENT.md](DEVELOPMENT.md))
 - Code-Aufbau: `arm9/source/romBrowser/DisplayMode/*` (Ansichten), `romBrowser/Theme/*` + `themes/*` (Aussehen), `romBrowser/CoverRepository` (Cover), `RomBrowserTopScreenView` (oberer Bildschirm, bisher 106×96-Cover als 8-bpp-Bitmap auf Sub-BG3).
 
 ## Grundsätze
@@ -32,25 +43,34 @@ Ein eigener Launcher als Ersatz für YSMenu:
 2. CI für `main` + Release-Workflow mit Paket für die M3 DS Real: `DsRunner.nds` als `BOOT.NDS`, `_pico` mit Loader M3DS, Autostart-Dateien, Anleitung
 3. Branding: Name, Banner und Icon „DsRunner“, About-Info
 4. **Entwicklung in melonDS:** prüfen, ob der Launcher mit DLDI in melonDS läuft, damit UI-Arbeit ohne SD-Umstecken geht. Spiele starten dort über Pico Loaders `MELONDS`-Plattform, falls nötig.
-5. **Autostart testen:** `BOOT.NDS` + TWiLight-Autostart-Dateien für M3 DS Real. Der alte `System`-Ordner wird gesichert, damit man zurückwechseln kann.
+5. **Autostart testen:** TWiLight-Autostart-Dateien für M3 DS Real. Der alte `System`-Ordner wird gesichert, damit man zurückwechseln kann.
 6. Upstream-Sync dokumentieren: wie man Pico-Updates holt
 
-**Ergebnis:** Die Karte startet beim Einschalten direkt einen selbst gebauten DsRunner (noch im Pico-Look).
+**Ergebnis:** ✅ Die Karte startet beim Einschalten direkt den selbst gebauten DsRunner (noch im Pico-Look).
+
+**Erkenntnisse:**
+- Autostart-Kette: Firmware → `SYSTEM/g6dsload.eng` → `_system_/_sys_data/r4i.sys` (Startprogramm von TWiLight mit M3-DLDI) → **`/_nds/TWiLightMenu/main.srldr`** (nicht `BOOT.NDS`, wie die TWiLight-Anleitung nahelegt). `r4i.sys` und `SRESET.dat` gibt es nur im TWiLight-Release, nicht im Quellcode.
+- Backups auf der Karte: `System_YSMenu_backup/` (inkl. der `SRESET.DAT` von YSMenu)
+- melonDS: Der Launcher läuft dort, Spiele mit dem M3DS-Loader nicht.
+- Später (optional): ein eigenes Startprogramm statt `r4i.sys` von TWiLight, das direkt `/DsRunner.nds` lädt
 
 ### Phase 1: Design-System „dsrunner“ (dunkel)
 1. Neuer Theme-Typ `dsrunner` (ViewFactory) mit den Farben aus dem Entwurf: Hintergrund #0F1117 → #181C26, Kacheln #232838, Akzent #4CC2FF
 2. Kachel-View mit runden Ecken, abgedunkelt wenn nicht ausgewählt, Leucht-Rahmen bei Auswahl, weiche Animation beim Wechseln
 3. App-Leiste: Titel, Zurück-Pfeil, Sortier-Pille, Zahnrad
 4. Statusleiste oben rechts: Uhrzeit (RTC) und Akku. **Hinweis:** Der DS Lite kennt beim Akku nur „gut“ und „schwach“, keine Prozentanzeige.
+5. Das dunkle DsRunner-Theme ist Standard (ersetzt Picos helles „Material“-Theme)
 
 ### Phase 2: Konsolen-Ebene
 1. Startbildschirm „Konsolen“: Raster aus Konsolen-Kacheln, oben das Artwork der Konsole mit „34 Spiele · zuletzt: …“
 2. Konfiguration `/_dsrunner/systems.json`: Konsole → Ordner/Dateiendungen → Start-Programm (NDS: Pico Loader, GBA: GBARunner2, NES: nesDS …). Ohne Datei werden `Games\NDS`, `Games\GBA` usw. automatisch erkannt.
 3. Spezial-Kacheln: **Favoriten** und **Apps** (Homebrew)
 4. A = Konsole öffnen, B = zurück
+5. **DsRunner startet immer auf dem Konsolen-Bildschirm**, nicht im zuletzt geöffneten Ordner. Das zuletzt gespielte Spiel ist in der Konsole vorausgewählt.
+6. **GBA-Spiele** öffnen GBARunner2 über die Dateizuordnung. Im Test war der GBA-Ordner noch leer, weil kein Start-Programm hinterlegt war.
 
 ### Phase 3: Spiele-Raster mit Covern
-1. Neue DisplayModes **3×2** (72-px-Kacheln) und **4×3** (51 px), im Menü umschaltbar
+1. Neue DisplayModes **3×2** (72-px-Kacheln) und **4×3** (51 px), im Menü umschaltbar. Sie ersetzen Picos Bannerliste als Standard (im Test: „schlechte Auswahl“).
 2. Cover-Kacheln als 3D-Texturen aus `/_dsrunner/art/<konsole>/…`. Fallback: Spiel-Icon auf Farbverlauf.
 3. Nachladen im Hintergrund und Cache, damit Scrollen ruckelfrei bleibt. **VRAM-Budget beachten.**
 4. Sortierung: A–Z, Z–A, **zuletzt gespielt**
@@ -97,4 +117,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 0. Danach Phase 1 + 2 als erster sichtbarer Meilenstein: dein Konsolen-Bildschirm auf dem DS.
+Phase 1 + 2 als erster sichtbarer Meilenstein: dein Konsolen-Bildschirm im dunklen Design auf dem DS. Entwicklung in melonDS mit Screenshots zur Abnahme, danach Test auf der Karte.

@@ -1,4 +1,4 @@
-name: Build Pico Launcher
+name: Build DsRunner
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
   pico_launcher:
     runs-on: ubuntu-latest
     container: skylyrac/blocksds:slim-v1.16.0
-    name: Build Pico Launcher
+    name: Build DsRunner
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -28,5 +28,5 @@ jobs:
         with:
           path: |
             _pico/
-            LAUNCHER.nds
-          name: Pico_Launcher
+            DsRunner.nds
+          name: DsRunner

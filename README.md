@@ -1,3 +1,11 @@
+# DsRunner
+> Eigener Launcher für den DS Lite (M3 DS Real), basierend auf **Pico Launcher** und **Pico Loader** vom [LNH team](https://github.com/LNH-team).
+> Plan und Stand: [docs/PLAN.md](docs/PLAN.md) · Entwickeln: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
+
+Der folgende Teil ist die README des Originalprojekts.
+
+---
+
 # Pico Launcher
 This repository contains Pico Launcher, which is a front-end for [Pico Loader](https://github.com/LNH-team/pico-loader).
 
