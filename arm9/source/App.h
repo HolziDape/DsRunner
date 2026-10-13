@@ -62,10 +62,13 @@ private:
     Rgb6Palette _rgb6Palette;
     Animator<int> _fadeAnimator;
 
-    TaskQueue<32, sizeof(TaskBase) + 32> _ioTaskQueue;
-    u32 _ioTaskThreadStack[2048 / 4];
-    TaskQueue<32, sizeof(TaskBase) + 32> _bgTaskQueue;
-    u32 _bgTaskThreadStack[2048 / 4];
+    // DsRunner: 64 instead of 32 slots, canceled tasks keep their slot until the thread gets to them
+    TaskQueue<64, sizeof(TaskBase) + 32> _ioTaskQueue;
+    // DsRunner: 8 KB instead of 2 KB. FatFs with long file names alone needs about 1 KB, and an
+    // overflow runs into the thread struct right below the stack (the launcher then hangs).
+    u32 _ioTaskThreadStack[8192 / 4];
+    TaskQueue<64, sizeof(TaskBase) + 32> _bgTaskQueue;
+    u32 _bgTaskThreadStack[8192 / 4];
 
     std::unique_ptr<ITheme> _theme;
     std::unique_ptr<IThemeBackground> _topBackground;

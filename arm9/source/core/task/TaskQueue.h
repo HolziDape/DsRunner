@@ -6,6 +6,7 @@
 #include "core/BitVector.h"
 #include "core/LinkedList.h"
 #include "Task.h"
+#include "VBlank.h"
 
 class TaskQueueBase;
 
@@ -181,15 +182,28 @@ private:
     [[gnu::noinline]]
     u32 AcquireSlot()
     {
-        u32 slot;
-        u32 irqs = rtos_disableIrqs();
+        while (true)
         {
-            slot = _poolOccupation.FindFirstZero();
-            _poolOccupation.Set(slot, 1);
+            u32 irqs = rtos_disableIrqs();
+            int slot = _poolOccupation.FindFirstZero();
+            if (slot >= 0)
+            {
+                _poolOccupation.Set(slot, 1);
+                rtos_restoreIrqs(irqs);
+                LOG_DEBUG("AcquireSlot: %d\n", slot);
+                return slot;
+            }
+            rtos_restoreIrqs(irqs);
+            // DsRunner: all slots are taken (seen when scrolling fast on a slow sd card). Using slot -1
+            // would overwrite memory, so wait for the task thread to finish a task instead.
+            if (rtos_getCurThread() == &_thread)
+            {
+                LOG_FATAL("Task queue full, enqueued from its own thread\n");
+                while (true);
+            }
+            LOG_DEBUG("Task queue full, waiting\n");
+            VBlank::Wait();
         }
-        rtos_restoreIrqs(irqs);
-        LOG_DEBUG("AcquireSlot: %d\n", slot);
-        return slot;
     }
 
     void* GetSlot() override

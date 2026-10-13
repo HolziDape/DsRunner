@@ -29,11 +29,20 @@ private:
         Failed
     };
 
+    // the art that should be shown (main thread only)
     char _requestedPath[256] = { 0 };
+    // the file the load task reads, only changed while no load task exists
+    char _loadingPath[256] = { 0 };
     TaskQueueBase* _ioTaskQueue = nullptr;
     // frames to wait before loading, so holding the dpad doesn't read every file on the way
     int _loadDelay = 0;
+    // a requested art still has to be loaded
+    bool _loadNeeded = false;
+    // At most one load is queued or running at a time (more could fill the io queue on a slow
+    // card). Every request gets a new number; a load for an older one stops early and is dropped.
     QueueTask<void> _loadTask;
+    volatile u32 _requestNumber = 0;
+    volatile u32 _loadedNumber = 0;
     volatile LoadResult _loadResult = LoadResult::None;
     bool _uploadPending = false;
     bool _artInVram = false;
@@ -45,11 +54,18 @@ private:
 
     alignas(32) u8 _pixels[256 * 192];
     alignas(32) u16 _palette[256];
+    // load buffers: kept here instead of on the small io thread stack
+    alignas(4) u8 _bmpPalette[256 * 4];
+    alignas(4) u8 _rowBuffer[256];
     // BLDALPHA value per screen line, plus one because the HBlank DMA always writes the next line
     alignas(32) u16 _blendTable[193];
 
     void StartLoad();
-    LoadResult Load(const char* path, const vu8& cancelRequested);
+    LoadResult Load(const char* path, u32 requestNumber, const vu8& cancelRequested);
+    bool IsStale(u32 requestNumber, const vu8& cancelRequested) const
+    {
+        return cancelRequested || requestNumber != _requestNumber;
+    }
     void UpdateBlendTable();
     void StopBlending();
 };

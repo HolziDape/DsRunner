@@ -48,7 +48,9 @@ private:
     Animator<int> _fadeAnimator;
 
     TaskQueue<32, sizeof(TaskBase) + 32> _ioTaskQueue;
-    u32 _ioTaskThreadStack[2048 / 4];
+    // DsRunner: 8 KB instead of 2 KB. FatFs with long file names alone needs about 1 KB, and an
+    // overflow runs into the thread struct right below the stack (the launcher then hangs).
+    u32 _ioTaskThreadStack[8192 / 4];
 
     std::unique_ptr<ITheme> _theme;
     std::unique_ptr<IThemeBackground> _topBackground;
