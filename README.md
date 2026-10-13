@@ -1,90 +1,123 @@
 # DsRunner
-> Eigener Launcher für den DS Lite (M3 DS Real), basierend auf **Pico Launcher** und **Pico Loader** vom [LNH team](https://github.com/LNH-team).
-> Plan und Stand: [docs/PLAN.md](docs/PLAN.md) · Entwickeln: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
-Der folgende Teil ist die README des Originalprojekts.
+Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS Real**. Er startet beim Einschalten automatisch und zeigt deine Spiele in einem dunklen Kachel-Design, mit großen Artworks auf dem oberen Bildschirm. Spiele startet DsRunner über [Pico Loader](https://github.com/LNH-team/pico-loader).
 
----
+![DsRunner: Konsolen, Spiele und 4×3-Raster](docs/images/DsRunner.png)
 
-# Pico Launcher
-This repository contains Pico Launcher, which is a front-end for [Pico Loader](https://github.com/LNH-team/pico-loader).
+<sub>Screenshots aus dem Emulator, Artworks sind Testbilder.</sub>
 
-![Horizontal display mode with custom theme](docs/images/HorizontalCustom.png)
-![Banner list display mode](docs/images/List.png)
-![Coverflow display mode](docs/images/Coverflow.png)
+## Funktionen
 
-## Features
-- Can load homebrew and retail games using [Pico Loader](https://github.com/LNH-team/pico-loader).
-- Various display modes
-    - Horizontal and vertical icon grid
-    - Banner list
-    - Coverflow
-- [File associations](docs/FileAssociations.md)
-- [Custom Icons, Banners & Covers](docs/Customization.md)
-- [Material Design 3 and custom themes](docs/Themes.md)
-- Support for background music (see [Themes](docs/Themes.md))
-- Support for cheats (See [Cheats](docs/Cheats.md))
+- **Startet automatisch** beim Einschalten des DS, ohne Umweg über ein anderes Menü
+- **Zwei Ebenen:** erst die Konsolen (NDS, GBA, …), dann deren Spiele
+- **Große Kacheln** im Raster 3×2 oder 4×3, Konsolen in ihrer eigenen Farbe
+- **Artwork oben** für jede Konsole und jedes Spiel, mit weichem Überblenden
+- **Spielanzahl** pro Konsole und Sortierung nach **zuletzt gespielt**
+- Uhr und Akkuanzeige
+- **GBA-Spiele** über GBARunner2, **Cheats** über `usrcheat.dat`
 
-General usage documentation can be found here: [Usage](docs/Usage.md).
+## Download
 
-## Setup & Configuration
-We recommend using WSL (Windows Subsystem for Linux), or MSYS2 to compile this repository.
-The steps provided will assume you already have one of those environments set up.
+**[⬇ Neueste Version herunterladen](https://github.com/HolziDape/DsRunner/releases/latest)**
 
-1. Install [BlocksDS](https://blocksds.skylyrac.net/docs/setup/)
+Dort gibt es zwei Dateien:
 
-## Compiling
+| Datei | Für wen |
+|---|---|
+| **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart und Pico Loader |
+| `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
 
-1. Run `make`
+## Installation (M3 DS Real)
 
-The launcher can be found in the root directory under the name `LAUNCHER.nds`.
+1. **SD-Karte sichern.** Mindestens alle Spielstände (`.sav`), den Ordner `SYSTEM` und die Datei `SRESET.DAT`. Damit kommst du jederzeit zu YSMenu zurück.
+2. `DsRunner_M3DSReal.zip` entpacken.
+3. Den **Inhalt** des entpackten Ordners ins Hauptverzeichnis der SD-Karte kopieren und vorhandene Dateien ersetzen.
+4. Spiele in Ordner pro Konsole legen (siehe nächster Abschnitt).
+5. Karte in den DS stecken und einschalten. DsRunner startet von selbst.
 
-2. Copy `LAUNCHER.nds` to your SD card.
-    - If you are using DSpico, rename to `_picoboot.nds` and place it in the root of your SD card.
-3. Copy the `_pico` pico folder to the root of your SD card.
+### Ordner für die Spiele
 
-> [!NOTE]
-> To use Pico Launcher, the Pico Loader files (`aplist.bin`, `savelist.bin`, `picoLoader7.bin` and `picoLoader9.bin`) must also be present in the `/_pico` folder on your SD card.
+DsRunner zeigt die Unterordner von `/Games` als Konsolen an:
 
-For DSpico the final directory structure will look like this:
 ```
-.
+SD-Karte
+├── Games
+│   ├── NDS      ← .nds-Spiele
+│   ├── GBA      ← .gba-Spiele (brauchen GBARunner2, siehe unten)
+│   └── Apps     ← Homebrew
+├── _dsrunner    ← Artworks und Spielverlauf (legt DsRunner selbst an)
+├── _nds
 ├── _pico
-│   ├── themes
-│   │   ├── material
-│   │   │   └── theme.json
-│   │   └── raspberry
-│   │       ├── bannerListCell.bin
-│   │       ├── bannerListCellPltt.bin
-│   │       ├── bannerListCellSelected.bin
-│   │       ├── bannerListCellSelectedPltt.bin
-│   │       ├── bottombg.bin
-│   │       ├── gridcell.bin
-│   │       ├── gridcellPltt.bin
-│   │       ├── gridcellSelected.bin
-│   │       ├── gridcellSelectedPltt.bin
-│   │       ├── scrim.bin
-│   │       ├── scrimPltt.bin
-│   │       ├── theme.json
-│   │       └── topbg.bin
-│   ├── aplist.bin
-│   ├── savelist.bin
-│   ├── picoLoader7.bin
-│   └── picoLoader9.bin
-└── _picoboot.nds
+└── ...
 ```
-Note: If you want to play DSiWare on the DSpico, additional files are required. See the [Pico Loader](https://github.com/LNH-team/pico-loader) readme for more information.
 
-## License
+- Ordner mit den Namen `NDS`, `GBA`, `GBC`, `GB`, `NES`, `SNES`, `SMS`, `GG`, `MD`, `PCE` und `Apps` bekommen eine eigene Farbe. Jeder andere Ordner erscheint ebenfalls als Kachel.
+- Gibt es keinen Ordner `/Games`, zeigt DsRunner einfach das Hauptverzeichnis der Karte. Einen anderen Ordner stellst du in `/_pico/settings.json` ein (`libraryPath`).
+- **GBA:** [GBARunner2](https://github.com/Gericom/GBARunner2) (`GBARunner2_arm7dldi_ds.nds`) ins Hauptverzeichnis legen, dazu das GBA-BIOS als `/_gba/bios.bin`. DsRunner findet es automatisch.
 
-Icons by [icons8](https://icons8.com/)
+### Update auf eine neue Version
 
-This project is licensed under the Zlib license. For details, see `LICENSE.txt`.
+Nur eine Datei ersetzen: `DsRunner.nds` aus dem neuen Download in **`/_nds/TWiLightMenu/main.srldr`** umbenennen und die alte Datei damit überschreiben (optional zusätzlich als `/BOOT.NDS`). Spiele, Spielstände und Einstellungen bleiben erhalten.
 
-Additional licenses may apply to the project. For details, see the `license` directory.
+### Zurück zu YSMenu
 
-## Contributors
-- [@Gericom](https://github.com/Gericom)
-- [@XLuma](https://github.com/XLuma)
-- [@Dartz150](https://github.com/Dartz150)
-- [@lifehackerhansol](https://github.com/lifehackerhansol)
+Die gesicherten Dateien `SYSTEM/g6dsload.1`, `SYSTEM/g6dsload.eng` und `SRESET.DAT` zurückkopieren, dann `boot.*`, `loader.eng` und den Ordner `_system_` löschen.
+
+## Bedienung
+
+| Taste | Funktion |
+|---|---|
+| Steuerkreuz | Auswahl bewegen |
+| A | Konsole öffnen / Spiel starten |
+| B | zurück zu den Konsolen |
+| L / R | eine Seite weiterblättern |
+| Y | Cheats für das ausgewählte Spiel |
+| Zahnrad (oben rechts) | Ansicht und Sortierung wählen |
+
+Der Touchscreen funktioniert ebenfalls.
+
+## Artworks
+
+Für das große Bild oben legst du ein BMP mit **256 × 192 Pixeln und 256 Farben** unter `/_dsrunner/art` ab, im selben Pfad wie das Spiel:
+
+| Für | Datei |
+|---|---|
+| Konsole `/Games/NDS` | `/_dsrunner/art/Games/NDS.bmp` |
+| Spiel `/Games/NDS/Mario Kart DS.nds` | `/_dsrunner/art/Games/NDS/Mario Kart DS.bmp` |
+
+Zum Ausprobieren reicht Paint: Bild auf 256 × 192 Pixel bringen und mit „Speichern unter“ als **256-Farben-Bitmap** speichern. Ein PC-Tool, das Artworks automatisch besorgt, ist in Arbeit.
+
+Alle Einstellungen und Dateiformate stehen in **[docs/CONFIG.md](docs/CONFIG.md)**.
+
+## Andere Flashkarten
+
+DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 DS Real.
+
+1. `DsRunner.zip` entpacken und den Inhalt (`DsRunner.nds`, `_pico`) ins Hauptverzeichnis der SD-Karte kopieren.
+2. Bei [Pico Loader](https://github.com/LNH-team/pico-loader/releases) die Dateien für deine Flashkarte herunterladen und `aplist.bin`, `savelist.bin`, `patchlist.bin`, `picoLoader7.bin` und `picoLoader9.bin` nach `/_pico` kopieren.
+3. `DsRunner.nds` aus dem Menü deiner Flashkarte starten. Ein Autostart ist für andere Karten nicht vorbereitet.
+
+## Stand
+
+DsRunner ist in Entwicklung. Was fertig ist und was als Nächstes kommt, steht in **[docs/PLAN.md](docs/PLAN.md)**. Fehler und Wünsche gerne als [Issue](https://github.com/HolziDape/DsRunner/issues).
+
+## Selbst bauen
+
+Mit Docker (unter Windows in WSL2):
+
+```sh
+git clone --recursive https://github.com/HolziDape/DsRunner.git
+cd DsRunner
+./build.sh            # → DsRunner.nds
+./build.sh package    # → fertiges SD-Paket für die M3 DS Real in sd-package/
+```
+
+Details, Test im Emulator und Pico-Updates: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
+
+## Danke & Lizenz
+
+DsRunner ist ein Fork von **[Pico Launcher](https://github.com/LNH-team/pico-launcher)** und nutzt **[Pico Loader](https://github.com/LNH-team/pico-loader)**, beide vom [LNH team](https://github.com/LNH-team): [@Gericom](https://github.com/Gericom), [@XLuma](https://github.com/XLuma), [@Dartz150](https://github.com/Dartz150), [@lifehackerhansol](https://github.com/lifehackerhansol). Die Autostart-Dateien für die M3 DS Real stammen aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu). Icons von [icons8](https://icons8.com/).
+
+Lizenz: Zlib, siehe `LICENSE.txt`. Weitere Lizenzen im Ordner `licenses`.
+
+Die englische Dokumentation von Pico Launcher (Themes, Cheats, eigene Icons) liegt weiterhin unter [docs/](docs/Usage.md). Sie gilt größtenteils auch für DsRunner.
