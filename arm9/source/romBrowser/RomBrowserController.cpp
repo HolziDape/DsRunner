@@ -11,6 +11,7 @@
 #include "cheats/EmptyCheatRepository.h"
 #include "cheats/PicoLoaderCheatDataFactory.h"
 #include "Theme/dsrunner/DsRunnerLibrary.h"
+#include "Theme/dsrunner/DsRunnerSystems.h"
 #include "RomBrowserController.h"
 
 // Skips a drive prefix like "fat:" and the leading slashes of a path.
@@ -306,6 +307,8 @@ void RomBrowserController::HandleNavigateTrigger()
                 _cheatRepository = std::make_unique<EmptyCheatRepository>();
             }
         }
+        // DsRunner: consoles of /_dsrunner/systems.json and emulators on the sd card, once (before file types are needed)
+        gDsRunnerSystems.Load(_appSettingsService->GetAppSettings());
         // DsRunner: the play history is needed for sorting by last played
         gDsRunnerLibrary.playHistory.Load();
         gDsRunnerLibrary.favorites.Load();

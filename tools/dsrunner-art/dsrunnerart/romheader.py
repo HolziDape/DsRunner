@@ -151,10 +151,11 @@ def crc32_of_file(path: Path, skip: int = 0, chunk_size: int = 1 << 20) -> int:
 
 def copier_header_size(path: Path, system_key: str, size: int) -> int:
     """Size of a header that some dumps carry in front of the ROM data (iNES, SNES copier)."""
-    if system_key == "nes":
+    if system_key in ("nes", "fds"):
+        # iNES header, fwNES header of Famicom Disk System images
         try:
             with open(path, "rb") as file:
-                if file.read(4) == b"NES\x1a":
+                if file.read(4) in (b"NES\x1a", b"FDS\x1a"):
                     return 16
         except OSError:
             return 0

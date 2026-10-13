@@ -26,7 +26,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | `lastUsedFilePath` | Zuletzt gestartetes Spiel, wird automatisch gesetzt. |
 | `showClock` | `true` (Standard): Uhrzeit oben rechts in der Statusleiste. `false`: nur die Akkuanzeige. Umschalten im Menü (Zahnrad → Uhr). Gilt nur im DsRunner-Theme. |
 | `language` | Stammt von Pico Launcher und wird nicht ausgewertet. Die Oberfläche von DsRunner ist immer deutsch (siehe [Sprache](#sprache)). |
-| `fileAssociations` | Programm, das Dateien mit einer Endung öffnet (z.B. `gba`, `nes`). Der Dateipfad wird per argv übergeben. |
+| `fileAssociations` | Programm, das Dateien mit einer Endung öffnet (z.B. `gba`, `nes`). Der Dateipfad wird per argv übergeben. Hat Vorrang vor `systems.json` und den Emulatoren, die DsRunner selbst findet (siehe [Emulatoren](#emulatoren)). |
 
 ## Tasten
 
@@ -47,23 +47,108 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 /Games
   /NDS     Nintendo-DS-Spiele (.nds)
   /GBA     Game-Boy-Advance-Spiele (.gba), brauchen GBARunner2
+  /GB      Game Boy (.gb), /GBC Game Boy Color (.gbc)
+  /NES     NES (.nes, .fds), /SNES Super Nintendo (.sfc, .smc)
+  /SMS     Master System (.sms), /GG Game Gear (.gg)
+  /MD      Mega Drive (.md, .gen, .smd), /PCE PC Engine (.pce, .sgx)
   /Apps    Homebrew
   /...     weitere Ordner werden ebenfalls als Konsole angezeigt
 ```
 
-Konsolen mit eigener Farbe und eigenem Kürzel: `NDS`, `GBA`, `GBC`, `GB`, `NES`, `SNES`, `SMS`, `GG`, `MD`, `PCE`, `Apps`. Die Namen werden ohne Beachtung der Groß-/Kleinschreibung verglichen. Jeder andere Ordner bekommt eine neutrale Kachel mit den ersten vier Buchstaben.
+Konsolen mit eigener Farbe und eigenem Kürzel: `NDS` (auch `DS`), `GBA`, `GBC`, `GB`, `NES` (auch `FC`), `SNES` (auch `SFC`), `SMS`, `GG`, `MD` (auch `GEN`, `MEGADRIVE`), `PCE`, `Apps` (auch `Homebrew`). Die Namen werden ohne Beachtung der Groß-/Kleinschreibung verglichen. Jeder andere Ordner bekommt eine neutrale Kachel mit den ersten vier Buchstaben, außer er steht in der [`systems.json`](#eigene-konsolen-systemsjson).
 
-## GBA-Spiele
+Spiele anderer Konsolen als DS werden nur angezeigt, wenn es ein Programm (einen [Emulator](#emulatoren)) für sie gibt. Ohne eigenes Icon bekommen sie die Kachel ihrer Konsole (Farbe und Kürzel), bis DsRunner Art ein [Kachel-Bild](#kachel-bilder) für sie anlegt.
 
-`.gba`-Dateien werden nur angezeigt, wenn ein Programm dafür eingetragen ist. Ist in `fileAssociations` kein `gba`-Eintrag, sucht DsRunner GBARunner2 selbst, in dieser Reihenfolge:
+## Emulatoren
 
-1. `/_dsrunner/GBARunner2.nds`
-2. `/GBARunner2_arm7dldi_ds.nds`
-3. `/GBARunner2.nds`
-4. `/_nds/GBARunner2_arm7dldi_ds.nds`
-5. `/_nds/GBARunner2.nds`
+DsRunner startet Spiele anderer Konsolen über Emulatoren für den DS (Homebrew). Der Pfad des Spiels wird dabei wie bei Picos Dateizuordnungen als Argument übergeben (argv), der Emulator startet das Spiel also direkt, ohne eigene Dateiauswahl.
 
-Das GBA-BIOS (`bios.bin`) gehört neben GBARunner2 bzw. nach `/_gba/bios.bin`, wie in der Anleitung von GBARunner2.
+**Welches Programm eine Endung öffnet**, in dieser Reihenfolge:
+
+1. `fileAssociations` in `/_pico/settings.json` (siehe [Einstellungen](#einstellungen))
+2. `emulator` der Konsole in [`/_dsrunner/systems.json`](#eigene-konsolen-systemsjson)
+3. ein Emulator aus der Tabelle unten, den DsRunner beim Start auf der Karte findet
+
+Gibt es für eine Endung nichts davon, zeigt DsRunner die Dateien nicht an (der Ordner bleibt leer, „0 Spiele“).
+
+**Gefundene Emulatoren** (pro Konsole gilt der erste gefundene, von oben nach unten):
+
+| Konsole | Endungen | Emulator | Dateiname | Spiel per argv | Download |
+|---|---|---|---|---|---|
+| Game Boy Advance | `.gba`, `.agb` | GBARunner2 | `GBARunner2_arm7dldi_ds.nds`, `GBARunner2.nds`, `GBARunner2_arm9dldi_ds.nds` | ja | [GBARunner2](https://github.com/Gericom/GBARunner2/releases), für den DS Lite die Datei `GBARunner2_arm7dldi_ds.nds` |
+| NES | `.nes`, `.fds` | nesDS | `nesDS.nds` | ja | [nesDS](https://github.com/DS-Homebrew/NesDS/releases) |
+| Game Boy, Game Boy Color | `.gb`, `.sgb`, `.gbc` | GameYob | `GameYob.nds` | ja | [GameYob](https://github.com/Drenn1/GameYob/releases) oder aus TWiLight Menu++ (siehe unten) |
+| Game Boy, Game Boy Color | `.gb`, `.sgb`, `.gbc` | lameboy (nur ohne GameYob) | `lameboy.nds` | nicht dokumentiert, startet evtl. mit eigener Dateiauswahl | [lameboy](https://lameboy.nutki.com/) |
+| Master System, Game Gear | `.sms`, `.gg` | S8DS | `S8DS.nds` | ja | [S8DS](https://github.com/FluBBaOfWard/S8DS/releases) (`S8DS.nds` aus der ZIP-Datei) |
+| Mega Drive | `.md`, `.gen`, `.smd` | jEnesisDS | `jEnesisDS.nds` | ja (Version aus TWiLight Menu++) | aus TWiLight Menu++ (siehe unten) |
+| Super Nintendo | `.sfc`, `.smc` | SNEmulDS | `SNEmulDS-legacy.nds`, `SNEmulDS.nds` | `SNEmulDS-legacy.nds` ja. Das neue `SNEmulDS.nds` (TGDS) startet TWiLight auf eigene Art, mit argv ungetestet | `SNEmulDS-legacy.nds` aus TWiLight Menu++, neue Version: [snemulds](https://github.com/cotodevel/snemulds) |
+| PC Engine | `.pce`, `.sgx` | NitroGrafx | `NitroGrafx.nds` | ja | [NitroGrafx](https://github.com/FluBBaOfWard/NitroGrafx/releases) (`NitroGrafx.nds` aus der ZIP-Datei) |
+
+**Wohin damit:** DsRunner sucht in diesen Ordnern, in dieser Reihenfolge (Groß-/Kleinschreibung egal):
+
+1. `/_dsrunner/emulators/` (empfohlen)
+2. `/_dsrunner/`
+3. `/` (Hauptverzeichnis der Karte)
+4. `/_nds/`
+5. `/_nds/TWiLightMenu/emulators/` (dort legt [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases) seine Emulatoren ab, z. B. `nesds.nds`, `gameyob.nds`, `S8DS.nds`, `jEnesisDS.nds`, `SNEmulDS-legacy.nds`, `NitroGrafx.nds`)
+6. `/Emulators/`
+
+Jeder Ordner wird beim Start einmal gelesen. Andere Dateinamen (z. B. `nesDS_1.3.nds`) findet DsRunner nicht, dafür die Datei umbenennen oder den Pfad in `systems.json` bzw. `fileAssociations` eintragen. Gefundene Emulatoren schreibt DsRunner nicht in die `settings.json`. Eine dort schon stehende `gba`-Zuordnung (frühere Versionen haben GBARunner2 dort eingetragen) gilt weiter und hat Vorrang.
+
+**Hinweise zu den Emulatoren:**
+
+- **GBARunner2** braucht das GBA-BIOS (`bios.bin`) neben GBARunner2 bzw. unter `/_gba/bios.bin`, wie in seiner Anleitung.
+- **nesDS:** `.fds`-Spiele (Famicom Disk System) brauchen zusätzlich das FDS-BIOS, siehe Anleitung von nesDS.
+- **jEnesisDS** spielt Mega-Drive-Spiele bis 3 MB. TWiLight Menu++ startet es nur mit `.gen`-Dateien. Lädt ein `.md`-Spiel nicht, die Datei in `.gen` umbenennen.
+- **lameboy** und andere Emulatoren ohne argv starten mit ihrer eigenen Dateiauswahl, das Spiel muss man dann dort noch einmal wählen.
+- Picos `.md`-Zuordnung gilt für die ganze Karte: Liegt eine `README.md` in einem Ordner, erscheint sie dort als Mega-Drive-Spiel, sobald jEnesisDS gefunden wurde.
+
+## Eigene Konsolen (systems.json)
+
+`/_dsrunner/systems.json` ist optional. Damit lassen sich weitere Konsolen anlegen (z. B. WonderSwan mit NitroSwan) und die eingebauten ändern (Farbe, Kürzel, eigener Emulator). Ohne die Datei gilt die eingebaute Liste.
+
+```json
+{
+  "systems": {
+    "WS": {
+      "name": "WonderSwan",
+      "label": "WS",
+      "color": "#C08020",
+      "extensions": ["ws", "wsc"],
+      "emulator": "/_dsrunner/emulators/NitroSwan.nds",
+      "libretro": "Bandai - WonderSwan"
+    },
+    "SNES": {
+      "emulator": "/Emulators/SNEmulDS-legacy.nds"
+    },
+    "SMS": {
+      "label": "MS",
+      "color": [224, 64, 128]
+    }
+  }
+}
+```
+
+Jeder Schlüssel unter `systems` ist ein **Ordnername** der Bibliothek (Groß-/Kleinschreibung egal). Alle Felder sind optional:
+
+| Feld | Bedeutung | Ohne Angabe |
+|---|---|---|
+| `name` | Name der Konsole oben auf dem Bildschirm | eingebaute Konsole: ihr Name, sonst der Ordnername |
+| `label` | Kürzel auf der Kachel (höchstens 4 Zeichen werden gezeigt) | eingebaute Konsole: ihr Kürzel, sonst der Ordnername |
+| `color` | Farbe der Kachel: `"#RRGGBB"` oder `[R, G, B]` (0 bis 255). Der Verlauf oben wird daraus etwas dunkler berechnet. | eingebaute Farbe bzw. das neutrale Grau-Blau |
+| `heroColor` | eigene Farbe für den Verlauf oben, gleiches Format | aus `color` berechnet |
+| `extensions` | Dateiendungen dieser Konsole, höchstens 4, ohne Punkt (`"ws"`) | eingebaute Konsole: ihre Endungen, sonst keine |
+| `emulator` | Pfad des Emulators für diese Endungen, das Spiel wird per argv übergeben | der gefundene Emulator (siehe [Emulatoren](#emulatoren)) |
+| `libretro` | nur für [DsRunner Art](ART-TOOL.md): libretro-System für die Artworks (z. B. `"Bandai - WonderSwan"`), auch als Liste | aus der Endung, siehe ART-TOOL.md |
+
+Regeln:
+
+- Eine Endung, die mehrere Konsolen nennen, gehört zur ersten. Farbe und Kürzel einer Datei richten sich nach ihrer Endung (`systems.json` zuerst, dann die eingebaute Liste).
+- Existiert der `emulator`-Pfad nicht, wird er ignoriert (es gilt dann ein gefundener Emulator, sonst bleiben die Dateien unsichtbar).
+- `.nds`-Dateien startet immer Pico Loader, ein Emulator für `nds` wird ignoriert.
+- Höchstens 16 Konsolen und 8 KB Dateigröße. Ist die Datei kein gültiges JSON oder fehlt `systems`, ignoriert DsRunner sie ganz und nutzt die eingebaute Liste. DsRunner Art meldet solche Fehler beim Scannen im Protokoll, ebenso fehlende Emulatoren.
+- DsRunner liest die Datei einmal beim Start. Nach Änderungen DsRunner neu starten.
+- Texte (`name`, `label`) ohne `–` (Gedankenstrich) schreiben, die Schrift kennt ihn nicht.
 
 ## Ansichten
 

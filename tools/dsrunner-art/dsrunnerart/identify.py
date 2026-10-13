@@ -184,8 +184,9 @@ def identify(entry: Entry, catalog: Catalog, preferred_regions: list[str], crc_c
     if best[2]:
         return found(best[1], best[2], f"ähnlicher Name ({best[0]:.0%})")
 
-    # 4. the file may carry a No-Intro name the lists don't know (yet)
-    if regions_of(stem):
+    # 4. the file may carry a No-Intro name the lists don't know (yet). Consoles of systems.json without
+    #    a libretro system have nothing to search in.
+    if regions_of(stem) and system.libretro_names:
         info.names = [(system.libretro_names[0], stem)]
         info.match = "Dateiname"
     return info

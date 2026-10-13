@@ -8,13 +8,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .consoles import System, system_for_file
+from .consoles import (MAX_SYSTEMS_FILE_SIZE, CustomConsole, System, parse_systems_json, set_custom_systems,
+                       system_for_file)
 
 # see DsRunnerFileInfoCardView.cpp
 ART_FOLDER = "/_dsrunner/art"
 # size of the path buffer in DsRunnerFileInfoCardView::RequestArt (including the terminator)
 ART_PATH_BUFFER = 256
 SETTINGS_PATH = "/_pico/settings.json"
+# optional consoles of the launcher (DsRunnerSystems::FilePath)
+SYSTEMS_PATH = "/_dsrunner/systems.json"
 DEFAULT_LIBRARY_PATH = "/Games"
 OVERRIDE_FOLDER = "/_dsrunner/art-override"
 # tile images for the launcher grid: same path rule, other root (docs/CONFIG.md, "Kachel-Bilder")
@@ -119,6 +122,28 @@ def read_library_path(sd_root: Path) -> str:
     return skip_drive(value)
 
 
+def read_systems_json(sd_root: Path) -> tuple[list[CustomConsole], list[str]]:
+    """The consoles of /_dsrunner/systems.json and warnings for the log. Like the launcher, a missing file
+    gives no consoles silently, an invalid one gives a warning and no consoles."""
+    path = to_fs_path(sd_root, SYSTEMS_PATH)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return [], []
+    if size == 0 or size > MAX_SYSTEMS_FILE_SIZE:
+        return [], [f"{SYSTEMS_PATH} wird ignoriert (Größe {size} Bytes, höchstens {MAX_SYSTEMS_FILE_SIZE})."]
+    try:
+        with open(path, encoding="utf-8-sig") as file:
+            data = json.load(file)
+    except (OSError, ValueError) as error:
+        return [], [f"{SYSTEMS_PATH} wird ignoriert (kein gültiges JSON: {error})."]
+    customs, warnings = parse_systems_json(data)
+    for custom in customs:
+        if custom.emulator and not to_fs_path(sd_root, custom.emulator).is_file():
+            warnings.append(f"systems.json: Emulator {custom.emulator} für {custom.console.folder_name} fehlt auf der Karte.")
+    return customs, warnings
+
+
 @dataclass
 class Entry:
     """A folder or ROM the launcher shows and that gets an artwork."""
@@ -198,8 +223,10 @@ def _is_hidden(path: Path, name: str) -> bool:
 
 def scan(sd_root: Path, library_path: Optional[str] = None, max_depth: int = 4,
          cancelled: Callable[[], bool] = lambda: False) -> ScanResult:
-    """Collects the console folders, subfolders and ROMs of the library."""
-    warnings: list[str] = []
+    """Collects the console folders, subfolders and ROMs of the library. Reads systems.json first, its
+    consoles stay known to dsrunnerart.consoles (colors, systems) until the next scan."""
+    customs, warnings = read_systems_json(sd_root)
+    set_custom_systems(customs)
     if library_path is None:
         library_path = read_library_path(sd_root)
     library_path = "/" + library_path.strip("/") if library_path.strip("/") else ""
