@@ -55,6 +55,7 @@ public:
 
     const TCHAR* GetCurrentFolderName() const override { return _currentFolderName; }
     bool IsCurrentFolderLibraryRoot() const override { return _currentFolderIsLibraryRoot; }
+    const TCHAR* GetCurrentFolderPath() const override { return _currentFolderPath; }
 
 private:
     IAppSettingsService* _appSettingsService;
@@ -72,10 +73,13 @@ private:
     // info about the folder being loaded, filled by the io thread and taken over when loading is done
     TCHAR _newFolderName[256] = { 0 };
     bool _newFolderIsLibraryRoot = false;
+    TCHAR _newFolderPath[256] = { 0 };
     TCHAR _currentFolderName[256] = { 0 };
+    TCHAR _currentFolderPath[256] = { 0 };
     bool _currentFolderIsLibraryRoot = false;
     FileInfo _triggerFileInfo;
     QueueTask<void> _navigateTask;
+    QueueTask<void> _gameCountTask;
     bool _saveSettingsPending = false;
     std::unique_ptr<CoverRepository> _coverRepository;
     std::unique_ptr<IconRepository> _iconRepository;
@@ -89,6 +93,7 @@ private:
     void HandleLaunchTrigger();
     void HandleChangeDisplayModeTrigger();
     void HandleGotoSettingsScreenTrigger();
+    void StartGameCount();
     void UpdateLastUsedFilepath();
     void SetPicoLoaderParams() const;
     void LoadCheats() const;

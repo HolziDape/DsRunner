@@ -1,12 +1,13 @@
 """Draws the DsRunner banner icon: a dark rounded tile with two stylised screens
 (artwork on top, tile grid below) in the launcher's accent colour.
 
-Writes icon.bmp as 32x32, 8 bpp with a 16 colour palette (the format ndstool
-expects for banner icons; palette entry 0 is transparent).
+Writes icon.png as 32x32 RGBA with at most 15 opaque colours. The BlocksDS
+ndstool builds the banner palette from the colours itself and only treats
+transparent pixels (alpha) as transparent: a palette entry 0 in a .bmp is
+not kept, which made the corners show up magenta.
 
-Usage: python make_icon.py <out.bmp>
+Usage: python make_icon.py <out.png>
 """
-import struct
 import sys
 
 from PIL import Image, ImageDraw
@@ -16,12 +17,13 @@ SIZE = 32
 BG = (24, 28, 38)
 TILE = (44, 50, 68)
 ACCENT = (76, 194, 255)
-TRANSPARENT = (255, 0, 255)
 
 
 def draw():
     s = SIZE * SS
-    img = Image.new("RGB", (s, s), TRANSPARENT)
+    # the corners are cut off with a mask later; drawing them in the tile colour keeps
+    # the downscaled edge pixels free of a coloured fringe
+    img = Image.new("RGB", (s, s), BG)
     d = ImageDraw.Draw(img)
     d.rounded_rectangle((0, 0, s - 1, s - 1), 7 * SS, fill=BG)
     d.rounded_rectangle((SS, SS, s - SS - 1, s - SS - 1), 6 * SS, outline=ACCENT, width=SS)
@@ -38,32 +40,21 @@ def draw():
     return img
 
 
-def to_bmp16(img, path):
+def to_png(img, path):
     small = img.resize((SIZE, SIZE), Image.LANCZOS)
     # keep the corners exactly transparent
     mask = Image.new("L", (SIZE * SS, SIZE * SS), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, SIZE * SS - 1, SIZE * SS - 1), 7 * SS, fill=255)
     mask = mask.resize((SIZE, SIZE), Image.LANCZOS).point(lambda v: 255 if v > 127 else 0)
+    # 15 colours: the banner palette has 16 entries and entry 0 is the transparent one
     quant = small.quantize(colors=15, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-    pal = quant.getpalette()[: 15 * 3]
-    palette = [TRANSPARENT] + [tuple(pal[i:i + 3]) for i in range(0, len(pal), 3)]
-    palette += [(0, 0, 0)] * (16 - len(palette))
-    q = quant.load()
-    m = mask.load()
-    rows = []
-    for y in range(SIZE - 1, -1, -1):  # bmp rows are bottom-up
-        rows.append(bytes(0 if m[x, y] == 0 else q[x, y] + 1 for x in range(SIZE)))
-    pixels = b"".join(rows)
-    pal_bytes = b"".join(bytes((b, g, r, 0)) for r, g, b in palette)
-    offset = 14 + 40 + len(pal_bytes)
-    header = b"BM" + struct.pack("<IHHI", offset + len(pixels), 0, 0, offset)
-    info = struct.pack("<IiiHHIIiiII", 40, SIZE, SIZE, 1, 8, 0, len(pixels), 2835, 2835, 16, 16)
-    with open(path, "wb") as f:
-        f.write(header + info + pal_bytes + pixels)
+    out = quant.convert("RGBA")
+    out.putalpha(mask)
+    # fully transparent pixels all get the same colour, so they count as one palette entry
+    out.putdata([p if p[3] else (0, 0, 0, 0) for p in out.getdata()])
+    out.save(path)
 
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else "icon.bmp"
-    to_bmp16(draw(), out)
-    preview = Image.open(out).convert("RGB").resize((SIZE * 8, SIZE * 8), Image.NEAREST)
-    preview.save(out.replace(".bmp", "_preview.png"))
+    out = sys.argv[1] if len(sys.argv) > 1 else "icon.png"
+    to_png(draw(), out)

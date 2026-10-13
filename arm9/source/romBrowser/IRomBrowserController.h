@@ -54,6 +54,9 @@ public:
     /// @brief Returns true when the folder that is currently shown is the library root,
     ///        the folder whose subfolders are the consoles.
     virtual bool IsCurrentFolderLibraryRoot() const = 0;
+
+    /// @brief Gets the full path of the folder that is currently shown (may start with a drive like "fat:").
+    virtual const TCHAR* GetCurrentFolderPath() const = 0;
 };
 
 inline IRomBrowserController::~IRomBrowserController() { }

@@ -9,8 +9,9 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
 | 1 Design-System | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** |
 | 2 Konsolen-Ebene | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** (ohne Spielanzahl und Favoriten, siehe unten) |
-| 3 Cover-Raster | ⏳ als Nächstes |
-| 4–9 | offen |
+| 3 Kachel-Raster | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** (ohne Cover in den Kacheln, siehe unten) |
+| 4 Großes Artwork oben | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** |
+| 5–9 | offen |
 
 **Test auf dem DS (13.10.2026, Phase 0):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Aufgefallen waren das helle Pico-Theme, die Bannerliste, der Start im zuletzt geöffneten Ordner und der leere GBA-Ordner. Phase 1 und 2 beheben das.
 
@@ -91,11 +92,28 @@ Ein eigener Launcher als Ersatz für YSMenu:
 3. Nachladen im Hintergrund und Cache, damit Scrollen ruckelfrei bleibt. **VRAM-Budget beachten.**
 4. Sortierung: A–Z, Z–A, **zuletzt gespielt**
 
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#kachelraster)):
+- Ansichten `TileGrid3x2` (76 × 70 px, Icons 2× vergrößert) und `TileGrid4x3` (55 × 44 px), im Menü als erste beiden Layouts, gespeichert in `settings.json`. `TileGrid3x2` ist der neue Standard.
+- Die Kacheln zeichnet die 3D-Engine (runde Ecken, Farbverlauf, Akzent-Rahmen und Leuchten bei Auswahl), das Icon liegt als Sprite darauf. Dadurch kosten die Kacheln kein OBJ-VRAM und keine OBJ-Palettenzeilen. Zum Vergrößern werden die Sprites der Icons nachträglich auf affine Doppelgröße umgestellt, die Palettenzeilen werden für die doppelte Höhe reserviert.
+- Reihenfolge zeilenweise (A B C / D E F) statt Picos spaltenweiser Reihenfolge, Blättern nach unten. Kacheln, die unter die App-Leiste scrollen, werden dort abgeschnitten (das Icon verschwindet, sobald es hineinragen würde).
+- Spielanzahl pro Konsole auf dem oberen Bildschirm, im Hintergrund gezählt (IO-Warteschlange, einmal pro Start, beim Spielstart abgebrochen).
+- Sortierung „zuletzt gespielt“ über den Spielverlauf `/_dsrunner/recent.txt`. Ersetzt im Menü Picos „zuletzt geändert“, das nie umgesetzt war.
+
+**Offen:**
+- **Cover in den Kacheln** (3D-Texturen): Ein 128×96-Cover mit 256 Farben braucht 12 KB Textur-VRAM. Das 3×2-Raster hält 13 Kacheln vor, das 4×3-Raster 22, das passt nicht neben die übrigen Texturen in Bank D (128 KB). Machbar wäre es mit kleineren Covern (z. B. 64×48 mit 16 Farben = 1,5 KB) und eigenem Nachladen. Kommt, wenn das PC-Tool (Phase 5) Cover erzeugt.
+- Spielanzahl auf der Kachel selbst (bisher nur oben).
+
 ### Phase 4: Großes Artwork oben
 1. Bildschirmfüllendes Bild (256×192, 8 bpp, 256 Farben + Dithering, ≈ 48 KB) pro Konsole und Spiel. Ersetzt das kleine Cover auf dem oberen Bildschirm.
 2. Abdunkelnder Verlauf unten, darüber Titel und Untertitel
 3. Weiches Überblenden beim Wechseln der Auswahl
 4. Fallback ohne Artwork: Farbverlauf in der Konsolenfarbe
+
+**Ergebnis:** ✅ Umgesetzt (Format und Ordner in [CONFIG.md](CONFIG.md#artworks)):
+- BMP 256 × 192, 8 bpp unter `/_dsrunner/art/<Pfad wie auf der SD-Karte>.bmp`, für Konsolen-Ordner und Spiele. Geladen auf der IO-Warteschlange (6 Bilder Verzögerung, damit Halten des Steuerkreuzes nicht jede Datei liest) in einen 48-KB-Puffer, angezeigt auf Sub-BG2 (256-Farben-Bitmap in VRAM C ab 64 KB).
+- Überblenden und Abdunkeln über Alpha-Blending mit dem Farbverlauf (BG0): eine HBlank-DMA (Kanal 1) schreibt pro Bildschirmzeile einen eigenen `BLDALPHA`-Wert. So gibt es den Verlauf nach unten und das Ein-/Ausblenden ohne Zusatzspeicher.
+- Wechsel: altes Bild in den Farbverlauf ausblenden (≈ 8 Bilder), neues einblenden. Ein direktes Überblenden Bild-zu-Bild bräuchte ein zweites Bitmap und ist offen.
+- Picos kleines Cover wird in den Kachel-Ansichten nicht mehr gezeigt. In Picos Ansichten liegt es wie bisher über dem Bild.
 
 ### Phase 5: PC-Tool „DsRunner Art“ (Python, Windows)
 1. SD-Karte scannen und Spiele erkennen: NDS/GBA über den Game-Code im ROM-Header, sonst über den Dateinamen
@@ -133,4 +151,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 1 + 2 als erster sichtbarer Meilenstein: dein Konsolen-Bildschirm im dunklen Design auf dem DS. Entwicklung in melonDS mit Screenshots zur Abnahme, danach Test auf der Karte.
+Phase 3 + 4 auf dem DS testen (Kacheln, Blättern, Spielanzahl, Sortierung nach Spielstart, Artworks mit Test-Bildern). Danach Phase 5: das PC-Tool erzeugt die Artworks im Format aus [CONFIG.md](CONFIG.md#artworks).

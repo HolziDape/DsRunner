@@ -3,5 +3,7 @@
 enum class SdFolderSortType
 {
     Name,
-    LastModified
+    LastModified,
+    // DsRunner: by position in the play history
+    LastPlayed
 };

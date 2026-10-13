@@ -1,8 +1,11 @@
 #pragma once
+#include <string.h>
 #include "DsRunnerConsoles.h"
 
+class TaskQueueBase;
+
 /// @brief State shared between the DsRunner theme's file info card (which knows what is selected)
-///        and the top screen background (which draws the gradient in the matching color).
+///        and the top screen background (which draws the gradient in the matching color and the artwork).
 class DsRunnerHeroState
 {
 public:
@@ -28,7 +31,34 @@ public:
         return dirty;
     }
 
+    /// @brief Sets the artwork to show (nullptr for none) and the queue to load it on.
+    void SetArt(const char* path, TaskQueueBase* ioTaskQueue)
+    {
+        if (!path)
+            path = "";
+        if (strcmp(path, _artPath) != 0)
+        {
+            strlcpy(_artPath, path, sizeof(_artPath));
+            _ioTaskQueue = ioTaskQueue;
+            _artDirty = true;
+        }
+    }
+
+    const char* GetArtPath() const { return _artPath; }
+    TaskQueueBase* GetIoTaskQueue() const { return _ioTaskQueue; }
+
+    /// @brief Returns true once after the artwork changed.
+    bool ConsumeArtDirty()
+    {
+        bool dirty = _artDirty;
+        _artDirty = false;
+        return dirty;
+    }
+
 private:
     Color _color = DsRunnerConsoles::kUnknownHero;
     bool _dirty = true;
+    char _artPath[256] = { 0 };
+    TaskQueueBase* _ioTaskQueue = nullptr;
+    bool _artDirty = false;
 };

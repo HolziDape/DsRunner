@@ -5,6 +5,6 @@
 class RomBrowserDisplaySettings
 {
 public:
-    RomBrowserLayout layout = RomBrowserLayout::HorizontalIconGrid;
+    RomBrowserLayout layout = RomBrowserLayout::TileGrid3x2; // DsRunner: large tiles by default
     RomBrowserSortMode sortMode = RomBrowserSortMode::NameAscending;
 };

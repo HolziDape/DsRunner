@@ -32,6 +32,10 @@ static const char* serializeRomBrowserLayout(RomBrowserLayout romBrowserLayout)
             return "FileList";
         case RomBrowserLayout::CoverFlow:
             return "CoverFlow";
+        case RomBrowserLayout::TileGrid3x2:
+            return "TileGrid3x2";
+        case RomBrowserLayout::TileGrid4x3:
+            return "TileGrid4x3";
         default:
             return "";
     }
@@ -53,6 +57,10 @@ static bool tryParseRomBrowserLayout(
         romBrowserLayout = RomBrowserLayout::FileList;
     else if (!strcasecmp(romBrowserLayoutString, "CoverFlow"))
         romBrowserLayout = RomBrowserLayout::CoverFlow;
+    else if (!strcasecmp(romBrowserLayoutString, "TileGrid3x2"))
+        romBrowserLayout = RomBrowserLayout::TileGrid3x2;
+    else if (!strcasecmp(romBrowserLayoutString, "TileGrid4x3"))
+        romBrowserLayout = RomBrowserLayout::TileGrid4x3;
     else
         return false;
 
@@ -69,6 +77,8 @@ static const char* serializeRomBrowserSortMode(RomBrowserSortMode romBrowserSort
             return "NameDescending";
         case RomBrowserSortMode::LastModified:
             return "LastModified";
+        case RomBrowserSortMode::LastPlayed:
+            return "LastPlayed";
         default:
             return "";
     }
@@ -86,6 +96,8 @@ static bool tryParseRomBrowserSortMode(
         romBrowserSortMode = RomBrowserSortMode::NameDescending;
     else if (!strcasecmp(romBrowserDisplayModeString, "LastModified"))
         romBrowserSortMode = RomBrowserSortMode::LastModified;
+    else if (!strcasecmp(romBrowserDisplayModeString, "LastPlayed"))
+        romBrowserSortMode = RomBrowserSortMode::LastPlayed;
     else
         return false;
 

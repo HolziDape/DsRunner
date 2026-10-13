@@ -1,6 +1,7 @@
 #include "common.h"
 #include <algorithm>
 #include "romBrowser/FileType/Nds/NdsFileType.h"
+#include "romBrowser/Theme/dsrunner/DsRunnerLibrary.h"
 #include "RomBrowserViewModel.h"
 
 RomBrowserViewModel::RomBrowserViewModel(IRomBrowserController* romBrowserController, const char* initialSelectedFileName)
@@ -26,6 +27,14 @@ RomBrowserViewModel::RomBrowserViewModel(IRomBrowserController* romBrowserContro
         {
             filterSortParams = SdFolderFilterSortParams(
                 SdFolderSortType::LastModified, SdFolderSortDirection::Descending, false);
+            break;
+        }
+        case RomBrowserSortMode::LastPlayed:
+        {
+            filterSortParams = SdFolderFilterSortParams(
+                SdFolderSortType::LastPlayed, SdFolderSortDirection::Ascending, false);
+            filterSortParams.playHistory = &gDsRunnerLibrary.playHistory;
+            filterSortParams.folderPath = romBrowserController->GetCurrentFolderPath();
             break;
         }
     }

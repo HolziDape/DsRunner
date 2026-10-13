@@ -15,7 +15,7 @@ NAME		:= 	DsRunner
 GAME_TITLE	:= DsRunner
 GAME_SUBTITLE	:= based on Pico Launcher
 GAME_AUTHOR	:= HolziDape
-GAME_ICON	:= icon.bmp
+GAME_ICON	:= icon.png
 
 # DLDI and internal SD slot of DSi
 # --------------------------------
