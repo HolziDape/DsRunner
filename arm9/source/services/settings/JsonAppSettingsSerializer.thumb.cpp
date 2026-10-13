@@ -48,14 +48,13 @@ static bool tryParseRomBrowserLayout(
     if (!romBrowserLayoutString)
         return false;
 
-    if (!strcasecmp(romBrowserLayoutString, "HorizontalIconGrid"))
-        romBrowserLayout = RomBrowserLayout::HorizontalIconGrid;
-    else if (!strcasecmp(romBrowserLayoutString, "VerticalIconGrid"))
-        romBrowserLayout = RomBrowserLayout::VerticalIconGrid;
-    else if (!strcasecmp(romBrowserLayoutString, "BannerList"))
-        romBrowserLayout = RomBrowserLayout::BannerList;
-    else if (!strcasecmp(romBrowserLayoutString, "FileList"))
-        romBrowserLayout = RomBrowserLayout::FileList;
+    // DsRunner: the icon grids, the banner list and the file list can't be chosen anymore,
+    // settings that still have them show the 3x2 tile grid
+    if (!strcasecmp(romBrowserLayoutString, "HorizontalIconGrid") ||
+        !strcasecmp(romBrowserLayoutString, "VerticalIconGrid") ||
+        !strcasecmp(romBrowserLayoutString, "BannerList") ||
+        !strcasecmp(romBrowserLayoutString, "FileList"))
+        romBrowserLayout = RomBrowserLayout::TileGrid3x2;
     else if (!strcasecmp(romBrowserLayoutString, "CoverFlow"))
         romBrowserLayout = RomBrowserLayout::CoverFlow;
     else if (!strcasecmp(romBrowserLayoutString, "TileGrid3x2"))

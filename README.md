@@ -10,13 +10,14 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 
 - **Startet automatisch** beim Einschalten des DS, ohne Umweg über ein anderes Menü
 - **Zwei Ebenen:** erst die Konsolen (NDS, GBA, …), dann deren Spiele
-- **Große Kacheln** im Raster 3×2 oder 4×3 mit Cover-Bildern, Konsolen in ihrer eigenen Farbe
+- **Drei Ansichten** mit passendem Bildstil: große Kacheln im Raster 3×2 mit vereinfachten Cover-Bildern, kleine Kacheln im Raster 4×3 mit klaren Pixel-Icons und die **CoverFlow** mit den echten Covern. Konsolen in ihrer eigenen Farbe
 - **Artwork oben** für jede Konsole und jedes Spiel, mit weichem Überblenden
 - **Spielanzahl** pro Konsole und Sortierung nach **zuletzt gespielt**
 - **Favoriten** mit X, gesammelt in der Kachel „★ Favoriten“
 - **Weiterspielen** mit START: das zuletzt gespielte Spiel direkt von der Konsolen-Ebene starten
 - Uhr (abschaltbar) und Akkuanzeige, Oberfläche auf Deutsch
-- **GBA-Spiele** über GBARunner2, **Cheats** über `usrcheat.dat`
+- **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet; eigene Konsolen über `systems.json`
+- **Cheats** über `usrcheat.dat`
 
 ## Download
 
@@ -29,6 +30,8 @@ Dort gibt es diese Dateien:
 | **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart und Pico Loader |
 | `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
 | `DsRunnerArt.exe` | PC-Programm für Windows, lädt die [Artworks](#artworks) auf die Karte |
+
+Was sich in welcher Version geändert hat, steht im **[CHANGELOG](CHANGELOG.md)**. Welche Version auf deiner Karte läuft, siehst du unten rechts im Menü „Anzeige“ (Zahnrad oben rechts).
 
 ## Installation (M3 DS Real)
 
@@ -57,6 +60,7 @@ SD-Karte
 - Ordner mit den Namen `NDS`, `GBA`, `GBC`, `GB`, `NES`, `SNES`, `SMS`, `GG`, `MD`, `PCE` und `Apps` bekommen eine eigene Farbe. Jeder andere Ordner erscheint ebenfalls als Kachel.
 - Gibt es keinen Ordner `/Games`, zeigt DsRunner einfach das Hauptverzeichnis der Karte. Einen anderen Ordner stellst du in `/_pico/settings.json` ein (`libraryPath`).
 - **GBA:** [GBARunner2](https://github.com/Gericom/GBARunner2) (`GBARunner2_arm7dldi_ds.nds`) ins Hauptverzeichnis legen, dazu das GBA-BIOS als `/_gba/bios.bin`. DsRunner findet es automatisch.
+- **Andere Konsolen:** den passenden Emulator (z. B. `nesDS.nds`) ins Hauptverzeichnis oder nach `/_dsrunner/emulators` legen. Welche Emulatoren DsRunner kennt und wo es sucht: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).
 
 ### Update auf eine neue Version
 
@@ -83,7 +87,7 @@ Der Touchscreen funktioniert ebenfalls.
 
 ## Artworks
 
-Die großen Bilder für den oberen Bildschirm besorgt das PC-Programm **DsRunner Art** automatisch: SD-Karte einstecken, Programm starten, **„Artworks aktualisieren“** klicken. Es erkennt die Spiele (DS und GBA am Game-Code, andere Konsolen an Prüfsumme oder Dateiname), lädt Titelbilder, Screenshots oder Cover von [libretro-thumbnails](https://github.com/libretro-thumbnails) und erzeugt Bilder für die Konsolen-Ordner. Außerdem legt es für jedes Spiel ein kleines **Cover für die Kachel** an (auch für GBA-Spiele, die kein eigenes Icon haben). Eigene Bilder haben Vorrang.
+Die großen Bilder für den oberen Bildschirm besorgt das PC-Programm **DsRunner Art** automatisch: SD-Karte einstecken, Programm starten, **„Bilder aktualisieren“** klicken. Es erkennt die Spiele (DS und GBA am Game-Code, andere Konsolen an Prüfsumme oder Dateiname), lädt Titelbilder, Screenshots oder Cover von [libretro-thumbnails](https://github.com/libretro-thumbnails) und erzeugt Bilder für die Konsolen-Ordner. Außerdem legt es für jedes Spiel die Bilder der drei Ansichten an: ein vereinfachtes **Kachel-Bild** für das 3×2-Raster, das echte **Cover** für die CoverFlow und für Spiele ohne eigenes Icon (GBA & Co.) ein kleines **Pixel-Icon** für das 4×3-Raster. Eigene Bilder haben Vorrang.
 
 - Windows: `DsRunnerArt.exe` aus dem [Release](https://github.com/HolziDape/DsRunner/releases/latest), oder mit Python aus `tools/dsrunner-art`
 - Anleitung, Optionen und Fehlerbehebung: **[docs/ART-TOOL.md](docs/ART-TOOL.md)**
@@ -109,7 +113,7 @@ DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 
 
 ## Stand
 
-DsRunner ist in Entwicklung. Was fertig ist und was als Nächstes kommt, steht in **[docs/PLAN.md](docs/PLAN.md)**. Fehler und Wünsche gerne als [Issue](https://github.com/HolziDape/DsRunner/issues).
+DsRunner ist in Entwicklung. Was fertig ist und was als Nächstes kommt, steht in **[docs/PLAN.md](docs/PLAN.md)**, die Änderungen pro Version im **[CHANGELOG](CHANGELOG.md)**. Fehler und Wünsche gerne als [Issue](https://github.com/HolziDape/DsRunner/issues).
 
 ## Selbst bauen
 

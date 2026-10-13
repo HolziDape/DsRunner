@@ -1,8 +1,13 @@
-"""Image conversion to the launcher's artwork and tile formats and generated artworks.
+"""Image conversion to the launcher's artwork, tile, cover and icon formats and generated artworks.
 
 Artworks (docs/CONFIG.md, "Artworks"): Windows BMP, 256x192, 8 bpp with palette, BI_RGB.
-Tile images (docs/CONFIG.md, "Kachel-Bilder"): the same, but 64x64.
-The DS shows palette index 0 as transparent, so the written files never use it.
+Tile images (docs/CONFIG.md, "Kachel-Bilder"): the same, but 64x64, in a simplified style (at most
+24 colors, no dithering).
+The DS shows palette index 0 as transparent, so these files never use it.
+Covers for the cover flow (docs/Customization.md, "Cover format"): 128x96, 8 bpp, the picture in the
+left 106x96 pixels, the rest is padding. Realistic: 255 colors with dithering.
+Icons for the 4x3 grid (docs/Customization.md, "Icon format"): 32x32, 4 bpp, 16 colors, palette
+index 0 is transparent. Minimalist: at most 15 colors, no dithering, single pixels cleaned up.
 """
 from __future__ import annotations
 
@@ -11,11 +16,23 @@ import struct
 from dataclasses import dataclass, field
 from typing import Optional
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 WIDTH = 256
 HEIGHT = 192
 TILE_SIZE = 64
+# tile images: few colors and no dithering, so they look clean at 64 px
+TILE_COLORS = 24
+# covers: the texture is 128x96, the cover flow shows the left 106x96 pixels
+COVER_WIDTH = 128
+COVER_HEIGHT = 96
+COVER_PICTURE_WIDTH = 106
+COVER_BACKGROUND = (18, 20, 28)  # #12141C, around the picture when its aspect differs
+# icons: 32x32, 4 bpp; index 0 is transparent, so 15 colors are left
+ICON_SIZE = 32
+ICON_COLORS = 15
+# transparent rounded corners of the icons (radius in pixels)
+ICON_CORNER_RADIUS = 4
 # the launcher darkens the art from line 92 on and draws the title at line 122
 VISIBLE_HEIGHT = 92
 MAX_COLORS = 255
@@ -26,8 +43,9 @@ ACCENT = (76, 194, 255)    # #4CC2FF
 SIGNATURE = (0x5244, 1)  # "DR", format 1
 
 # NDS and (western) GBA box fronts carry a band with the console name on the left: system ->
-# (share of the width, aspect range of the boxes that have it), measured on libretro boxarts
-SPINES = {"nds": (0.135, 1.0, 1.3), "gba": (0.145, 0.95, 1.05)}
+# (share of the width, aspect range of the boxes that have it), measured on libretro boxarts.
+# GBA boxes have a silver frame next to the band, the picture starts at about 22 %
+SPINES = {"nds": (0.135, 1.0, 1.3), "gba": (0.225, 0.95, 1.05)}
 # a screen half counts as empty when one color covers more than this share of it
 FLAT_SHARE = 0.6
 
@@ -160,9 +178,123 @@ def to_tile(image: Image.Image, art_type: str, system_key: Optional[str] = None)
         anchor = 0.3 if portrait else 0.5
     elif art_type == "boxart":
         image = trim_spine(image, system_key)
+        # zoomed in on logo and main character: rating labels and publisher logos in the corners
+        # are only noise at 64 pixels
+        if image.width >= image.height * 0.8:
+            image = salient_square(image, 0.82, (0.5, 0.3))
         # the logo sits at the top of tall boxes
         anchor = 0.3
-    return cover_fit(image, anchor, (TILE_SIZE, TILE_SIZE))
+    tile = cover_fit(image, anchor, (TILE_SIZE, TILE_SIZE))
+    # less detail: half of a 3x3 median smooths fine texture but keeps edges and letters
+    tile = Image.blend(tile, tile.filter(ImageFilter.MedianFilter(3)), 0.5)
+    return simplify(tile)
+
+
+def simplify(image: Image.Image, contrast: float = 1.08, color: float = 1.12, sharpen: int = 60) -> Image.Image:
+    """A bit more contrast and color and slightly sharper edges: the small pictures read better
+    once their colors are reduced (without dithering)."""
+    image = ImageEnhance.Contrast(image).enhance(contrast)
+    image = ImageEnhance.Color(image).enhance(color)
+    if sharpen:
+        image = image.filter(ImageFilter.UnsharpMask(radius=1, percent=sharpen, threshold=2))
+    return image
+
+
+def to_cover(image: Image.Image, art_type: str, system_key: Optional[str] = None) -> Image.Image:
+    """Turns a boxart, screen or user image into a 128x96 RGB cover for the cover flow.
+
+    The whole picture is fitted into the left 106x96 pixels (pictures with nearly the same aspect
+    fill it, the others get dark bars), the 22 pixels on the right are black padding."""
+    image = _flatten(image)
+    if art_type in ("title", "snap"):
+        image, _ = pick_screen(image, system_key)
+    width, height = image.size
+    area = (COVER_PICTURE_WIDTH, COVER_HEIGHT)
+    aspect = width / height
+    target = area[0] / area[1]
+    if abs(aspect / target - 1) <= 0.06:
+        picture = cover_fit(image, 0.5, area)
+    else:
+        scale = min(area[0] / width, area[1] / height)
+        size = (max(1, round(width * scale)), max(1, round(height * scale)))
+        picture = Image.new("RGB", area, COVER_BACKGROUND)
+        picture.paste(image.resize(size, _RESAMPLE), ((area[0] - size[0]) // 2, (area[1] - size[1]) // 2))
+    cover = Image.new("RGB", (COVER_WIDTH, COVER_HEIGHT), (0, 0, 0))
+    cover.paste(picture, (0, 0))
+    return cover
+
+
+def _detail_map(image: Image.Image, short_side: int = 48) -> tuple[list[float], int, int]:
+    """Edge strength plus a bit of saturation per pixel of a small copy (row by row), and its size."""
+    width, height = image.size
+    scale = short_side / min(width, height)
+    size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    small = image.resize(size, Image.Resampling.BILINEAR)
+    edges = small.convert("L").filter(ImageFilter.FIND_EDGES).tobytes()
+    saturation = small.convert("HSV").getchannel("S").tobytes()
+    return [edge + 0.25 * sat for edge, sat in zip(edges, saturation)], size[0], size[1]
+
+
+def salient_square(image: Image.Image, share: float, anchor: tuple[float, float]) -> Image.Image:
+    """The square crop (share of the short side) with the most detail, preferring the anchor.
+
+    Simple heuristic for "the most recognizable part": logos and characters have many edges and
+    strong colors, empty sky or plain backgrounds have none. A distance penalty keeps the crop near
+    the anchor (where boxes and title screens usually have the logo) and away from rating labels and
+    publisher logos in the corners."""
+    width, height = image.size
+    values, map_width, map_height = _detail_map(image)
+    window = max(1, round(min(map_width, map_height) * share))
+    # summed area table: sums of any window in constant time
+    table = [[0.0] * (map_width + 1) for _ in range(map_height + 1)]
+    for y in range(map_height):
+        row_sum = 0.0
+        row = values[y * map_width:(y + 1) * map_width]
+        above, current = table[y], table[y + 1]
+        for x in range(map_width):
+            row_sum += row[x]
+            current[x + 1] = above[x + 1] + row_sum
+    free_x, free_y = map_width - window, map_height - window
+    best, best_x, best_y = -1.0, 0, 0
+    for y in range(free_y + 1):
+        for x in range(free_x + 1):
+            total = table[y + window][x + window] - table[y][x + window] - table[y + window][x] + table[y][x]
+            dx = (x / free_x - anchor[0]) if free_x else 0.0
+            dy = (y / free_y - anchor[1]) if free_y else 0.0
+            score = total * (1.0 - 0.6 * min(1.0, (dx * dx + dy * dy) ** 0.5))
+            if score > best:
+                best, best_x, best_y = score, x, y
+    scale = min(width, height) / min(map_width, map_height)
+    side = round(min(width, height) * share)
+    left = min(width - side, round(best_x * scale))
+    top = min(height - side, round(best_y * scale))
+    return image.crop((left, top, left + side, top + side))
+
+
+def to_icon(image: Image.Image, art_type: str, system_key: Optional[str] = None) -> Image.Image:
+    """Turns a boxart, screen or user image into a minimalist 32x32 RGBA icon (corners transparent).
+
+    The most detailed square around the logo area is cut out, scaled down with a good filter and
+    given a bit more contrast; to_icon_bmp then reduces it to 15 flat colors."""
+    image = _flatten(image)
+    if art_type in ("title", "snap"):
+        image, _ = pick_screen(image, system_key)
+        # title screens have the logo in the upper middle
+        share, anchor = 1.0, (0.5, 0.35)
+    elif art_type == "boxart":
+        image = trim_spine(image, system_key)
+        # the logo and the main character sit in the upper part of the box
+        share, anchor = 0.85, (0.5, 0.3)
+    else:
+        # the user's own pictures: the middle
+        share, anchor = 1.0, (0.5, 0.5)
+    crop = salient_square(image, share, anchor)
+    icon = crop.resize((ICON_SIZE, ICON_SIZE), _RESAMPLE, reducing_gap=3.0)
+    icon = simplify(icon, contrast=1.12, color=1.2, sharpen=40).convert("RGBA")
+    mask = Image.new("L", icon.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, ICON_SIZE - 1, ICON_SIZE - 1), ICON_CORNER_RADIUS, fill=255)
+    icon.putalpha(mask)
+    return icon
 
 
 def icon_tile(icon: Image.Image) -> Image.Image:
@@ -184,7 +316,7 @@ def _to_555(value: int) -> int:
 
 
 def quantize(image: Image.Image, colors: int = MAX_COLORS, dither: bool = True) -> tuple[bytes, list[tuple[int, int, int]]]:
-    """Reduces an RGB image to at most `colors` DS colors with Floyd-Steinberg dithering.
+    """Reduces an RGB image to at most `colors` DS colors, with Floyd-Steinberg dithering or flat.
 
     Returns the pixel indices (0-based, row by row, top to bottom) and the palette.
     """
@@ -192,7 +324,9 @@ def quantize(image: Image.Image, colors: int = MAX_COLORS, dither: bool = True) 
     # build the palette from the colors the DS can show, then dither against exactly those colors
     lut = [_to_555(value) for value in range(256)]
     reduced = rgb.point(lut * 3)
-    palette_image = reduced.quantize(colors=colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    # few colors: refine the median cut palette (k-means), every color counts there
+    palette_image = reduced.quantize(colors=colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE,
+                                     kmeans=2 if colors <= 32 else 0)
     used = sorted(index for _, index in (palette_image.getcolors(256) or []))
     raw_palette = palette_image.getpalette() or []
     palette = [tuple(_to_555(c) for c in raw_palette[i * 3:i * 3 + 3]) for i in used if i * 3 + 3 <= len(raw_palette)]
@@ -234,10 +368,79 @@ def encode_bmp(pixels: bytes, palette: list[tuple[int, int, int]], skip_index_ze
     return file_header + info_header + palette_bytes + pixel_bytes
 
 
-def to_ds_bmp(image: Image.Image, dither: bool = True) -> bytes:
-    """RGB image (256x192 artwork or 64x64 tile image) -> BMP bytes in the launcher's format."""
-    pixels, palette = quantize(image, MAX_COLORS, dither)
+def to_ds_bmp(image: Image.Image, dither: bool = True, colors: int = MAX_COLORS) -> bytes:
+    """RGB image (256x192 artwork or 128x96 cover) -> BMP bytes in the launcher's format."""
+    pixels, palette = quantize(image, colors, dither)
     return encode_bmp(pixels, palette, size=image.size)
+
+
+def remove_specks(pixels: bytes, width: int, height: int, majority: int = 4) -> bytes:
+    """Light mode filter: a pixel whose color none of its 8 neighbors has takes the color most of
+    them have (when at least `majority` of them, or half of them at the edge, agree)."""
+    result = bytearray(pixels)
+    for y in range(height):
+        for x in range(width):
+            own = pixels[y * width + x]
+            counts: dict[int, int] = {}
+            neighbors = 0
+            for ny in range(max(0, y - 1), min(height, y + 2)):
+                for nx in range(max(0, x - 1), min(width, x + 2)):
+                    if nx == x and ny == y:
+                        continue
+                    neighbors += 1
+                    value = pixels[ny * width + nx]
+                    counts[value] = counts.get(value, 0) + 1
+            if own in counts:
+                continue
+            value, count = max(counts.items(), key=lambda item: (item[1], -item[0]))
+            if count >= min(majority, neighbors // 2 + 1):
+                result[y * width + x] = value
+    return bytes(result)
+
+
+def to_tile_bmp(image: Image.Image) -> bytes:
+    """64x64 RGB tile image -> BMP: at most TILE_COLORS flat colors (no dithering, no specks)."""
+    pixels, palette = quantize(image, TILE_COLORS, dither=False)
+    pixels = remove_specks(pixels, image.width, image.height, majority=5)
+    return encode_bmp(pixels, palette, size=image.size)
+
+
+def to_cover_bmp(image: Image.Image) -> bytes:
+    """128x96 RGB cover -> 8 bpp BMP for the cover flow (realistic: 255 colors, dithered)."""
+    return to_ds_bmp(image, dither=True)
+
+
+def encode_icon_bmp(pixels: bytes, palette: list[tuple[int, int, int]]) -> bytes:
+    """Writes a 32x32 4 bpp bottom-up BMP with a 16 color palette (as BmpFileIconData reads it).
+
+    pixels: one palette index (0-15) per pixel, row by row from the top; index 0 is transparent."""
+    if len(pixels) != ICON_SIZE * ICON_SIZE or max(pixels) > 15:
+        raise ValueError("32x32 pixels with indices 0-15 expected")
+    palette = (list(palette) + [(0, 0, 0)] * 16)[:16]
+    palette_bytes = b"".join(struct.pack("<BBBB", b, g, r, 0) for r, g, b in palette)
+    rows = []
+    for y in range(ICON_SIZE):
+        row = pixels[y * ICON_SIZE:(y + 1) * ICON_SIZE]
+        # the left pixel is in the high nibble; 16 bytes per row need no padding
+        rows.append(bytes((row[x] << 4) | row[x + 1] for x in range(0, ICON_SIZE, 2)))
+    pixel_bytes = b"".join(reversed(rows))
+    offset = 14 + 40 + len(palette_bytes)
+    file_header = struct.pack("<2sIHHI", b"BM", offset + len(pixel_bytes), SIGNATURE[0], SIGNATURE[1], offset)
+    info_header = struct.pack("<IiiHHIIiiII", 40, ICON_SIZE, ICON_SIZE, 1, 4, 0, len(pixel_bytes), 2835, 2835, 16, 0)
+    return file_header + info_header + palette_bytes + pixel_bytes
+
+
+def to_icon_bmp(icon: Image.Image) -> bytes:
+    """32x32 RGBA icon -> 4 bpp BMP: at most 15 flat colors, transparent pixels get index 0."""
+    icon = icon.convert("RGBA")
+    if icon.size != (ICON_SIZE, ICON_SIZE):
+        raise ValueError("32x32 icon expected")
+    pixels, palette = quantize(icon.convert("RGB"), ICON_COLORS, dither=False)
+    pixels = remove_specks(pixels, ICON_SIZE, ICON_SIZE)
+    alpha = icon.getchannel("A").tobytes()
+    indices = bytes(0 if a < 128 else p + 1 for p, a in zip(pixels, alpha))
+    # entry 0 is never shown; the theme background makes previews on the PC look right
+    return encode_icon_bmp(indices, [BACKGROUND] + list(palette))
 
 
 def is_tool_bmp(data: bytes) -> bool:
@@ -257,7 +460,7 @@ class Validation:
         return not self.errors
 
 
-def validate_bmp(data: bytes, size: tuple[int, int] = (WIDTH, HEIGHT)) -> Validation:
+def validate_bmp(data: bytes, size: tuple[int, int] = (WIDTH, HEIGHT), index_zero_warning: bool = True) -> Validation:
     """Checks a file like DsRunnerTopArt::Load does (and warns about palette index 0).
 
     size: (256, 192) for artworks, (64, 64) for tile images."""
@@ -291,11 +494,69 @@ def validate_bmp(data: bytes, size: tuple[int, int] = (WIDTH, HEIGHT)) -> Valida
     if result.errors:
         return result
     pixels = data[pixel_offset:pixel_offset + pixel_count]
-    if 0 in pixels:
+    if index_zero_warning and 0 in pixels:
         result.warnings.append("Palettenfarbe 0 wird benutzt (der DS ersetzt sie durch eine ähnliche Farbe)")
     if max(pixels) >= colors:
         result.warnings.append("Pixel verweisen auf Farben außerhalb der Palette")
     return result
+
+
+def validate_cover_bmp(data: bytes) -> Validation:
+    """Checks a cover like BmpFileCover does (BmpHeader::Validate: 128x96, 8 bpp, 40 byte header,
+    0 or 256 palette entries). Covers are textures without transparency, index 0 is fine."""
+    result = validate_bmp(data, (COVER_WIDTH, COVER_HEIGHT), index_zero_warning=False)
+    if result.ok:
+        dib_size = struct.unpack_from("<I", data, 0x0E)[0]
+        colors = struct.unpack_from("<I", data, 0x2E)[0]
+        if dib_size != 40:
+            result.errors.append(f"BMP-Kopf mit {dib_size} statt 40 Bytes")
+        if colors not in (0, 256):
+            result.errors.append(f"{colors} Palettenfarben statt 256")
+    return result
+
+
+def validate_icon_bmp(data: bytes) -> Validation:
+    """Checks an icon like BmpFileIconData::Load does: 32x32, 4 bpp, BI_RGB, 40 byte header,
+    0 or 16 palette entries, pixel data after the 118 bytes of header and palette."""
+    result = Validation()
+    if len(data) < 118 or data[:2] != b"BM":
+        result.errors.append("keine BMP-Datei")
+        return result
+    pixel_offset, dib_size = struct.unpack_from("<II", data, 0x0A)
+    width, height = struct.unpack_from("<ii", data, 0x12)
+    bpp = struct.unpack_from("<H", data, 0x1C)[0]
+    compression = struct.unpack_from("<I", data, 0x1E)[0]
+    colors = struct.unpack_from("<I", data, 0x2E)[0]
+    if dib_size != 40:
+        result.errors.append(f"BMP-Kopf mit {dib_size} statt 40 Bytes")
+    if width != ICON_SIZE or abs(height) != ICON_SIZE:
+        result.errors.append(f"Größe {width}x{abs(height)} statt 32x32")
+    if bpp != 4:
+        result.errors.append(f"{bpp} bit pro Pixel statt 4")
+    if compression != 0:
+        result.errors.append("komprimiert (nur BI_RGB geht)")
+    if colors not in (0, 16):
+        result.errors.append(f"{colors} Palettenfarben statt 16")
+    if result.errors:
+        return result
+    if pixel_offset < 118:
+        result.errors.append("Bilddaten beginnen vor dem Ende der Palette")
+    elif pixel_offset + ICON_SIZE * ICON_SIZE // 2 > len(data):
+        result.errors.append("Bilddaten unvollständig")
+    return result
+
+
+def decode_icon_bmp(data: bytes) -> tuple[list[list[int]], list[tuple[int, int, int]]]:
+    """Reads an icon the way BmpFileIconData does: (rows of palette indices from the top, palette)."""
+    palette = [(data[0x36 + i * 4 + 2], data[0x36 + i * 4 + 1], data[0x36 + i * 4]) for i in range(16)]
+    pixel_offset = struct.unpack_from("<I", data, 0x0A)[0]
+    top_down = struct.unpack_from("<i", data, 0x16)[0] < 0
+    raw = data[pixel_offset:pixel_offset + ICON_SIZE * ICON_SIZE // 2]
+    rows = []
+    for y in range(ICON_SIZE):
+        source = raw[(y if top_down else ICON_SIZE - 1 - y) * 16:][:16]
+        rows.append([value for byte in source for value in (byte >> 4, byte & 0x0F)])
+    return rows, palette
 
 
 def decode_bmp(data: bytes) -> Image.Image:

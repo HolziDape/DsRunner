@@ -8,19 +8,28 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .consoles import System, system_for_file
+from .consoles import (MAX_SYSTEMS_FILE_SIZE, CustomConsole, System, parse_systems_json, set_custom_systems,
+                       system_for_file)
 
 # see DsRunnerFileInfoCardView.cpp
 ART_FOLDER = "/_dsrunner/art"
 # size of the path buffer in DsRunnerFileInfoCardView::RequestArt (including the terminator)
 ART_PATH_BUFFER = 256
 SETTINGS_PATH = "/_pico/settings.json"
+# optional consoles of the launcher (DsRunnerSystems::FilePath)
+SYSTEMS_PATH = "/_dsrunner/systems.json"
 DEFAULT_LIBRARY_PATH = "/Games"
 OVERRIDE_FOLDER = "/_dsrunner/art-override"
 # tile images for the launcher grid: same path rule, other root (docs/CONFIG.md, "Kachel-Bilder")
 TILE_FOLDER = "/_dsrunner/tiles"
 TILE_OVERRIDE_FOLDER = "/_dsrunner/tile-override"
 MANIFEST_NAME = ".dsrunner-art.json"
+# Pico's covers (cover flow) and icons by file name, see CoverRepository / IconRepository and
+# docs/Customization.md: /_pico/covers/user/<file name with extension>.bmp
+COVER_FOLDER = "/_pico/covers/user"
+ICON_FOLDER = "/_pico/icons/user"
+# Pico builds "<file name>.bmp" in a 256 byte buffer
+USER_NAME_BUFFER = 256
 
 # folders in the SD root that are never consoles (only relevant without a library folder)
 _ROOT_SYSTEM_FOLDERS = {"system", "system volume information", "$recycle.bin", "recycler", "found.000"}
@@ -71,6 +80,20 @@ def tile_path_for_entry(entry_path: str, is_folder: bool) -> Optional[str]:
     return art_path_for_entry(entry_path, False, TILE_FOLDER)
 
 
+def user_file_path(entry_path: str, is_folder: bool, root: str) -> Optional[str]:
+    """Path of a cover or icon by file name: /Games/GBA/Kirby.gba -> /_pico/covers/user/Kirby.gba.bmp.
+
+    root is COVER_FOLDER or ICON_FOLDER. None for folders and for names Pico can't look up (longer
+    than its buffer, or than a FAT long file name)."""
+    if is_folder:
+        return None
+    name = skip_drive(entry_path).rstrip("/").rsplit("/", 1)[-1]
+    file_name = name + ".bmp"
+    if not name or len(file_name.encode()) >= USER_NAME_BUFFER or len(file_name) > 255:
+        return None
+    return f"{root}/{file_name}"
+
+
 def to_fs_path(sd_root: Path, sd_path: str) -> Path:
     """Local path of an SD path ("/Games/NDS" -> E:\\Games\\NDS)."""
     parts = [part for part in skip_drive(sd_path).split("/") if part]
@@ -99,6 +122,28 @@ def read_library_path(sd_root: Path) -> str:
     return skip_drive(value)
 
 
+def read_systems_json(sd_root: Path) -> tuple[list[CustomConsole], list[str]]:
+    """The consoles of /_dsrunner/systems.json and warnings for the log. Like the launcher, a missing file
+    gives no consoles silently, an invalid one gives a warning and no consoles."""
+    path = to_fs_path(sd_root, SYSTEMS_PATH)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return [], []
+    if size == 0 or size > MAX_SYSTEMS_FILE_SIZE:
+        return [], [f"{SYSTEMS_PATH} wird ignoriert (Größe {size} Bytes, höchstens {MAX_SYSTEMS_FILE_SIZE})."]
+    try:
+        with open(path, encoding="utf-8-sig") as file:
+            data = json.load(file)
+    except (OSError, ValueError) as error:
+        return [], [f"{SYSTEMS_PATH} wird ignoriert (kein gültiges JSON: {error})."]
+    customs, warnings = parse_systems_json(data)
+    for custom in customs:
+        if custom.emulator and not to_fs_path(sd_root, custom.emulator).is_file():
+            warnings.append(f"systems.json: Emulator {custom.emulator} für {custom.console.folder_name} fehlt auf der Karte.")
+    return customs, warnings
+
+
 @dataclass
 class Entry:
     """A folder or ROM the launcher shows and that gets an artwork."""
@@ -122,6 +167,14 @@ class Entry:
     @property
     def tile_sd_path(self) -> Optional[str]:
         return tile_path_for_entry(self.sd_path, self.is_folder)
+
+    @property
+    def cover_sd_path(self) -> Optional[str]:
+        return user_file_path(self.sd_path, self.is_folder, COVER_FOLDER)
+
+    @property
+    def icon_sd_path(self) -> Optional[str]:
+        return user_file_path(self.sd_path, self.is_folder, ICON_FOLDER)
 
     @property
     def stem(self) -> str:
@@ -170,8 +223,10 @@ def _is_hidden(path: Path, name: str) -> bool:
 
 def scan(sd_root: Path, library_path: Optional[str] = None, max_depth: int = 4,
          cancelled: Callable[[], bool] = lambda: False) -> ScanResult:
-    """Collects the console folders, subfolders and ROMs of the library."""
-    warnings: list[str] = []
+    """Collects the console folders, subfolders and ROMs of the library. Reads systems.json first, its
+    consoles stay known to dsrunnerart.consoles (colors, systems) until the next scan."""
+    customs, warnings = read_systems_json(sd_root)
+    set_custom_systems(customs)
     if library_path is None:
         library_path = read_library_path(sd_root)
     library_path = "/" + library_path.strip("/") if library_path.strip("/") else ""

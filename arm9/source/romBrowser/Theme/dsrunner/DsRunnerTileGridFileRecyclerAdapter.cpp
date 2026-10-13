@@ -13,8 +13,10 @@
 
 SharedPtr<View> DsRunnerTileGridFileRecyclerAdapter::CreateView() const
 {
+    // without a texture loader the view allocates no texture vram and never shows a tile image
     return DsRunnerTileItemView::CreateShared(std::make_unique<RomBrowserItemViewModel>(_romBrowserController),
-        _romBrowserController, _textureLoader, _tileWidth, _tileHeight, _iconScale, _clipTop);
+        _romBrowserController, _useTileImages ? _textureLoader : nullptr, _tileWidth, _tileHeight, _iconScale,
+        _clipTop);
 }
 
 void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int index) const
@@ -38,7 +40,7 @@ TaskResult<void> DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> v
     const InternalFileInfo* internalFileInfo, const vu8& cancelRequested) const
 {
     auto result = IconGridFileRecyclerAdapter::BindView(view, index, internalFileInfo, cancelRequested);
-    if (cancelRequested)
+    if (cancelRequested || !_useTileImages)
         return result;
 
     // games can have a tile image instead of the icon (folders keep their console badge)

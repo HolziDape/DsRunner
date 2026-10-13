@@ -1,6 +1,12 @@
 # DsRunner Art: Artworks automatisch auf die Karte
 
-**DsRunner Art** ist ein kleines PC-Programm für Windows (läuft auch unter Linux und macOS). Es liest die Spiele auf deiner SD-Karte, sucht passende Bilder im Internet und speichert sie im Format, das DsRunner auf dem oberen Bildschirm zeigt. Konsolen-Ordner bekommen ein eigenes Bild in der Farbe der Konsole. Außerdem bekommt jedes Spiel ein kleines [Kachel-Bild](#kachel-bilder) für das Raster im Launcher.
+**DsRunner Art** ist ein kleines PC-Programm für Windows (läuft auch unter Linux und macOS). Es liest die Spiele auf deiner SD-Karte, sucht passende Bilder im Internet und speichert sie im Format, das DsRunner auf dem oberen Bildschirm zeigt. Konsolen-Ordner bekommen ein eigenes Bild in der Farbe der Konsole. Außerdem bekommt jedes Spiel passende Bilder für die drei Ansichten des Launchers:
+
+| Ansicht | Bild | Stil |
+|---|---|---|
+| Raster 3 × 2 | [Kachel-Bild](#kachel-bilder) 64 × 64 | mittel: vereinfacht, wenige Farben |
+| Raster 4 × 3 | [Icon](#cover-und-icons) 32 × 32 (nur Spiele ohne eigenes Icon, also nicht DS) | minimalistisch: Pixelgrafik mit 15 Farben |
+| CoverFlow | [Cover](#cover-und-icons) 106 × 96 | realistisch: das echte Cover |
 
 ## Installation
 
@@ -25,13 +31,13 @@ Windows zeigt beim ersten Start eventuell „Der Computer wurde durch Windows ge
 
 1. SD-Karte in den PC stecken.
 2. DsRunner Art starten. Bei **SD-Karte** steht die Karte schon drin, wenn darauf DsRunner liegt (erkennbar an „(DsRunner)“). Sonst aus der Liste wählen oder mit **Ordner wählen …** einen Ordner angeben. **↻** liest die Laufwerke neu ein.
-3. Optionen prüfen (siehe unten) und **Artworks aktualisieren** klicken.
-4. Warten, bis „Fertig“ erscheint. Im Protokoll steht für jedes Spiel, welches Bild es bekommen hat, und bei Spielen ohne Bild der Grund. Mit **Details anzeigen** erscheinen auch die Spiele, an denen sich nichts geändert hat, und woher die Kachel-Bilder stammen.
+3. Optionen prüfen (siehe unten) und **Bilder aktualisieren** klicken.
+4. Warten, bis „Fertig“ erscheint. Im Protokoll steht für jedes Spiel, welches Bild es bekommen hat, und bei Spielen ohne Bild der Grund. Mit **Details anzeigen** erscheinen auch die Spiele, an denen sich nichts geändert hat, und woher Kachel-Bilder, Cover und Icons stammen.
 5. Karte sicher entfernen und in den DS stecken.
 
 Beim nächsten Mal lädt das Tool nur noch, was fehlt: neue Spiele, neue eigene Bilder. Das geht dann in wenigen Sekunden.
 
-**Prüfen** kontrolliert alle Bilder in `/_dsrunner/art` und `/_dsrunner/tiles` so, wie DsRunner sie lädt, und meldet unbrauchbare Dateien (zum Beispiel von Hand gespeicherte Bilder in der falschen Größe). **Artwork-Ordner öffnen** zeigt den Ordner im Explorer.
+**Prüfen** kontrolliert alle Bilder in `/_dsrunner/art`, `/_dsrunner/tiles`, `/_pico/covers/user` und `/_pico/icons/user` so, wie DsRunner sie lädt, und meldet unbrauchbare Dateien (zum Beispiel von Hand gespeicherte Bilder in der falschen Größe). **Artwork-Ordner öffnen** zeigt den Ordner im Explorer.
 
 ### Optionen
 
@@ -43,8 +49,10 @@ Beim nächsten Mal lädt das Tool nur noch, was fehlt: neue Spiele, neue eigene 
 | **Auch von Hand abgelegte Bilder ersetzen** | Normalerweise lässt das Tool BMP-Dateien in Ruhe, die es nicht selbst geschrieben hat (z. B. ein Testbild, das du nach `_dsrunner/art` kopiert hast). Mit dieser Option ersetzt es sie, sobald es ein Bild findet. Am Ende jedes Laufs steht, wie viele von Hand abgelegte Bilder behalten wurden. Nur bei Bedarf einschalten, die Option wird nicht gespeichert. |
 | **Bilder für Konsolen-Ordner erzeugen** | Jeder Konsolen-Ordner (`NDS`, `GBA`, …) und jeder Unterordner bekommt ein Bild: Farbverlauf in der Konsolenfarbe mit großem Kürzel. Dafür ist kein Internet nötig. |
 | **Spiel-Icon als Ersatzbild** | Findet das Tool für ein DS-Spiel kein Bild (z. B. Homebrew, keine Verbindung), baut es eins aus dem Icon des Spiels, auch für die Kachel. Bei der nächsten Aktualisierung wird erneut nach einem richtigen Bild gesucht. |
-| **Kachel-Bilder erzeugen** | Jedes Spiel bekommt ein Kachel-Bild (64 × 64) für das Raster, siehe [Kachel-Bilder](#kachel-bilder). Standard: an. |
-| **Bilder gelöschter Spiele entfernen** | Löscht Bilder und Kachel-Bilder, die das Tool für Spiele angelegt hat, die nicht mehr auf der Karte sind. |
+| **Kachel-Bilder erzeugen** | Jedes Spiel bekommt ein Kachel-Bild (64 × 64) für das 3×2-Raster, siehe [Kachel-Bilder](#kachel-bilder). Standard: an. |
+| **Cover erzeugen** | Jedes Spiel bekommt ein Cover für die CoverFlow-Ansicht, siehe [Cover und Icons](#cover-und-icons). Standard: an. |
+| **Kleine Icons erzeugen** | Spiele ohne eigenes Icon (GBA & Co.) bekommen ein Icon (32 × 32) für das 4×3-Raster, siehe [Cover und Icons](#cover-und-icons). Standard: an. |
+| **Bilder gelöschter Spiele entfernen** | Löscht Bilder, Kachel-Bilder, Cover und Icons, die das Tool für Spiele angelegt hat, die nicht mehr auf der Karte sind. |
 | **Eigene Bilder** | Ordner mit eigenen Bildern (siehe unten). Leer = `_dsrunner\art-override` auf der Karte. |
 
 ## Woher die Bilder kommen
@@ -61,6 +69,8 @@ Beim nächsten Mal lädt das Tool nur noch, was fehlt: neue Spiele, neue eigene 
 2. **Andere Konsolen** (GB, GBC, NES, SNES, …): über die Prüfsumme der Datei (CRC32).
 3. **Sonst über den Namen:** Dateiname bzw. Titel aus dem DS-Banner. Klammern wie `(Europe)`, `[!]`, Nummern wie `0042 - ` und Groß-/Kleinschreibung werden ignoriert. Bei leicht abweichenden Namen sucht das Tool den ähnlichsten (Zahlen müssen aber übereinstimmen, „FIFA 08“ ist nicht „FIFA 09“). Fehlen Wörter oder ein Untertitel („Pokemon Rot“ → „Pokemon - Rote Edition“, „Donkey Kong Country 2“ → „… - Diddy's Kong Quest“), klappt es ebenfalls, solange nur ein Spiel passt.
 
+**Welche Dateien:** alle Endungen, die DsRunner kennt (`.nds`, `.gba`, `.gb`, `.gbc`, `.sgb`, `.nes`, `.fds`, `.sfc`, `.smc`, `.sms`, `.gg`, `.md`, `.gen`, `.smd`, `.pce`, `.sgx`), dazu die Endungen der Konsolen aus [`/_dsrunner/systems.json`](CONFIG.md#eigene-konsolen-systemsjson). Für eine eigene Konsole sucht das Tool im libretro-System aus ihrem Eintrag `libretro`. Ohne diesen Eintrag entscheidet die Endung (`.ws`, `.wsc`, `.ngp`, `.ngc`, `.a26`, `.a78`, `.col` und `.sg` kennt das Tool), sonst bekommt der Ordner nur sein Konsolen-Bild in der Farbe aus `systems.json`.
+
 Die Bilder landen **nur auf deiner Karte**. Sie gehören den jeweiligen Rechteinhabern und werden weder im Repository noch in Releases verteilt.
 
 ## Titelbild oder Cover
@@ -75,12 +85,32 @@ Getestet mit 17 DS-Spielen mit Titelbild (u. a. Mario Kart DS, Pokémon Schwarz 
 
 ## Kachel-Bilder
 
-Die Icons der DS-Spiele (32 × 32) sind in den großen Kacheln grob, GBA-Spiele haben gar keins. Deshalb legt das Tool für jedes Spiel ein **Kachel-Bild** (64 × 64) an, das DsRunner in der Kachel statt des Icons zeigt:
+Die Icons der DS-Spiele (32 × 32) sind in den großen Kacheln des 3×2-Rasters grob, GBA-Spiele haben gar keins. Deshalb legt das Tool für jedes Spiel ein **Kachel-Bild** (64 × 64) an, das DsRunner dort statt des Icons zeigt (das 4×3-Raster zeigt immer das Icon):
 
 - Pfad wie beim Artwork, nur unter `/_dsrunner/tiles`: `/Games/NDS/Mario Kart DS.nds` → `/_dsrunner/tiles/Games/NDS/Mario Kart DS.bmp`. Ordner bekommen keins.
 - Inhalt: das **Cover**, auf 64 × 64 gefüllt (der Streifen „NINTENDO DS“ bzw. „GAME BOY ADVANCE“ am linken Rand wird abgeschnitten). Ersatz der Reihe nach: Titelbild, Screenshot, das Icon des Spiels doppelt groß (pixelgenau) auf dunklem Grund.
-- Verkleinert mit Lanczos, auf 255 Farben mit Dithering, Format wie in [CONFIG.md](CONFIG.md#kachel-bilder).
+- **Vereinfachter Stil**, damit das Bild bei 64 Pixeln nicht unruhig wirkt: verkleinert mit Lanczos, zur Hälfte mit einem 3 × 3-Median geglättet (feine Muster verschwinden, Kanten und Schrift bleiben), etwas mehr Kontrast und Farbe, leicht nachgeschärft, dann auf **höchstens 24 Farben ohne Dithering** reduziert; einzelne Pixel, die zu keinem Nachbarn passen, übernehmen die Farbe ihrer Umgebung. Format wie in [CONFIG.md](CONFIG.md#kachel-bilder).
+- Kachel-Bilder aus älteren Versionen (mit 255 Farben und Dithering) erneuert das Tool beim nächsten Lauf einmal automatisch.
 - Es gelten dieselben Regeln wie bei den Artworks: Liste in `/_dsrunner/tiles/.dsrunner-art.json`, von Hand abgelegte Kachel-Bilder bleiben (außer mit **Auch von Hand abgelegte Bilder ersetzen**), Icon-Ersatz wird beim nächsten Lauf erneut gesucht.
+
+## Cover und Icons
+
+Beide liegen in Picos Ordnern und gelten für den **Dateinamen mit Endung** (so sucht Pico sie, siehe [CONFIG.md](CONFIG.md#cover-coverflow)). Zwei Spiele mit demselben Dateinamen in verschiedenen Ordnern teilen sich Cover und Icon. Eigene Bilder aus `art-override`/`tile-override` gelten hier nicht; wer ein anderes Cover oder Icon will, legt das BMP selbst in den Ordner (es bleibt dann, wie bei den Artworks).
+
+**Cover (CoverFlow, realistisch):** `/Games/GBA/Golden Sun.gba` → `/_pico/covers/user/Golden Sun.gba.bmp`
+
+- Inhalt: das echte **Cover** (Ersatz: Titelbild, dann Screenshot), im Ganzen in die sichtbaren 106 × 96 Pixel eingepasst. DS-Cover haben fast dasselbe Seitenverhältnis und füllen die Fläche, quadratische GBA-Cover und Bildschirmbilder bekommen dunkle Ränder (#12141C). Rechts 22 Pixel schwarzer Rand (nicht sichtbar).
+- 128 × 96, 8 bit, bis zu 255 Farben mit Floyd-Steinberg-Dithering, damit es wie ein Foto wirkt.
+- Ohne Bild bleibt Picos „?“; aus dem Spiel-Icon baut das Tool kein Cover.
+
+**Icons (4×3-Raster, minimalistisch):** `/Games/GBA/Golden Sun.gba` → `/_pico/icons/user/Golden Sun.gba.bmp`
+
+- Nur für Spiele **ohne eigenes Icon**: alle außer DS-Spielen, und DS-Spiele, deren ROM kein Icon hat (Homebrew). DS-Spiele mit Banner-Icon behalten ihr Icon.
+- Ausschnitt: das Tool sucht im Cover (Ersatz: Titelbild, Screenshot) das Quadrat mit den meisten Kanten und kräftigsten Farben, also meist Logo und Hauptfigur. Beim Cover ist das Quadrat 85 % der kürzeren Seite groß und liegt bevorzugt im oberen Drittel (ohne den Konsolen-Streifen links), beim Titelbild ist es so hoch wie das Bild und liegt bevorzugt in der Mitte. Je weiter ein Quadrat davon entfernt ist, desto mehr Abzug bekommt es; Altersfreigabe und Herstellerlogo in den Ecken gewinnen so nicht.
+- Verkleinert mit Lanczos auf 32 × 32, mehr Kontrast und Farbe, dann **höchstens 15 Farben ohne Dithering**, einzelne Pixel werden geglättet. Die Ecken sind abgerundet und durchsichtig (Palettenfarbe 0).
+- 32 × 32, 4 bit, 16 Farben, wie Pico es erwartet. Im 3×2-Raster erscheint das Icon doppelt groß, wenn es dort kein Kachel-Bild gibt.
+
+Für beide gilt dieselbe Buchführung wie bei den Artworks: Liste in `/_pico/covers/user/.dsrunner-art.json` bzw. `/_pico/icons/user/.dsrunner-art.json`, Kennung im Dateikopf, **von Hand abgelegte Cover und Icons bleiben** (außer mit „Auch von Hand abgelegte Bilder ersetzen“). Fehlt ein Cover oder Icon, steht das nur unter **Details anzeigen** im Protokoll.
 
 ## Eigene Bilder
 
@@ -104,7 +134,8 @@ Ablage im Ordner `_dsrunner/art-override` auf der Karte (oder im gewählten Ordn
   `/Games/NDS/Mario Kart DS.nds` → `/_dsrunner/art/Games/NDS/Mario Kart DS.bmp`, Ordner `/Games/NDS` → `/_dsrunner/art/Games/NDS.bmp`.
 - Format: BMP 256 × 192, 8 bit, höchstens 255 Farben aus dem 15-bit-Farbraum des DS, Floyd-Steinberg-Dithering, Palettenfarbe 0 bleibt frei. Etwa 50 KB pro Bild.
 - Kachel-Bilder liegen genauso unter `/_dsrunner/tiles/` (nur Spiele, 64 × 64, siehe [Kachel-Bilder](#kachel-bilder)).
-- Die Datei `/_dsrunner/art/.dsrunner-art.json` (bzw. `/_dsrunner/tiles/.dsrunner-art.json`) merkt sich, welche Bilder vom Tool stammen. Zusätzlich trägt jedes BMP des Tools eine Kennung im Dateikopf, damit es auch dann erkannt wird, wenn die Liste verloren geht (z. B. Fenster während des Laufs geschlossen). **Bilder, die du selbst dorthin kopiert hast, überschreibt das Tool nur mit „Auch von Hand abgelegte Bilder ersetzen“** (`--replace-manual`). Wie viele es behalten hat, steht am Ende des Protokolls; kann DsRunner so ein Bild gar nicht anzeigen (falsche Größe o. Ä.), wird das gemeldet.
+- Cover und Icons liegen unter `/_pico/covers/user/` und `/_pico/icons/user/` (Dateiname mit Endung plus `.bmp`, siehe [Cover und Icons](#cover-und-icons)).
+- Die Datei `.dsrunner-art.json` in jedem dieser Ordner merkt sich, welche Bilder vom Tool stammen. Zusätzlich trägt jedes BMP des Tools eine Kennung im Dateikopf, damit es auch dann erkannt wird, wenn die Liste verloren geht (z. B. Fenster während des Laufs geschlossen). **Bilder, die du selbst dorthin kopiert hast, überschreibt das Tool nur mit „Auch von Hand abgelegte Bilder ersetzen“** (`--replace-manual`). Wie viele es behalten hat, steht am Ende des Protokolls; kann DsRunner so ein Bild gar nicht anzeigen (falsche Größe o. Ä.), wird das gemeldet.
 - Welcher Ordner die Bibliothek ist, liest das Tool aus `/_pico/settings.json` (`libraryPath`, Standard `/Games`). Gibt es ihn nicht, nimmt es das Hauptverzeichnis (ohne Ordner wie `_nds`, `_pico`, `SYSTEM`).
 
 ## Kommandozeile
@@ -131,12 +162,14 @@ Gleichwertig: `py -m dsrunnerart --sd E:\` im Ordner `tools\dsrunner-art`. Die `
 | `--sources libretro,gametdb` | Quellen und ihre Reihenfolge |
 | `--no-console-art`, `--no-icon` | keine Konsolen-Bilder bzw. Icon-Ersatzbilder |
 | `--no-tiles` | keine Kachel-Bilder erzeugen |
+| `--no-covers` | keine Cover für die CoverFlow-Ansicht erzeugen |
+| `--no-icons` | keine kleinen Icons (32 × 32) erzeugen (nicht verwechseln mit `--no-icon`) |
 | `--tile-override ORDNER` | Ordner mit eigenen Kachel-Bildern (Standard: `_dsrunner\tile-override` auf der Karte) |
 | `--replace-manual` | auch von Hand abgelegte Bilder ersetzen |
 | `--no-crc` | keine Prüfsummen berechnen (schneller bei sehr vielen großen Dateien) |
-| `--clean` | Bilder und Kachel-Bilder gelöschter Spiele entfernen |
+| `--clean` | Bilder, Kachel-Bilder, Cover und Icons gelöschter Spiele entfernen |
 | `--dry-run` | nur anzeigen, was passieren würde |
-| `--check` | vorhandene Bilder und Kachel-Bilder prüfen |
+| `--check` | vorhandene Bilder, Kachel-Bilder, Cover und Icons prüfen |
 | `--library PFAD` | anderer Bibliotheksordner als in `settings.json` |
 | `--retry-missing` | auch Bilder neu suchen, die in den letzten 14 Tagen nicht gefunden wurden |
 | `--cache ORDNER` | Cache-Ordner |
@@ -164,7 +197,7 @@ Der Ordner darf jederzeit gelöscht werden, er wird beim nächsten Lauf neu ange
 | **„Dateiliste von libretro-thumbnails nicht verfügbar“** | Die GitHub-API erlaubt ohne Anmeldung nur 60 Anfragen pro Stunde. Das Tool sucht die Bilder dann direkt, das ist nur etwas langsamer. |
 | **Fenster öffnet sich nicht / „tkinter fehlt“** | Python neu installieren und „tcl/tk and IDLE“ ausgewählt lassen. Oder die Kommandozeile mit `--sd` verwenden. |
 | **Doppelklick auf `dsrunner_art.py` öffnet einen Editor** | Rechtsklick → Öffnen mit → Python, oder im Ordner `py dsrunner_art.py` eingeben. |
-| **Bild erscheint nicht auf dem DS** | Artworks und Kachel-Bilder zeigt DsRunner in den Kachel-Ansichten (3×2, 4×3). Mit **Prüfen** kontrollieren, ob alle Dateien in Ordnung sind. Liegt das Bild im richtigen Pfad (siehe oben)? |
+| **Bild erscheint nicht auf dem DS** | Artworks zeigt DsRunner in allen Ansichten oben, Kachel-Bilder nur im 3×2-Raster, Icons im 4×3-Raster (und im 3×2-Raster ohne Kachel-Bild), Cover in der CoverFlow-Ansicht. DsRunner liest die Ordner von Pico beim Start ein: nach dem Kopieren neuer Cover oder Icons den DS neu starten. Mit **Prüfen** kontrollieren, ob alle Dateien in Ordnung sind. Liegt das Bild im richtigen Pfad (siehe oben)? |
 | **„Pfad zu lang für den Launcher“** | DsRunner kann Bildpfade bis 255 Zeichen laden. Den Spiel- oder Ordnernamen kürzen. |
 
 ## Für Entwickler
@@ -172,6 +205,6 @@ Der Ordner darf jederzeit gelöscht werden, er wird beim nächsten Lauf neu ange
 - Code: `tools/dsrunner-art/dsrunnerart/` (`sdcard.py` Pfade und Scan, `romheader.py`, `identify.py`, `sources.py`, `imaging.py`, `updater.py`, `gui.py`, `cli.py`)
 - Tests (ohne Netz, mit erzeugten ROM-Köpfen): `py -m unittest discover -s tests -t .` im Ordner `tools/dsrunner-art`
 - Weitere Quelle (z. B. SteamGridDB oder ScreenScraper, die einen API-Key brauchen): in `sources.py` von `ArtSource` ableiten, `candidates()` (und bei Bedarf `load()`) umsetzen und in `build_sources()` eintragen.
-- Die Pfadregel in `sdcard.art_path` entspricht `DsRunnerFileInfoCardView::RequestArt`, die Prüfung in `imaging.validate_bmp` entspricht `DsRunnerTopArt::Load`. Kachel-Bilder nutzen dieselbe Regel mit `sdcard.TILE_FOLDER` (`tile_path_for_entry`) und `validate_bmp(data, (64, 64))`. Ändert sich eins davon im Launcher, müssen Tool und Tests mitziehen.
-- Die Wahl der Bildschirmhälfte steht in `imaging.pick_screen`, die Reihenfolge der Bildarten in `sources.FALLBACK_ORDER` und `sources.TILE_ORDER`.
+- Die Pfadregel in `sdcard.art_path` entspricht `DsRunnerFileInfoCardView::RequestArt`, die Prüfung in `imaging.validate_bmp` entspricht `DsRunnerTopArt::Load`. Kachel-Bilder nutzen dieselbe Regel mit `sdcard.TILE_FOLDER` (`tile_path_for_entry`) und `validate_bmp(data, (64, 64))`. Cover und Icons: `sdcard.user_file_path` entspricht `CoverRepository`/`IconRepository` (Dateiname + `.bmp`), `imaging.validate_cover_bmp` entspricht `BmpFileCover`, `imaging.validate_icon_bmp` entspricht `BmpFileIconData::Load` (beide mit `BmpHeader::Validate`). Ändert sich eins davon im Launcher, müssen Tool und Tests mitziehen.
+- Die Wahl der Bildschirmhälfte steht in `imaging.pick_screen`, die Reihenfolge der Bildarten in `sources.FALLBACK_ORDER`, `sources.TILE_ORDER`, `sources.COVER_ORDER` und `sources.ICON_ORDER`, der Icon-Ausschnitt in `imaging.salient_square`. Nach einer Änderung am Aussehen einer Bildart `updater.STYLES` hochzählen, dann erneuert das Tool die alten Dateien.
 - Release: Der Workflow `release.yml` baut `DsRunnerArt.exe` mit PyInstaller auf `windows-latest` und hängt sie an das Release.

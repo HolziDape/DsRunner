@@ -290,7 +290,7 @@ void DsRunnerTileItemView::Update()
 
 void DsRunnerTileItemView::DrawTileImage()
 {
-    // the image sits in the middle of the tile, 1:1 in the 3x2 grid and scaled down in the 4x3 grid
+    // the image sits in the middle of the tile, 1:1 in the 3x2 grid (the 4x3 grid shows no tile images)
     int size = std::min(DSRUNNER_TILE_IMAGE_SIZE, std::min(_width, _height) - 2 * IMAGE_MARGIN);
     int x0 = _position.x + (_width - size) / 2;
     int y0 = _position.y + (_height - size) / 2;

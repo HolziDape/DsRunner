@@ -9,11 +9,12 @@ public:
     DsRunnerTileGridFileRecyclerAdapter(IRomBrowserController* romBrowserController, FileInfoManager* fileInfoManager,
         TaskQueueBase* taskQueue, const IThemeFileIconFactory* themeFileIconFactory,
         const IRomBrowserViewFactory* romBrowserViewFactory, VBlankTextureLoader* textureLoader,
-        int tileWidth, int tileHeight, int iconScale, int clipTop)
+        int tileWidth, int tileHeight, int iconScale, int clipTop, bool useTileImages)
         : IconGridFileRecyclerAdapter(romBrowserController, fileInfoManager, taskQueue,
             themeFileIconFactory, romBrowserViewFactory)
         , _textureLoader(textureLoader)
-        , _tileWidth(tileWidth), _tileHeight(tileHeight), _iconScale(iconScale), _clipTop(clipTop) { }
+        , _tileWidth(tileWidth), _tileHeight(tileHeight), _iconScale(iconScale), _clipTop(clipTop)
+        , _useTileImages(useTileImages) { }
 
     void GetViewSize(int& width, int& height) const override
     {
@@ -29,7 +30,7 @@ public:
     void InitVram(const VramContext& vramContext) override { }
 
 protected:
-    // runs on the io thread: the icon like the icon grid, plus the tile image of the game
+    // runs on the io thread: the icon like the icon grid, plus the tile image of the game (3x2 grid)
     TaskResult<void> BindView(SharedPtr<View> view, int index,
         const InternalFileInfo* internalFileInfo, const vu8& cancelRequested) const override;
 
@@ -39,4 +40,6 @@ private:
     int _tileHeight;
     int _iconScale;
     int _clipTop;
+    // false: no tile images, the views get no texture loader (and no texture vram)
+    bool _useTileImages;
 };

@@ -33,7 +33,8 @@ def _sources(value: str) -> tuple[str, ...]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dsrunner_art",
-        description="DsRunner Art: lädt Artworks (oberer Bildschirm) und Kachel-Bilder für DsRunner auf die SD-Karte. "
+        description="DsRunner Art: lädt Artworks (oberer Bildschirm), Kachel-Bilder (3×2), Cover (CoverFlow) und "
+                    "kleine Icons (4×3) für DsRunner auf die SD-Karte. "
                     "Ohne Argumente öffnet sich das Fenster.")
     parser.add_argument("--sd", metavar="LAUFWERK", help="SD-Karte bzw. Ordner, z. B. E:\\ oder /media/sd")
     parser.add_argument("--type", type=_art_type, default="title",
@@ -53,15 +54,20 @@ def build_parser() -> argparse.ArgumentParser:
                         help="kein Ersatzbild aus dem Spiel-Icon, wenn nichts gefunden wird")
     parser.add_argument("--no-tiles", action="store_true",
                         help="keine Kachel-Bilder (64x64, /_dsrunner/tiles) für das Raster des Launchers erzeugen")
+    parser.add_argument("--no-covers", action="store_true",
+                        help="keine Cover (128x96, /_pico/covers/user) für die CoverFlow-Ansicht erzeugen")
+    parser.add_argument("--no-icons", action="store_true",
+                        help="keine kleinen Icons (32x32, /_pico/icons/user) für Spiele ohne eigenes Icon erzeugen "
+                             "(nicht zu verwechseln mit --no-icon)")
     parser.add_argument("--tile-override", metavar="ORDNER", type=Path,
                         help="Ordner mit eigenen Kachel-Bildern (Standard: <SD>/_dsrunner/tile-override)")
     parser.add_argument("--replace-manual", action="store_true",
                         help="auch von Hand abgelegte Bilder ersetzen, wenn ein Bild gefunden wird")
     parser.add_argument("--no-crc", action="store_true", help="Spiele nicht über die Prüfsumme erkennen")
     parser.add_argument("--clean", action="store_true",
-                        help="Artworks und Kachel-Bilder löschen, die das Tool für inzwischen gelöschte Spiele angelegt hat")
+                        help="Bilder löschen, die das Tool für inzwischen gelöschte Spiele angelegt hat")
     parser.add_argument("--dry-run", action="store_true", help="nur anzeigen, nichts schreiben")
-    parser.add_argument("--check", action="store_true", help="nur die vorhandenen Artworks und Kachel-Bilder prüfen")
+    parser.add_argument("--check", action="store_true", help="nur die vorhandenen Artworks, Kachel-Bilder, Cover und Icons prüfen")
     parser.add_argument("--library", metavar="PFAD", help="Bibliotheksordner statt libraryPath aus settings.json")
     parser.add_argument("--cache", metavar="ORDNER", type=Path, help="Cache-Ordner auf dem PC")
     parser.add_argument("--retry-missing", action="store_true",
@@ -115,7 +121,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         icon_fallback=not args.no_icon, region=args.region, override_dir=args.override, sources=args.sources,
         clean=args.clean, dry_run=args.dry_run, cache_dir=args.cache, workers=args.workers, use_crc=not args.no_crc,
         library_path=args.library, refresh_misses=args.retry_missing, tiles=not args.no_tiles,
-        tile_override_dir=args.tile_override, replace_manual=args.replace_manual)
+        tile_override_dir=args.tile_override, replace_manual=args.replace_manual, covers=not args.no_covers,
+        icons=not args.no_icons)
 
     last_percent = [-1]
 

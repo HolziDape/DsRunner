@@ -9,11 +9,13 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
 | 1 Design-System | ✅ erledigt, auf dem DS getestet |
 | 2 Konsolen-Ebene | ✅ erledigt, auf dem DS getestet (Spielanzahl kam mit Phase 3, Favoriten mit Phase 6) |
-| 3 Kachel-Raster | ✅ auf dem DS getestet (13.10.2026). Danach: Kachel-Bilder (Cover) statt Icons, Hänger behoben (siehe unten), **erneuter Test auf dem DS steht aus** |
+| 3 Kachel-Raster | ✅ auf dem DS getestet (13.10.2026). Danach: Kachel-Bilder (Cover) statt Icons, Hänger behoben, nur noch drei Ansichten mit eigenem Bildstil (siehe unten), **erneuter Test auf dem DS steht aus** |
 | 4 Großes Artwork oben | ✅ erledigt, auf dem DS getestet (Testbilder werden angezeigt und überblendet) |
 | 5 PC-Tool „DsRunner Art“ | ✅ im Code (Tests, echte Downloads von libretro-thumbnails, erzeugte Bilder in DeSmuME angezeigt), **Test unter Windows mit der Karte steht aus** |
 | 6 Komfort | ✅ im Code, gebaut und in DeSmuME geprüft (deutsche Oberfläche, Favoriten, Weiterspielen, Uhr im Menü), **Test auf dem DS steht aus** |
-| 7–9 | offen |
+| 7 Weitere Konsolen | ✅ im Code, gebaut und in DeSmuME geprüft (Konsolen-Kacheln, Spielanzahl, `systems.json`), **Test mit echten Emulatoren auf dem DS steht aus** |
+| 8 Loader | 🔎 recherchiert ([LOADER.md](LOADER.md)), Umsetzung erst nach Entscheidung, braucht Tests auf dem DS |
+| 9 Releases | ✅ Version aus `VERSION`, Changelog, Release-Workflow mit Versionsprüfung und Release-Notizen, `LIESMICH.txt` im SD-Paket ([RELEASE.md](RELEASE.md)) |
 
 **Test auf dem DS (13.10.2026, Phase 1–4):** dunkles Theme, Konsolen-Ebene mit Spielanzahl und Artworks laufen. Die neue Kachel-Ansicht war noch nicht eingeschaltet, weil eine vorhandene `settings.json` die alte Ansicht behält.
 
@@ -96,7 +98,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 3. Nachladen im Hintergrund und Cache, damit Scrollen ruckelfrei bleibt. **VRAM-Budget beachten.**
 4. Sortierung: A–Z, Z–A, **zuletzt gespielt**
 
-**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#kachelraster)):
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#ansichten)):
 - Ansichten `TileGrid3x2` (76 × 70 px, Icons 2× vergrößert) und `TileGrid4x3` (55 × 44 px), im Menü als erste beiden Layouts, gespeichert in `settings.json`. `TileGrid3x2` ist der neue Standard.
 - Die Kacheln zeichnet die 3D-Engine (runde Ecken, Farbverlauf, Akzent-Rahmen und Leuchten bei Auswahl), das Icon liegt als Sprite darauf. Dadurch kosten die Kacheln kein OBJ-VRAM und keine OBJ-Palettenzeilen. Zum Vergrößern werden die Sprites der Icons nachträglich auf affine Doppelgröße umgestellt, die Palettenzeilen werden für die doppelte Höhe reserviert.
 - Reihenfolge zeilenweise (A B C / D E F) statt Picos spaltenweiser Reihenfolge, Blättern nach unten. Kacheln, die unter die App-Leiste scrollen, werden dort abgeschnitten (das Icon verschwindet, sobald es hineinragen würde).
@@ -109,6 +111,12 @@ Ein eigener Launcher als Ersatz für YSMenu:
 **Nach dem Test auf dem DS (13.10.2026):**
 - **Hänger behoben:** Nach GBA → zurück → NDS hing DsRunner (Streifen oben, falsche Icon-Farben). Ursache: Der IO-Thread hatte nur 2 KB Stack. Er braucht schon ohne Artworks gut 1,6 KB (FatFs mit langen Dateinamen); ein Überlauf schreibt in die Thread-Verwaltung direkt darunter, danach hängt der VBlank-Interrupt. Jetzt 8 KB Stack für IO- und Hintergrund-Thread. Außerdem: die Aufgaben-Warteschlangen haben 64 statt 32 Plätze und warten bei Überfüllung, statt Speicher zu überschreiben; Artworks laden höchstens einzeln und erst, wenn die Auswahl 20 Bilder lang stehen bleibt.
 - **Kachel-Bilder:** Die 32×32-Icons wirkten in den großen Kacheln zu grob, GBA-Spiele haben keine. DsRunner zeigt jetzt ein 64×64-Bild (256 Farben, 4 KB Textur pro Kachel) aus `/_dsrunner/tiles`, das DsRunner Art aus dem Cover erzeugt ([CONFIG.md](CONFIG.md#kachel-bilder)). Im 3×2-Raster 1:1, im 4×3-Raster verkleinert auf 38 px. Ohne Bild bleibt das Icon.
+
+**Drei Ansichten, drei Bildstile (13.10.2026):** Die Kachel-Bilder wirkten für ihre kleine Pixelgröße zu detailreich. Jetzt gibt es im Menü nur noch drei Ansichten, jede mit dem passenden Bild ([CONFIG.md](CONFIG.md#ansichten)):
+- **Raster 3 × 2:** Kachel-Bild 64 × 64, 1:1, von DsRunner Art jetzt vereinfacht erzeugt (leicht geglättet, höchstens 24 Farben ohne Dithering). Alte Kachel-Bilder erneuert das Tool einmal automatisch.
+- **Raster 4 × 3:** nur noch das Icon 32 × 32 in Originalgröße (klare Pixelgrafik), keine Kachel-Bilder und kein Textur-VRAM mehr. DS-Spiele zeigen ihr Banner-Icon, andere Spiele ein Icon, das DsRunner Art in `/_pico/icons/user` anlegt (15 Farben, Ausschnitt um Logo und Hauptfigur).
+- **CoverFlow (Pico):** die echten Cover, von DsRunner Art in `/_pico/covers/user` angelegt (128 × 96, Bild in 106 × 96, 255 Farben mit Dithering). Bisher zeigte die Ansicht nur „?“.
+- Picos Icon-Raster (waagrecht/senkrecht) und die Bannerliste sind aus dem Menü entfernt. Eine `settings.json` mit einer dieser Ansichten (oder `FileList`) öffnet das 3×2-Raster.
 - **Abdunkeln oben:** langer, weicher Verlauf ab Zeile 64 statt eines kurzen harten Übergangs.
 
 ### Phase 4: Großes Artwork oben
@@ -144,6 +152,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 - GameTDB-Adressen (`art.gametdb.com/ds/coverHQ|coverM|cover|coverS/<Region>/<Code>`) konnten in der Entwicklungsumgebung nicht geprüft werden (Host gesperrt). Das Tool überspringt die Quelle, wenn sie nicht antwortet.
 - Die Dateiliste der Thumbnail-Repos kommt über die GitHub-API (ohne Anmeldung 60 Anfragen pro Stunde, eine pro Konsole und Woche). Ohne sie werden Bilder direkt per Name versucht.
 - ~~Kleine Cover für die Kacheln~~: erledigt, siehe Kachel-Bilder in Phase 3.
+- ~~Bilder für alle Ansichten~~: erledigt, das Tool legt auch Cover (`/_pico/covers/user`) und kleine Icons (`/_pico/icons/user`) an, siehe „Drei Ansichten“ in Phase 3.
 
 ### Phase 6: Komfort
 1. Deutsche Oberfläche (prüfen, ob die Pico-Fonts Umlaute haben)
@@ -169,12 +178,41 @@ Ein eigener Launcher als Ersatz für YSMenu:
 ### Phase 7: Weitere Konsolen (optional)
 Emulator-Homebrew einbinden (GBARunner2, nesDS, GameYob, S8DS, jEnesisDS …) über `systems.json`, mit passenden Kacheln und Artworks.
 
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#emulatoren)):
+- **Emulatoren werden gefunden** wie bisher GBARunner2: nesDS (NES, FDS), GameYob bzw. lameboy (GB/GBC), S8DS (SMS/GG), jEnesisDS (Mega Drive), SNEmulDS (SNES), NitroGrafx (PC Engine). Gesucht wird in `/_dsrunner/emulators`, `/_dsrunner`, `/`, `/_nds`, `/_nds/TWiLightMenu/emulators` und `/Emulators`. Jeder Ordner wird beim Start einmal gelesen. Das Spiel wird wie bei Picos Dateizuordnungen per argv übergeben.
+- **Reihenfolge:** `fileAssociations` in `settings.json` vor `emulator` in `systems.json` vor gefundenen Emulatoren. Gefundene Emulatoren werden nicht mehr in die `settings.json` geschrieben (bisher landete GBARunner2 dort beim ersten Spielstart und blieb stehen). Ohne Emulator bleiben die Spiele einer Konsole ausgeblendet.
+- **`/_dsrunner/systems.json`** (optional): Ordnername → Name, Kürzel, Farbe, Endungen, Emulator, libretro-System. Überschreibt eingebaute Konsolen oder legt neue an (z. B. WonderSwan mit NitroSwan). Höchstens 16 Konsolen mit je 4 Endungen, 8 KB. Gelesen einmal auf dem IO-Thread vor dem ersten Ordner, ungültige Dateien werden mit einer Logzeile ignoriert.
+- Neue Endungen der eingebauten Konsolen: `.sgb`, `.fds`, `.md`/`.gen`/`.smd`, `.sgx`, Ordner `FC` und `SFC` als weitere Namen. Spiele ohne eigenes Icon bekommen die farbige Kachel ihrer Konsole mit Kürzel.
+- Code: `DsRunnerEmulators` (Tabelle und Suche), `DsRunnerSystems` (systems.json, Dateitypen), Einhängepunkte nur in `ExtensionFileTypeProvider` und `RomBrowserController`.
+- **DsRunner Art** kennt dieselben Konsolen und Endungen, liest `systems.json` (Farben, Feld `libretro`, sonst die Endung) und meldet fehlerhafte Einträge und fehlende Emulatoren. Ein Test vergleicht `consoles.py` mit `DsRunnerConsoles.h` und `DsRunnerEmulators.h`.
+
+**Offen:**
+- Test auf dem DS mit jedem Emulator (Start per argv, Spielstände). Unsicher: lameboy (argv nicht dokumentiert), das neue SNEmulDS (TGDS), jEnesisDS mit `.md` statt `.gen`.
+- `.md` gilt kartenweit: eine `README.md` erscheint als Mega-Drive-Spiel, sobald jEnesisDS gefunden wurde.
+- Spiele anderer Konsolen heißen wie ihre Datei, mit Endung („Metroid.nes“).
+
 ### Phase 8: Loader (bei Bedarf)
 - Spiele, die mit Pico schlechter laufen als mit YSMenu, sammeln und vergleichen → Fork `HolziDape/pico-loader`
 - Wunsch-Feature: **zurück zum Launcher aus Retail-Spielen** (Soft-Reset). Pico kann das bisher nur bei Homebrew.
 
+**Recherche (13.10.2026):** siehe [LOADER.md](LOADER.md). Kurz:
+- Pico kann „zurück zum Launcher“ bisher nur bei Homebrew. Bei Retail-Spielen fehlen ein Tasten-Auslöser, ein Launcher-Pfad, der den Neustart übersteht, und ein DLDI-Treiber für den Launcher.
+- Am besten passt der Fork-Branch `igr-hooks` von danyocom (L+R+Unten+B 2 s halten, wartet auf laufende Speicherzugriffe, plattformunabhängig) zusammen mit dem DLDI-Cache aus Pico-PR #220. Auf der M3 DS Real ist er noch nicht getestet.
+- Plan, falls gewünscht: Fork `HolziDape/pico-loader`, beides übernehmen, Launcher-Pfad für DsRunner festlegen, M3DS bauen (≈ 1–2 Tage), dann Test mit 20–30 Spielen auf dem DS.
+- Spiele, die mit Pico schlechter laufen als mit YSMenu, kommen in [compat/pico-vs-ysmenu.md](compat/pico-vs-ysmenu.md).
+- Vorher prüfen: ob die Autostart-Kette DsRunner überhaupt seinen eigenen Pfad (`argv[0]`) übergibt. Sonst klappt die Rückkehr nicht einmal bei Homebrew.
+
 ### Phase 9: Releases
 Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 0), Installationsanleitung.
+
+**Ergebnis:** ✅ Umgesetzt (siehe [RELEASE.md](RELEASE.md)):
+- **Version:** Die Datei `VERSION` im Hauptverzeichnis ist die einzige Quelle (jetzt `0.2.0`, die nächste Version). Der Launcher zeigt sie unten rechts im Menü „Anzeige“, das Banner in der Titelzeile, DsRunner Art im Fenstertitel und mit `--version`. Nur der Release-Workflow baut mit `DSRUNNER_RELEASE=1` die reine Nummer, jeder andere Build zeigt `0.2.0-dev+<commit>`.
+- **`tools/version.sh`:** `set X.Y.Z` setzt VERSION und DsRunner Art und macht aus „Unveröffentlicht“ im Changelog den Abschnitt der Version, `check vX.Y.Z` prüft vor dem Release, `notes` gibt die Release-Notizen aus.
+- **Changelog:** `CHANGELOG.md` auf Deutsch im Stil von Keep a Changelog. Picos Changelog bis zum Fork liegt unter `docs/PicoLauncher-CHANGELOG.md`.
+- **Release-Workflow:** prüft zuerst, dass der Tag `v` + VERSION ist und DsRunner Art und Changelog passen (sonst wird nichts gebaut), baut die drei Dateien und setzt zum Schluss den Changelog-Abschnitt an den Anfang der Release-Beschreibung.
+- **SD-Paket:** `LIESMICH.txt` mit Version, Spiele-Ordnern, Update-Anleitung, Hinweis auf DsRunner Art und dem Weg zurück zu YSMenu.
+
+**Offen:** Der erste Release mit dem neuen Workflow (v0.2.0) prüft den Notizen-Job zum ersten Mal echt.
 
 ## Risiken
 
@@ -189,4 +227,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 5 + 6 auf dem DS und unter Windows testen: Artworks mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden, Favoriten (X), Weiterspielen (START), Uhr im Menü, Start von Spielen aus der Favoritenliste (NDS und GBA) und Spielstände.
+Auf dem DS und unter Windows testen: Bilder mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden, die drei Ansichten (3×2 mit Kachel-Bildern, 4×3 mit Icons, Coverflow mit Covern) ansehen, Favoriten (X), Weiterspielen (START), Uhr im Menü, Start aus der Favoritenliste (NDS und GBA), Spielstände. Dazu je ein Spiel pro Emulator (Phase 7). Danach Release v0.2.0 ([RELEASE.md](RELEASE.md)) und Entscheidung zu Phase 8.

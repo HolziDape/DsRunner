@@ -27,6 +27,10 @@ ART_TYPE_LABELS = {"title": "Titelbild", "snap": "Screenshot", "boxart": "Cover 
 FALLBACK_ORDER = ("title", "boxart", "snap")
 # tile images: the box first, it is close to square and made to be recognized at a glance
 TILE_ORDER = ("boxart", "title", "snap")
+# covers for the cover flow: the real box, a screen when there is none
+COVER_ORDER = ("boxart", "title", "snap")
+# small icons: the box has the largest shapes (logo, main character) to cut out
+ICON_ORDER = ("boxart", "title", "snap")
 
 
 def type_order(preferred: str) -> list[str]:

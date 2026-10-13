@@ -21,8 +21,9 @@ jobs:
         with:
           submodules: true
       - name: Run build script
+        # development build: version from VERSION with "-dev+<commit>" (see Makefile)
         run: |
-          make
+          make DSRUNNER_COMMIT="$(echo "$GITHUB_SHA" | cut -c1-7)"
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v4
         with:
