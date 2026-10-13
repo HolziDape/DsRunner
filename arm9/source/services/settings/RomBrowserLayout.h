@@ -6,5 +6,8 @@ enum class RomBrowserLayout
     VerticalIconGrid,
     BannerList,
     FileList,
-    CoverFlow
+    CoverFlow,
+    // DsRunner tile grids
+    TileGrid3x2,
+    TileGrid4x3
 };

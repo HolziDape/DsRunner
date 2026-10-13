@@ -3,6 +3,7 @@
 #include "RomBrowserVerticalIconGridDisplayMode.h"
 #include "RomBrowserBannerListDisplayMode.h"
 #include "RomBrowserHorizontalCoverFlowDisplayMode.h"
+#include "romBrowser/Theme/dsrunner/DsRunnerTileGridDisplayMode.h"
 #include "RomBrowserDisplayModeFactory.h"
 
 const RomBrowserDisplayMode* RomBrowserDisplayModeFactory::GetRomBrowserDisplayMode(
@@ -25,6 +26,14 @@ const RomBrowserDisplayMode* RomBrowserDisplayModeFactory::GetRomBrowserDisplayM
         case RomBrowserLayout::CoverFlow:
         {
             return &RomBrowserHorizontalCoverFlowDisplayMode::sInstance;
+        }
+        case RomBrowserLayout::TileGrid3x2:
+        {
+            return &DsRunnerTileGridDisplayMode::sInstance3x2;
+        }
+        case RomBrowserLayout::TileGrid4x3:
+        {
+            return &DsRunnerTileGridDisplayMode::sInstance4x3;
         }
         default:
         {

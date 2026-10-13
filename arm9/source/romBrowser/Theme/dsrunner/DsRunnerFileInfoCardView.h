@@ -77,6 +77,13 @@ public:
 
     void SetFileNameAsync(TaskQueueBase* taskQueue, const TCHAR* fileName, bool useAsTitle) override;
 
+    void SetItemContext(const TCHAR* folderPath, bool isFolder, TaskQueueBase* ioTaskQueue) override
+    {
+        strlcpy(_folderPath, folderPath ? folderPath : "", sizeof(_folderPath));
+        _isFolder = isFolder;
+        _ioTaskQueue = ioTaskQueue;
+    }
+
     Rectangle GetBounds() const override
     {
         return Rectangle(_position, 256, 192);
@@ -89,6 +96,15 @@ private:
     SharedPtr<Label2DView> _filenameLabelView;
     const MaterialColorScheme* _colorScheme;
     DsRunnerHeroState* _heroState;
+    TCHAR _folderPath[256] = { 0 };
+    bool _isFolder = false;
+    TaskQueueBase* _ioTaskQueue = nullptr;
+    // console folder whose game count is still being counted, shown when it is known
+    TCHAR _pendingCountFolder[64] = { 0 };
+    TaskQueueBase* _textTaskQueue = nullptr;
+
+    void RequestArt(const TCHAR* fileName);
+    bool ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName);
 
     DsRunnerFileInfoCardView(const MaterialColorScheme* colorScheme, const IFontRepository* fontRepository,
         DsRunnerHeroState* heroState);

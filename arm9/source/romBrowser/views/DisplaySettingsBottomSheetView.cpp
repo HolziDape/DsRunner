@@ -16,6 +16,8 @@
 #include "unknownIcon.h"
 #include "coverflowIcon.h"
 #include "themeIcon.h"
+#include "tileGrid3x2Icon.h"
+#include "tileGrid4x3Icon.h"
 #include "../IRomBrowserController.h"
 #include "gui/input/InputProvider.h"
 #include "themes/material/MaterialColorScheme.h"
@@ -37,20 +39,28 @@
 #define FILTERS_LABEL_X     20
 #define FILTERS_LABEL_Y     112
 
-static RomBrowserLayout sRomBrowserDisplayModes[4] =
+// DsRunner: the tile grids come first
+static RomBrowserLayout sRomBrowserDisplayModes[6] =
 {
-    [0] = RomBrowserLayout::HorizontalIconGrid,
-    [1] = RomBrowserLayout::VerticalIconGrid,
-    [2] = RomBrowserLayout::BannerList,
-    [3] = RomBrowserLayout::CoverFlow
+    [0] = RomBrowserLayout::TileGrid3x2,
+    [1] = RomBrowserLayout::TileGrid4x3,
+    [2] = RomBrowserLayout::HorizontalIconGrid,
+    [3] = RomBrowserLayout::VerticalIconGrid,
+    [4] = RomBrowserLayout::BannerList,
+    [5] = RomBrowserLayout::CoverFlow
 };
 
-static RomBrowserSortMode sRomBrowserSortModes[4] =
+// DsRunner: last played instead of Pico's (unimplemented) last modified
+static RomBrowserSortMode sRomBrowserSortModes[3] =
 {
     [0] = RomBrowserSortMode::NameAscending,
     [1] = RomBrowserSortMode::NameDescending,
-    [2] = RomBrowserSortMode::LastModified
+    [2] = RomBrowserSortMode::LastPlayed
 };
+
+// x of the first layout / sort option button and the distance between the buttons
+#define OPTIONS_X           62
+#define OPTIONS_STEP        32
 
 DisplaySettingsBottomSheetView::DisplaySettingsBottomSheetView(
     DisplaySettingsViewModel* viewModel, const MaterialColorScheme* materialColorScheme,
@@ -149,14 +159,17 @@ void DisplaySettingsBottomSheetView::InitVram(const VramContext& vramContext)
         _themeButton->SetIconVramOffset(LoadIcon(*objVramManager, themeIconTiles, themeIconTilesLen));
 
         // layout options
-        _layoutOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, hGridIconTiles, hGridIconTilesLen));
-        _layoutOptions[1]->SetIconVramOffset(LoadIcon(*objVramManager, vGridIconTiles, vGridIconTilesLen));
-        _layoutOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, bannerListIconTiles, bannerListIconTilesLen));
-        _layoutOptions[3]->SetIconVramOffset(LoadIcon(*objVramManager, coverflowIconTiles, coverflowIconTilesLen));
+        _layoutOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, tileGrid3x2IconTiles, tileGrid3x2IconTilesLen));
+        _layoutOptions[1]->SetIconVramOffset(LoadIcon(*objVramManager, tileGrid4x3IconTiles, tileGrid4x3IconTilesLen));
+        _layoutOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, hGridIconTiles, hGridIconTilesLen));
+        _layoutOptions[3]->SetIconVramOffset(LoadIcon(*objVramManager, vGridIconTiles, vGridIconTilesLen));
+        _layoutOptions[4]->SetIconVramOffset(LoadIcon(*objVramManager, bannerListIconTiles, bannerListIconTilesLen));
+        _layoutOptions[5]->SetIconVramOffset(LoadIcon(*objVramManager, coverflowIconTiles, coverflowIconTilesLen));
 
         // sort options
         _sortOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, sortNameAscendingIconTiles, sortNameAscendingIconTilesLen));
         _sortOptions[1]->SetIconVramOffset(LoadIcon(*objVramManager, sortNameDescendingIconTiles, sortNameDescendingIconTilesLen));
+        _sortOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, recentIconTiles, recentIconTilesLen));
     }
 }
 
@@ -173,7 +186,7 @@ void DisplaySettingsBottomSheetView::Update()
     _themeButton->SetPosition(THEME_BUTTON_X, _position.y + THEME_BUTTON_Y);
     UpdateLabels();
     auto selectedDisplayMode = _viewModel->GetRomBrowserDisplayMode();
-    int x = 70;
+    int x = OPTIONS_X;
     u32 idx = 0;
     for (auto& layoutOption : _layoutOptions)
     {
@@ -181,11 +194,11 @@ void DisplaySettingsBottomSheetView::Update()
         layoutOption->SetState(sRomBrowserDisplayModes[idx] == selectedDisplayMode
             ? IconButtonView::State::ToggleSelected
             : IconButtonView::State::ToggleUnselected);
-        x += 32;
+        x += OPTIONS_STEP;
         idx++;
     }
     auto selectedSortMode = _viewModel->GetRomBrowserSortMode();
-    x = 70;
+    x = OPTIONS_X;
     idx = 0;
     for (auto& sortOption : _sortOptions)
     {
@@ -193,7 +206,7 @@ void DisplaySettingsBottomSheetView::Update()
         sortOption->SetState(sRomBrowserSortModes[idx] == selectedSortMode
             ? IconButtonView::State::ToggleSelected
             : IconButtonView::State::ToggleUnselected);
-        x += 32;
+        x += OPTIONS_STEP;
         idx++;
     }
 }

@@ -4,5 +4,7 @@ enum class RomBrowserSortMode
 {
     NameAscending,
     NameDescending,
-    LastModified
+    LastModified,
+    // DsRunner: most recently played first (play history in /_dsrunner/recent.txt)
+    LastPlayed
 };

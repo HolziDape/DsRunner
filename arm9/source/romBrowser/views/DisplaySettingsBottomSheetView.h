@@ -39,8 +39,8 @@ private:
     SharedPtr<Label2DView> _layoutLabel;
     SharedPtr<Label2DView> _sortingLabel;
 
-    std::array<SharedPtr<IconButton2DView>, 4> _layoutOptions;
-    std::array<SharedPtr<IconButton2DView>, /*3*/2> _sortOptions;
+    std::array<SharedPtr<IconButton2DView>, 6> _layoutOptions;
+    std::array<SharedPtr<IconButton2DView>, 3> _sortOptions;
 
     const MaterialColorScheme* _materialColorScheme;
 

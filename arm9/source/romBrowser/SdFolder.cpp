@@ -1,6 +1,7 @@
 #include "common.h"
 #include <string.h>
 #include <algorithm>
+#include "Theme/dsrunner/DsRunnerLibrary.h"
 #include "SdFolder.h"
 
 SdFolder::SdFolder(FileInfo** files, int fileCount)
@@ -28,6 +29,12 @@ std::unique_ptr<const FileInfo*[]> SdFolder::FilterAndSort(
         {
             sortedFilteredFiles[filteredCount++] = file;
         }
+    }
+    if (filterSortParams.sortType == SdFolderSortType::LastPlayed)
+    {
+        SortByLastPlayed(filterSortParams, sortedFilteredFiles.get(), filteredCount);
+        resultCount = filteredCount;
+        return sortedFilteredFiles;
     }
     std::sort(sortedFilteredFiles.get(), sortedFilteredFiles.get() + filteredCount,
         [filterSortParams] (const FileInfo*& a, const FileInfo*& b)
@@ -60,6 +67,41 @@ std::unique_ptr<const FileInfo*[]> SdFolder::FilterAndSort(
         });
     resultCount = filteredCount;
     return sortedFilteredFiles;
+}
+
+void SdFolder::SortByLastPlayed(const SdFolderFilterSortParams& filterSortParams,
+    const FileInfo** files, u32 count) const
+{
+    // look up the position in the play history once per file, then sort by it:
+    // folders first (by name), then the played files newest first, then the rest by name
+    struct RankedFile
+    {
+        u32 rank;
+        const FileInfo* file;
+    };
+    auto rankedFiles = std::make_unique<RankedFile[]>(count);
+    for (u32 i = 0; i < count; i++)
+    {
+        int rank = -1;
+        if (filterSortParams.playHistory && filterSortParams.folderPath &&
+            files[i]->GetFileType()->GetClassification() != FileTypeClassification::Folder)
+        {
+            rank = filterSortParams.playHistory->GetRank(filterSortParams.folderPath, files[i]->GetFileName());
+        }
+        rankedFiles[i] = { rank < 0 ? 0xFFFFFFFFu : (u32)rank, files[i] };
+    }
+    std::sort(rankedFiles.get(), rankedFiles.get() + count,
+        [] (const RankedFile& a, const RankedFile& b)
+        {
+            bool result = true;
+            if (CompareClassification(a.file, b.file, result))
+                return result;
+            if (a.rank != b.rank)
+                return a.rank < b.rank;
+            return CompareName(a.file, b.file);
+        });
+    for (u32 i = 0; i < count; i++)
+        files[i] = rankedFiles[i].file;
 }
 
 bool SdFolder::CompareClassification(const FileInfo* a, const FileInfo* b, bool& result)

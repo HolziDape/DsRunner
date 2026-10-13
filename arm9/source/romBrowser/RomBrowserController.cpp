@@ -10,6 +10,7 @@
 #include "cheats/UsrCheatRepositoryFactory.h"
 #include "cheats/EmptyCheatRepository.h"
 #include "cheats/PicoLoaderCheatDataFactory.h"
+#include "Theme/dsrunner/DsRunnerLibrary.h"
 #include "RomBrowserController.h"
 
 // Skips a drive prefix like "fat:" and the leading slashes of a path.
@@ -247,6 +248,8 @@ void RomBrowserController::HandleNavigateTrigger()
                 _cheatRepository = std::make_unique<EmptyCheatRepository>();
             }
         }
+        // DsRunner: the play history is needed for sorting by last played
+        gDsRunnerLibrary.playHistory.Load();
 
         u64 startTick = gTickCounter.GetValue();
         _navigateFileName = nullptr;
@@ -283,6 +286,7 @@ void RomBrowserController::HandleNavigateTrigger()
             name = "";
         }
         StringUtil::Copy(_newFolderName, name, sizeof(_newFolderName) / sizeof(_newFolderName[0]));
+        StringUtil::Copy(_newFolderPath, currentPath, sizeof(_newFolderPath) / sizeof(_newFolderPath[0]));
         const char* libraryPath = _appSettingsService->GetAppSettings().libraryPath.GetString();
         _newFolderIsLibraryRoot = libraryPath[0] != 0 && isSamePath(currentPath, libraryPath);
 
@@ -300,13 +304,35 @@ void RomBrowserController::HandleFolderLoadDoneTrigger()
     _romBrowserViewModel.Reset();
     _sdFolder = std::move(_newSdFolder);
     StringUtil::Copy(_currentFolderName, _newFolderName, sizeof(_currentFolderName) / sizeof(_currentFolderName[0]));
+    StringUtil::Copy(_currentFolderPath, _newFolderPath, sizeof(_currentFolderPath) / sizeof(_currentFolderPath[0]));
     _currentFolderIsLibraryRoot = _newFolderIsLibraryRoot;
     _romBrowserViewModel = SharedPtr<RomBrowserViewModel>::MakeShared(this, _navigateFileName);
+    StartGameCount();
+}
+
+void RomBrowserController::StartGameCount()
+{
+    // DsRunner: count the games of the consoles in the background, once
+    auto& gameCounts = gDsRunnerLibrary.gameCounts;
+    if (!_currentFolderIsLibraryRoot || !_sdFolder ||
+        (_gameCountTask.IsValid() && !_gameCountTask.GetTask().IsCompleted()) ||
+        !gameCounts.NeedsCounting(_currentFolderPath))
+    {
+        return;
+    }
+    gameCounts.SetFolders(_currentFolderPath, *_sdFolder);
+    _gameCountTask = _ioTaskQueue->Enqueue([this] (const vu8& cancelRequested)
+    {
+        gDsRunnerLibrary.gameCounts.Count(_fileTypeProvider, cancelRequested);
+        return TaskResult<void>::Completed();
+    });
 }
 
 void RomBrowserController::HandleLaunchTrigger()
 {
     LOG_DEBUG("RomBrowserStateTrigger::Launch\n");
+    // don't let the game count delay the launch
+    _gameCountTask.CancelTask();
     _ioTaskQueue->Enqueue([this] (const vu8& cancelRequested)
     {
         UpdateLastUsedFilepath();
@@ -324,6 +350,7 @@ void RomBrowserController::HandleChangeDisplayModeTrigger()
 
 void RomBrowserController::HandleGotoSettingsScreenTrigger()
 {
+    _gameCountTask.CancelTask();
     gProcessManager.Goto<SettingsProcess>();
 }
 
@@ -338,6 +365,7 @@ void RomBrowserController::UpdateLastUsedFilepath()
     strlcat(_navigatePath, _triggerFileInfo.GetFileName(), sizeof(_navigatePath));
     _appSettingsService->GetAppSettings().lastUsedFilePath = _navigatePath;
     _appSettingsService->Save();
+    gDsRunnerLibrary.playHistory.Add(_navigatePath);
 }
 
 void RomBrowserController::SetPicoLoaderParams() const

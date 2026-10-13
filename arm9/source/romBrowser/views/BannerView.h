@@ -16,6 +16,13 @@ public:
 
     virtual void SetFileNameAsync(TaskQueueBase* taskQueue, const TCHAR* fileName, bool useAsTitle);
 
+    /// @brief DsRunner: tells the view where the item of the next SetFileNameAsync call is
+    ///        (for the artwork and game counts of the DsRunner theme).
+    /// @param folderPath The folder that contains the item.
+    /// @param isFolder True when the item is a folder.
+    /// @param ioTaskQueue The queue for file access.
+    virtual void SetItemContext(const TCHAR* folderPath, bool isFolder, TaskQueueBase* ioTaskQueue) { }
+
     void SetGameTitle(const char16_t* gameTitle)
     {
         SetGameTitleAsync(nullptr, gameTitle);

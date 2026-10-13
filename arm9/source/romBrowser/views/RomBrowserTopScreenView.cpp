@@ -10,6 +10,7 @@
 #include "themes/material/MaterialColorScheme.h"
 #include "../Theme/IRomBrowserViewFactory.h"
 #include "../Theme/IThemeFileIconFactory.h"
+#include "../FileType/FileType.h"
 #include "RomBrowserTopScreenView.h"
 
 RomBrowserTopScreenView::RomBrowserTopScreenView(
@@ -85,6 +86,9 @@ void RomBrowserTopScreenView::Update()
                 _iconGraphicsUploaded = false;
             }
             _fileInfoView->SetIcon(std::move(_selectedFileIcon));
+            _fileInfoView->SetItemContext(_viewModel->GetRomBrowserController()->GetCurrentFolderPath(),
+                item.GetFileType()->GetClassification() == FileTypeClassification::Folder,
+                _viewModel->GetIoTaskQueue());
             _fileInfoView->SetFileNameAsync(_viewModel->GetBgTaskQueue(), item.GetFileName(), fileNameAsTitle);
 
             _lastSelectedItem = selectedItem;
