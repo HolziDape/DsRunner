@@ -7,6 +7,9 @@ on:
 jobs:
   pico_launcher:
     runs-on: ubuntu-latest
+    # the job attaches the zips to the release, the default token can only read
+    permissions:
+      contents: write
     container: skylyrac/blocksds:slim-v1.16.0
     name: Build DsRunner
     steps:
