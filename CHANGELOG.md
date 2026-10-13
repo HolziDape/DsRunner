@@ -7,11 +7,17 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ## Unveröffentlicht
 
 ### Hinzugefügt
+- **Jede Ansicht mit eigenem Bildstil:** 3×2 zeigt vereinfachte Kachel-Bilder, 4×3 klare kleine Icons in Originalgröße, Coverflow die echten Cover. DsRunner Art legt dafür zusätzlich Cover (`/_pico/covers/user`) und Icons (`/_pico/icons/user`) an; abschaltbar mit „Cover“ und „Icons“ bzw. `--no-covers` und `--no-icons`.
+- **Weitere Konsolen:** DsRunner findet die Emulatoren nesDS (NES), GameYob oder lameboy (GB/GBC), S8DS (Master System, Game Gear), jEnesisDS (Mega Drive), SNEmulDS (SNES) und NitroGrafx (PC Engine) selbst, wie bisher GBARunner2. Anleitung: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).
+- **Eigene Konsolen** über `/_dsrunner/systems.json`: Name, Kürzel, Farbe, Dateiendungen und Emulator pro Ordner. DsRunner Art liest die Datei ebenfalls.
 - Versionsnummer unten rechts im Menü „Anzeige“ (Zahnrad oben rechts) und in der Titelzeile des Banners. Selbst gebaute Zwischenstände tragen den Zusatz `-dev`.
 - DsRunner Art trägt dieselbe Versionsnummer wie DsRunner (Fenstertitel und `--version`).
 - Die Release-Seite zeigt die Änderungen aus diesem Changelog.
 
 ### Geändert
+- Im Menü „Anzeige“ gibt es nur noch die Ansichten 3×2, 4×3 und Coverflow. Wer eine der entfernten Ansichten eingestellt hatte, startet im 3×2-Raster.
+- Kachel-Bilder im 3×2-Raster: weniger Farben, ruhiger, näher an Logo und Hauptfigur, bei GBA-Covern ohne den silbernen Rand. DsRunner Art erneuert vorhandene Kachel-Bilder einmal automatisch.
+- Ein gefundener Emulator wird nicht mehr fest in die `settings.json` geschrieben.
 - Ausführlichere `LIESMICH.txt` im Paket für die M3 DS Real: mit Version, Ordnern für die Spiele, Update-Anleitung und Hinweis auf DsRunner Art.
 
 ## [0.1.2](https://github.com/HolziDape/DsRunner/releases/tag/v0.1.2) - 2026-10-13

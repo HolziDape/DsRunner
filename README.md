@@ -16,7 +16,8 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 - **Favoriten** mit X, gesammelt in der Kachel „★ Favoriten“
 - **Weiterspielen** mit START: das zuletzt gespielte Spiel direkt von der Konsolen-Ebene starten
 - Uhr (abschaltbar) und Akkuanzeige, Oberfläche auf Deutsch
-- **GBA-Spiele** über GBARunner2, **Cheats** über `usrcheat.dat`
+- **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet; eigene Konsolen über `systems.json`
+- **Cheats** über `usrcheat.dat`
 
 ## Download
 
@@ -59,6 +60,7 @@ SD-Karte
 - Ordner mit den Namen `NDS`, `GBA`, `GBC`, `GB`, `NES`, `SNES`, `SMS`, `GG`, `MD`, `PCE` und `Apps` bekommen eine eigene Farbe. Jeder andere Ordner erscheint ebenfalls als Kachel.
 - Gibt es keinen Ordner `/Games`, zeigt DsRunner einfach das Hauptverzeichnis der Karte. Einen anderen Ordner stellst du in `/_pico/settings.json` ein (`libraryPath`).
 - **GBA:** [GBARunner2](https://github.com/Gericom/GBARunner2) (`GBARunner2_arm7dldi_ds.nds`) ins Hauptverzeichnis legen, dazu das GBA-BIOS als `/_gba/bios.bin`. DsRunner findet es automatisch.
+- **Andere Konsolen:** den passenden Emulator (z. B. `nesDS.nds`) ins Hauptverzeichnis oder nach `/_dsrunner/emulators` legen. Welche Emulatoren DsRunner kennt und wo es sucht: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).
 
 ### Update auf eine neue Version
 
