@@ -132,7 +132,7 @@ Der obere Bildschirm zeigt ein bildschirmfüllendes Artwork für die ausgewählt
 
 Regel: Pfad ab SD-Root, bei Dateien die Endung durch `.bmp` ersetzen, bei Ordnern `.bmp` anhängen. Groß-/Kleinschreibung spielt keine Rolle (FAT).
 
-**Format** (für das PC-Tool aus Phase 5):
+**Format** (das PC-Tool [DsRunner Art](ART-TOOL.md) erzeugt die Bilder automatisch):
 
 - Windows-BMP, **256 × 192 Pixel**, **8 bit pro Pixel** mit Palette (bis 256 Farben), unkomprimiert (`BI_RGB`). Zeilen von unten nach oben (Standard) oder von oben nach unten (negative Höhe) gehen beide. Dateigröße ≈ 50 KB.
 - Farben werden auf 15 bit (5 bit pro Kanal) gekürzt. Gutes Ergebnis: auf 255 Farben mit Dithering reduzieren.
@@ -141,4 +141,6 @@ Regel: Pfad ab SD-Root, bei Dateien die Endung durch `.bmp` ersetzen, bei Ordner
 - Mit Python/Pillow: `img.convert("RGB").resize((256, 192)).quantize(255, dither=Image.Dither.FLOYDSTEINBERG).save("x.bmp")`
 
 **Gestaltung:** Text liegt unten (Titel ab Zeile 122). Wichtige Bildteile gehören in die oberen ~90 Zeilen. Rechts oben (Zeilen 4–20) liegt die Statusleiste mit Uhr und Akku.
+
+**DsRunner Art** legt außerdem `/_dsrunner/art/.dsrunner-art.json` an (welche Bilder vom Tool stammen) und liest eigene Bilder aus `/_dsrunner/art-override/` (gleicher Pfad wie das Spiel, beliebiges Bildformat). DsRunner selbst nutzt beides nicht.
 
