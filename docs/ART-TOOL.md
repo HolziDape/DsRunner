@@ -57,7 +57,7 @@ Beim nächsten Mal lädt das Tool nur noch, was fehlt: neue Spiele, neue eigene 
 
 1. **DS und GBA:** über den 4-stelligen Game-Code im ROM (z. B. `AMCP` = Mario Kart DS, Europa). Das ist eindeutig, der Dateiname spielt dann keine Rolle.
 2. **Andere Konsolen** (GB, GBC, NES, SNES, …): über die Prüfsumme der Datei (CRC32).
-3. **Sonst über den Namen:** Dateiname bzw. Titel aus dem DS-Banner. Klammern wie `(Europe)`, `[!]`, Nummern wie `0042 - ` und Groß-/Kleinschreibung werden ignoriert. Bei leicht abweichenden Namen sucht das Tool den ähnlichsten (Zahlen müssen aber übereinstimmen, „FIFA 08“ ist nicht „FIFA 09“).
+3. **Sonst über den Namen:** Dateiname bzw. Titel aus dem DS-Banner. Klammern wie `(Europe)`, `[!]`, Nummern wie `0042 - ` und Groß-/Kleinschreibung werden ignoriert. Bei leicht abweichenden Namen sucht das Tool den ähnlichsten (Zahlen müssen aber übereinstimmen, „FIFA 08“ ist nicht „FIFA 09“). Fehlen Wörter oder ein Untertitel („Pokemon Rot“ → „Pokemon - Rote Edition“, „Donkey Kong Country 2“ → „… - Diddy's Kong Quest“), klappt es ebenfalls, solange nur ein Spiel passt.
 
 Die Bilder landen **nur auf deiner Karte**. Sie gehören den jeweiligen Rechteinhabern und werden weder im Repository noch in Releases verteilt.
 

@@ -75,6 +75,20 @@ class NameIndexTests(unittest.TestCase):
         self.assertEqual(names, ["Legend of Zelda, The - Phantom Hourglass (Europe)"])
         self.assertGreater(ratio, 0.9)
 
+    def test_missing_words_and_subtitles(self):
+        index = NameIndex.build([
+            "Pokemon - Rote Edition (Germany) (SGB Enhanced)", "Pokemon - Blaue Edition (Germany)",
+            "Legend of Zelda, The - A Link to the Past (Germany)", "Legend of Zelda, The - Link's Awakening DX (Germany)",
+            "Donkey Kong Country 2 - Diddy's Kong Quest (Europe)", "Super Mario Land (World)", "Super Mario World (Europe)",
+        ])
+        self.assertEqual(index.fuzzy("Pokemon Rot (G)")[0], ["Pokemon - Rote Edition (Germany) (SGB Enhanced)"])
+        self.assertEqual(index.fuzzy("Zelda - A Link to the Past")[0], ["Legend of Zelda, The - A Link to the Past (Germany)"])
+        self.assertEqual(index.fuzzy("zelda links awakening dx")[0], ["Legend of Zelda, The - Link's Awakening DX (Germany)"])
+        self.assertEqual(index.fuzzy("Donkey Kong Country 2")[0], ["Donkey Kong Country 2 - Diddy's Kong Quest (Europe)"])
+        # ambiguous: both "Super Mario ..." titles contain the query equally
+        self.assertEqual(index.fuzzy("Super Mario")[0], [])
+        self.assertEqual(index.fuzzy("Pokemon")[0], [])
+
     def test_fuzzy_keeps_similar_games_apart(self):
         self.assertEqual(self.index.fuzzy("Mario Party")[0], ["Mario Party DS (Europe)"])
         self.assertEqual(self.index.fuzzy("Mario Karts DX")[0][0][:13], "Mario Kart DS")
