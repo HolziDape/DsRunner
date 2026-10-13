@@ -72,9 +72,17 @@ static PUT_IN_VRAM settings_item_t sInputItems[] =
 #ifndef GIT_BRANCH
 #define GIT_BRANCH unavailable
 #endif
+#ifndef FORK_NAME
+#define FORK_NAME "GBARunner2"
+#endif
+#ifndef FORK_AUTHOR
+#define FORK_AUTHOR "unknown"
+#endif
 
 static PUT_IN_VRAM settings_item_t sInfoItems[] =
-{    
+{
+	{ SETTINGS_ITEM_MODE_SIMPLE, "Fork", FORK_NAME " by " FORK_AUTHOR, NULL, NULL },
+	{ SETTINGS_ITEM_MODE_SIMPLE, "Based on", "GBARunner2 by Gericom", NULL, NULL },
 	{ SETTINGS_ITEM_MODE_SIMPLE, "Commit date", STRINGIFY(GIT_COMMIT_DATE), NULL, NULL },
 	{ SETTINGS_ITEM_MODE_SIMPLE, "Commit hash", STRINGIFY(GIT_COMMIT_HASH), NULL, NULL },
     { SETTINGS_ITEM_MODE_SIMPLE, "Branch", STRINGIFY(GIT_BRANCH), NULL, NULL },
@@ -90,6 +98,8 @@ static PUT_IN_VRAM settings_item_t sInfoItems[] =
 		"DSi"
 #elif defined(USE_3DS_32MB)
 		"3DS"
+#elif defined(ROM3M)
+		"DS (rom3M)"
 #else
 		"DS"
 #endif

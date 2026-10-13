@@ -12,20 +12,20 @@ jobs:
   build:
     # build.sh runs the pinned (old) devkitARM image itself; that image is too old
     # to host the node based actions, so it can't be used as job container
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         variant: [ arm9dldi_ds, arm7dldi_ds, arm7dldi_ds_rom3M, arm7dldi_dsi, arm7dldi_3ds ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Build ${{ matrix.variant }}
         run: sh ./build.sh ${{ matrix.variant }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: GBARunner2_${{ matrix.variant }}
           path: build/GBARunner2_${{ matrix.variant }}.nds
@@ -33,11 +33,11 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           path: dist
           merge-multiple: true
