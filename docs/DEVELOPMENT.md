@@ -38,7 +38,7 @@ Tastatur: X = A, Z = B, S = X, A = Y, Q/W = L/R, Enter = Start, Backspace = Sele
 
 ## Icon
 
-`icon.bmp` wird von `tools/icon/make_icon.py` erzeugt (32×32, 16 Farben, Farbe 0 transparent).
+`icon.png` wird von `tools/icon/make_icon.py` erzeugt (32×32, RGBA, höchstens 15 Farben plus Transparenz). Kein `.bmp` verwenden: ndstool baut die Banner-Palette aus den Farben neu auf und erkennt Transparenz nur am Alpha-Kanal, Farbe 0 einer BMP wird sonst als normale Farbe (Magenta) angezeigt.
 
 ## Pico-Updates übernehmen
 
