@@ -1,48 +1,59 @@
 # Changelog
 
-## [Unreleased]
+Alle wichtigen Änderungen an DsRunner und am PC-Programm DsRunner Art. Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/). Vor Version 1.0 steht eine neue mittlere Zahl (0.**2**.0) für neue Funktionen, eine neue letzte Zahl (0.1.**2**) für Fehlerbehebungen und kleine Verbesserungen.
 
-### Added
-- Support for custom BMP icons for games and folders - by @tasken
-- Support for custom NDS banners (custom titles, subtitles and animated icons) for games and folders - by @tasken
-- Theme selector
-- Support for custom folder covers via a cover.bmp file placed inside the folder - by @tasken
+Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein Release entsteht: [docs/RELEASE.md](docs/RELEASE.md).
 
-### Fixed
-- Top screen cover is now displayed/hidden correctly when placed partially or fully off-screen
-- DSi banners with missing DSi part now fall back to the DS icon
-- Game-code cover lookup no longer searches on a stale buffer when a file has no game code
+## Unveröffentlicht
 
-## [v1.3.0] - 18 Apr 2026
+### Hinzugefügt
+- Versionsnummer unten rechts im Menü „Anzeige“ (Zahnrad oben rechts) und in der Titelzeile des Banners. Selbst gebaute Zwischenstände tragen den Zusatz `-dev`.
+- DsRunner Art trägt dieselbe Versionsnummer wie DsRunner (Fenstertitel und `--version`).
+- Die Release-Seite zeigt die Änderungen aus diesem Changelog.
 
-### Added
-- Ability to set the position of the top screen cover image in custom themes
-- Support for fast scrolling with the L and R buttons in coverflow display mode
-- Support for touch input
+### Geändert
+- Ausführlichere `LIESMICH.txt` im Paket für die M3 DS Real: mit Version, Ordnern für die Spiele, Update-Anleitung und Hinweis auf DsRunner Art.
 
-### Fixed
-- Use after free bug with the texture load request in Label3DView. This occurred for example when spamming B in banner list mode.
+## [0.1.2](https://github.com/HolziDape/DsRunner/releases/tag/v0.1.2) - 2026-10-13
 
-## [v1.2.0] - 29 Mar 2026
+### Hinzugefügt
+- Die Kacheln zeigen das Cover des Spiels statt des kleinen Icons, auch bei GBA-Spielen. Die Kachel-Bilder legt DsRunner Art in `/_dsrunner/tiles` an. Ohne Kachel-Bild bleibt das Icon.
+- DsRunner Art: Option „Kachel-Bilder erzeugen“ (Kommandozeile: `--no-tiles`, `--tile-override`).
+- DsRunner Art: Option „Auch von Hand abgelegte Bilder ersetzen“ (`--replace-manual`). Am Ende steht, wie viele eigene Bilder behalten wurden und welche der Launcher nicht anzeigen kann.
 
-### Added
-- Support for cheats with Pico Loader API v3
-- Hide files/dirs with hidden attribute, or with a name starting with a period
-- New customization options for custom themes
-    - Position of elements on the top screen
-    - Text colors
-    - Blend colors
+### Geändert
+- Weicheres Abdunkeln des Artworks hinter dem Text auf dem oberen Bildschirm.
+- Beim schnellen Blättern lädt DsRunner erst ein Artwork, wenn die Auswahl kurz stehen bleibt.
+- DsRunner Art: Fehlt ein Titelbild, nimmt es das Cover statt eines Screenshots. Bei DS-Bildern mit beiden Bildschirmen wird der obere verwendet, bei DS-Covern fällt der Rand mit dem Schriftzug weg.
 
-### Changed
-- File name on the top screen now uses marquee when too long
+### Behoben
+- DsRunner konnte nach dem Wechsel zwischen Ordnern hängen bleiben (gestreifter oberer Bildschirm, falsche Farben).
+- DsRunner Art: Ein abgebrochener Download oder ein Fehler beim Umwandeln ließ ein Spiel ohne Bild, jetzt wird das nächste Bild oder das Icon versucht. Spiele ohne Bild werden mit Grund aufgelistet.
+- DsRunner Art: Nach einem abgebrochenen Lauf hielt das Programm seine eigenen Bilder für von Hand abgelegte und aktualisierte sie nie wieder.
 
-### Fixed
-- Improve error handling for banners to better detect if a rom has a valid banner
+## [0.1.1](https://github.com/HolziDape/DsRunner/releases/tag/v0.1.1) - 2026-10-13
 
-## [v1.1.0] - 11 Jan 2026
+### Hinzugefügt
+- PC-Programm **DsRunner Art** (`DsRunnerArt.exe` für Windows): lädt die großen Bilder für den oberen Bildschirm automatisch auf die SD-Karte. Es erkennt die Spiele am Game-Code (DS, GBA), an der Prüfsumme oder am Dateinamen, lädt Titelbilder, Screenshots oder Cover von libretro-thumbnails und erzeugt Bilder für die Konsolen-Ordner. Eigene Bilder haben Vorrang. Anleitung: [docs/ART-TOOL.md](docs/ART-TOOL.md).
+- **Favoriten:** X fügt das ausgewählte Spiel hinzu oder entfernt es. Favoriten tragen einen goldenen Stern und erscheinen gesammelt in der Kachel „★ Favoriten“ auf der Konsolen-Ebene.
+- **Weiterspielen:** START auf der Konsolen-Ebene startet das zuletzt gespielte Spiel.
+- Uhr in der Statusleiste im Menü „Anzeige“ ein- und ausschaltbar.
 
-### Added
-- Support for Pico Loader API v2. This makes it possible to return to Pico Launcher from supported homebrew applications.
+### Geändert
+- Oberfläche auf Deutsch: Menü „Anzeige“, Cheats und Theme-Auswahl.
 
-## [v1.0.0] - 25 Nov 2025
-- Initial release
+## [0.1.0](https://github.com/HolziDape/DsRunner/releases/tag/v0.1.0) - 2026-10-13
+
+Erste Version von DsRunner, einem Fork von [Pico Launcher](https://github.com/LNH-team/pico-launcher) für den DS Lite mit der M3 DS Real.
+
+### Hinzugefügt
+- **Autostart auf der M3 DS Real:** fertiges Paket `DsRunner_M3DSReal.zip` für die SD-Karte mit Pico Loader und den Autostart-Dateien aus TWiLight Menu++. DsRunner startet beim Einschalten direkt.
+- Eigener Name, eigenes Icon und Banner „DsRunner“.
+- Dunkles DsRunner-Design mit Statusleiste (Uhr und Akku, ein schwacher Akku erscheint als kurzer roter Balken).
+- **Konsolen-Ebene:** Die Unterordner von `/Games` erscheinen als Konsolen, bekannte Konsolen (NDS, GBA, GBC, GB, NES, SNES, SMS, GG, MD, PCE, Apps) in eigenen Farben. DsRunner startet immer dort und wählt die Konsole des zuletzt gespielten Spiels vor. Der Ordner ist über `libraryPath` in `/_pico/settings.json` einstellbar.
+- GBA-Spiele starten automatisch über GBARunner2, wenn es auf der Karte liegt.
+- **Kachel-Raster** 3×2 (Standard) und 4×3, mit Leuchtrand um die Auswahl.
+- Spielanzahl pro Konsole auf dem oberen Bildschirm.
+- Sortierung „zuletzt gespielt“ (Spielverlauf in `/_dsrunner/recent.txt`).
+- **Großes Artwork** pro Konsole und Spiel auf dem oberen Bildschirm (`/_dsrunner/art`, BMP mit 256 × 192 Pixeln und 256 Farben), mit weichem Überblenden.
+- Aus Pico Launcher übernommen: Spiele über Pico Loader starten, Cheats, Touch-Bedienung, Theme-Auswahl, eigene Icons, Banner und Ordner-Cover. Die Änderungen von Pico Launcher bis zum Fork stehen in [docs/PicoLauncher-CHANGELOG.md](docs/PicoLauncher-CHANGELOG.md).
