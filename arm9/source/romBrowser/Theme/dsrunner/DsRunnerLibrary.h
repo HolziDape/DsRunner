@@ -20,6 +20,13 @@ namespace DsRunnerPaths
     /// @brief Builds "<folderPath>/<fileName>" without the drive prefix of \p folderPath.
     /// @return False when the path doesn't fit in \p result.
     bool Combine(const char* folderPath, const char* fileName, char* result, u32 resultSize);
+
+    /// @brief Builds the path of a DsRunner image that mirrors the sd card under \p root, e.g. root
+    ///        "/_dsrunner/art", folder "fat:/Games/NDS", file "Mario.nds" -> "/_dsrunner/art/Games/NDS/Mario.bmp".
+    ///        Files lose their extension, folder names are kept as they are.
+    /// @return False when the path doesn't fit in \p result.
+    bool MirrorPath(const char* root, const char* folderPath, const char* name, bool isFolder,
+        char* result, u32 resultSize);
 }
 
 /// @brief Play history: the most recently started files, newest first.

@@ -32,7 +32,8 @@ public:
     {
         return SharedPtr<DsRunnerTileGridFileRecyclerAdapter>::MakeShared(viewModel->GetRomBrowserController(),
             &viewModel->GetFileInfoManager(), viewModel->GetIoTaskQueue(),
-            themeFileIconFactory, romBrowserViewFactory, TileWidth(), TileHeight(), _iconScale, ClipTop);
+            themeFileIconFactory, romBrowserViewFactory, vblankTextureLoader,
+            TileWidth(), TileHeight(), _iconScale, ClipTop);
     }
 
 private:

@@ -8,9 +8,11 @@ class DsRunnerTileGridFileRecyclerAdapter : public IconGridFileRecyclerAdapter
 public:
     DsRunnerTileGridFileRecyclerAdapter(IRomBrowserController* romBrowserController, FileInfoManager* fileInfoManager,
         TaskQueueBase* taskQueue, const IThemeFileIconFactory* themeFileIconFactory,
-        const IRomBrowserViewFactory* romBrowserViewFactory, int tileWidth, int tileHeight, int iconScale, int clipTop)
+        const IRomBrowserViewFactory* romBrowserViewFactory, VBlankTextureLoader* textureLoader,
+        int tileWidth, int tileHeight, int iconScale, int clipTop)
         : IconGridFileRecyclerAdapter(romBrowserController, fileInfoManager, taskQueue,
             themeFileIconFactory, romBrowserViewFactory)
+        , _textureLoader(textureLoader)
         , _tileWidth(tileWidth), _tileHeight(tileHeight), _iconScale(iconScale), _clipTop(clipTop) { }
 
     void GetViewSize(int& width, int& height) const override
@@ -26,7 +28,13 @@ public:
     // the tiles are drawn with the 3D engine and need no shared OBJ graphics
     void InitVram(const VramContext& vramContext) override { }
 
+protected:
+    // runs on the io thread: the icon like the icon grid, plus the tile image of the game
+    TaskResult<void> BindView(SharedPtr<View> view, int index,
+        const InternalFileInfo* internalFileInfo, const vu8& cancelRequested) const override;
+
 private:
+    VBlankTextureLoader* _textureLoader;
     int _tileWidth;
     int _tileHeight;
     int _iconScale;

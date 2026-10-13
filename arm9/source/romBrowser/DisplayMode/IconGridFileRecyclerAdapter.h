@@ -24,6 +24,8 @@ private:
     const IRomBrowserViewFactory* _romBrowserViewFactory;
     IconGridItemView::VramToken _iconGridItemViewGraphics;
 
+protected:
+    // DsRunner: protected so the tile grid adapter can load its tile images in the same io task
     TaskResult<void> BindView(SharedPtr<View> view, int index,
         const InternalFileInfo* internalFileInfo, const vu8& cancelRequested) const override;
     void SetQueueTask(const SharedPtr<View>& view, QueueTask<void> queueTask) const override;

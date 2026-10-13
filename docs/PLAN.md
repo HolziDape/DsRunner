@@ -9,7 +9,7 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
 | 1 Design-System | ✅ erledigt, auf dem DS getestet |
 | 2 Konsolen-Ebene | ✅ erledigt, auf dem DS getestet (Spielanzahl kam mit Phase 3, Favoriten mit Phase 6) |
-| 3 Kachel-Raster | ✅ im Code, in DeSmuME geprüft. Auf dem DS: Spielanzahl ok, **Test der Kacheln steht aus** (ohne Cover in den Kacheln, siehe unten) |
+| 3 Kachel-Raster | ✅ auf dem DS getestet (13.10.2026). Danach: Kachel-Bilder (Cover) statt Icons, Hänger behoben (siehe unten), **erneuter Test auf dem DS steht aus** |
 | 4 Großes Artwork oben | ✅ erledigt, auf dem DS getestet (Testbilder werden angezeigt und überblendet) |
 | 5 PC-Tool „DsRunner Art“ | ✅ im Code (Tests, echte Downloads von libretro-thumbnails, erzeugte Bilder in DeSmuME angezeigt), **Test unter Windows mit der Karte steht aus** |
 | 6 Komfort | ✅ im Code, gebaut und in DeSmuME geprüft (deutsche Oberfläche, Favoriten, Weiterspielen, Uhr im Menü), **Test auf dem DS steht aus** |
@@ -104,8 +104,12 @@ Ein eigener Launcher als Ersatz für YSMenu:
 - Sortierung „zuletzt gespielt“ über den Spielverlauf `/_dsrunner/recent.txt`. Ersetzt im Menü Picos „zuletzt geändert“, das nie umgesetzt war.
 
 **Offen:**
-- **Cover in den Kacheln** (3D-Texturen): Ein 128×96-Cover mit 256 Farben braucht 12 KB Textur-VRAM. Das 3×2-Raster hält 13 Kacheln vor, das 4×3-Raster 22, das passt nicht neben die übrigen Texturen in Bank D (128 KB). Machbar wäre es mit kleineren Covern (z. B. 64×48 mit 16 Farben = 1,5 KB) und eigenem Nachladen. Kommt, wenn das PC-Tool (Phase 5) Cover erzeugt.
 - Spielanzahl auf der Kachel selbst (bisher nur oben).
+
+**Nach dem Test auf dem DS (13.10.2026):**
+- **Hänger behoben:** Nach GBA → zurück → NDS hing DsRunner (Streifen oben, falsche Icon-Farben). Ursache: Der IO-Thread hatte nur 2 KB Stack. Er braucht schon ohne Artworks gut 1,6 KB (FatFs mit langen Dateinamen); ein Überlauf schreibt in die Thread-Verwaltung direkt darunter, danach hängt der VBlank-Interrupt. Jetzt 8 KB Stack für IO- und Hintergrund-Thread. Außerdem: die Aufgaben-Warteschlangen haben 64 statt 32 Plätze und warten bei Überfüllung, statt Speicher zu überschreiben; Artworks laden höchstens einzeln und erst, wenn die Auswahl 20 Bilder lang stehen bleibt.
+- **Kachel-Bilder:** Die 32×32-Icons wirkten in den großen Kacheln zu grob, GBA-Spiele haben keine. DsRunner zeigt jetzt ein 64×64-Bild (256 Farben, 4 KB Textur pro Kachel) aus `/_dsrunner/tiles`, das DsRunner Art aus dem Cover erzeugt ([CONFIG.md](CONFIG.md#kachel-bilder)). Im 3×2-Raster 1:1, im 4×3-Raster verkleinert auf 38 px. Ohne Bild bleibt das Icon.
+- **Abdunkeln oben:** langer, weicher Verlauf ab Zeile 64 statt eines kurzen harten Übergangs.
 
 ### Phase 4: Großes Artwork oben
 1. Bildschirmfüllendes Bild (256×192, 8 bpp, 256 Farben + Dithering, ≈ 48 KB) pro Konsole und Spiel. Ersetzt das kleine Cover auf dem oberen Bildschirm.
@@ -139,7 +143,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 - Test unter Windows mit echter Karte und größerer Sammlung (Trefferquote der Namenssuche bei frei benannten Dateien, Laufzeit der Prüfsummen über USB).
 - GameTDB-Adressen (`art.gametdb.com/ds/coverHQ|coverM|cover|coverS/<Region>/<Code>`) konnten in der Entwicklungsumgebung nicht geprüft werden (Host gesperrt). Das Tool überspringt die Quelle, wenn sie nicht antwortet.
 - Die Dateiliste der Thumbnail-Repos kommt über die GitHub-API (ohne Anmeldung 60 Anfragen pro Stunde, eine pro Konsole und Woche). Ohne sie werden Bilder direkt per Name versucht.
-- Kleine Cover für die Kacheln (Phase 3, „Cover in den Kacheln“) erzeugt das Tool noch nicht.
+- ~~Kleine Cover für die Kacheln~~: erledigt, siehe Kachel-Bilder in Phase 3.
 
 ### Phase 6: Komfort
 1. Deutsche Oberfläche (prüfen, ob die Pico-Fonts Umlaute haben)
