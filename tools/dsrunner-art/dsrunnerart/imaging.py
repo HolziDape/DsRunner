@@ -43,8 +43,9 @@ ACCENT = (76, 194, 255)    # #4CC2FF
 SIGNATURE = (0x5244, 1)  # "DR", format 1
 
 # NDS and (western) GBA box fronts carry a band with the console name on the left: system ->
-# (share of the width, aspect range of the boxes that have it), measured on libretro boxarts
-SPINES = {"nds": (0.135, 1.0, 1.3), "gba": (0.145, 0.95, 1.05)}
+# (share of the width, aspect range of the boxes that have it), measured on libretro boxarts.
+# GBA boxes have a silver frame next to the band, the picture starts at about 22 %
+SPINES = {"nds": (0.135, 1.0, 1.3), "gba": (0.225, 0.95, 1.05)}
 # a screen half counts as empty when one color covers more than this share of it
 FLAT_SHARE = 0.6
 
@@ -177,6 +178,10 @@ def to_tile(image: Image.Image, art_type: str, system_key: Optional[str] = None)
         anchor = 0.3 if portrait else 0.5
     elif art_type == "boxart":
         image = trim_spine(image, system_key)
+        # zoomed in on logo and main character: rating labels and publisher logos in the corners
+        # are only noise at 64 pixels
+        if image.width >= image.height * 0.8:
+            image = salient_square(image, 0.82, (0.5, 0.3))
         # the logo sits at the top of tall boxes
         anchor = 0.3
     tile = cover_fit(image, anchor, (TILE_SIZE, TILE_SIZE))
