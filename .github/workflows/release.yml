@@ -16,7 +16,7 @@ jobs:
           submodules: true
       - name: Install zip
         run:
-          apt-get update && apt-get -y install zip unzip curl
+          apt-get update && apt-get -y install zip unzip curl p7zip-full
       - name: Run build script
         run: |
           make
