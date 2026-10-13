@@ -55,6 +55,30 @@ bool DsRunnerPaths::Combine(const char* folderPath, const char* fileName, char* 
     return true;
 }
 
+bool DsRunnerPaths::MirrorPath(const char* root, const char* folderPath, const char* name, bool isFolder,
+    char* result, u32 resultSize)
+{
+    folderPath = SkipDrive(folderPath);
+    u32 rootLength = strlen(root);
+    u32 length = folderLength(folderPath);
+    u32 nameLength = strlen(name);
+    const char* extension = isFolder ? nullptr : strrchr(name, '.');
+    if (extension && extension != name)
+        nameLength = extension - name;
+    if (rootLength + length + 1 + nameLength + 4 >= resultSize)
+        return false;
+    char* p = result;
+    memcpy(p, root, rootLength);
+    p += rootLength;
+    memcpy(p, folderPath, length);
+    p += length;
+    *p++ = '/';
+    memcpy(p, name, nameLength);
+    p += nameLength;
+    strcpy(p, ".bmp");
+    return true;
+}
+
 // Returns true when the full path \p entry is the file \p fileName in the folder \p folderPath,
 // where \p folderPathLength is the folderLength() of the folder path (without drive).
 static bool isFileInFolder(const char* entry, const char* folderPath, u32 folderPathLength, const char* fileName)

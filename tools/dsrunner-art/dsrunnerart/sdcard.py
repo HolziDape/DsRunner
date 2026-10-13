@@ -17,6 +17,9 @@ ART_PATH_BUFFER = 256
 SETTINGS_PATH = "/_pico/settings.json"
 DEFAULT_LIBRARY_PATH = "/Games"
 OVERRIDE_FOLDER = "/_dsrunner/art-override"
+# tile images for the launcher grid: same path rule, other root (docs/CONFIG.md, "Kachel-Bilder")
+TILE_FOLDER = "/_dsrunner/tiles"
+TILE_OVERRIDE_FOLDER = "/_dsrunner/tile-override"
 MANIFEST_NAME = ".dsrunner-art.json"
 
 # folders in the SD root that are never consoles (only relevant without a library folder)
@@ -29,12 +32,13 @@ def skip_drive(path: str) -> str:
     return path[colon + 1:] if colon >= 0 else path
 
 
-def art_path(folder_path: str, file_name: str, is_folder: bool) -> Optional[str]:
+def art_path(folder_path: str, file_name: str, is_folder: bool, root: str = ART_FOLDER) -> Optional[str]:
     """Mirror of DsRunnerFileInfoCardView::RequestArt.
 
     folder_path is the folder that contains the entry (as the launcher has it, e.g. "fat:/Games/NDS/"),
     file_name the name of the entry. Returns the SD path of the artwork, or None when the launcher
-    can't build it (path too long for its buffer).
+    can't build it (path too long for its buffer). root is ART_FOLDER for artworks and TILE_FOLDER
+    for tile images (same rule).
     """
     folder = skip_drive(folder_path).rstrip("/")
     name = file_name
@@ -44,19 +48,27 @@ def art_path(folder_path: str, file_name: str, is_folder: bool) -> Optional[str]
         if dot > 0:
             name = name[:dot]
     # lengths in bytes: the launcher works on UTF-8 strings (FF_LFN_UNICODE 2)
-    length = len(ART_FOLDER.encode()) + len(folder.encode()) + 1 + len(name.encode()) + len(".bmp")
+    length = len(root.encode()) + len(folder.encode()) + 1 + len(name.encode()) + len(".bmp")
     if length >= ART_PATH_BUFFER:
         return None
-    return f"{ART_FOLDER}{folder}/{name}.bmp"
+    return f"{root}{folder}/{name}.bmp"
 
 
-def art_path_for_entry(entry_path: str, is_folder: bool) -> Optional[str]:
+def art_path_for_entry(entry_path: str, is_folder: bool, root: str = ART_FOLDER) -> Optional[str]:
     """Artwork SD path for the entry at entry_path (a path from the SD root, e.g. "/Games/NDS")."""
     path = skip_drive(entry_path)
     if is_folder:
         path = path.rstrip("/")
     slash = path.rfind("/")
-    return art_path(path[:slash + 1] if slash >= 0 else "/", path[slash + 1:], is_folder)
+    return art_path(path[:slash + 1] if slash >= 0 else "/", path[slash + 1:], is_folder, root)
+
+
+def tile_path_for_entry(entry_path: str, is_folder: bool) -> Optional[str]:
+    """Tile image SD path of a game: /Games/NDS/Mario Kart DS.nds -> /_dsrunner/tiles/Games/NDS/Mario Kart DS.bmp.
+    Folders have no tile image (None)."""
+    if is_folder:
+        return None
+    return art_path_for_entry(entry_path, False, TILE_FOLDER)
 
 
 def to_fs_path(sd_root: Path, sd_path: str) -> Path:
@@ -106,6 +118,26 @@ class Entry:
     @property
     def art_sd_path(self) -> Optional[str]:
         return art_path_for_entry(self.sd_path, self.is_folder)
+
+    @property
+    def tile_sd_path(self) -> Optional[str]:
+        return tile_path_for_entry(self.sd_path, self.is_folder)
+
+    @property
+    def stem(self) -> str:
+        """Name without the file extension (folders keep their name)."""
+        name = self.name
+        if not self.is_folder and "." in name[1:]:
+            name = name.rsplit(".", 1)[0]
+        return name
+
+    @property
+    def relative_key(self) -> str:
+        """Lower case SD path without extension and leading slash ("games/nds/mario kart ds"), the key
+        for mirrored override images."""
+        path = skip_drive(self.sd_path).rstrip("/")
+        folder, _, _ = path.rpartition("/")
+        return f"{folder}/{self.stem}".strip("/").lower()
 
 
 @dataclass

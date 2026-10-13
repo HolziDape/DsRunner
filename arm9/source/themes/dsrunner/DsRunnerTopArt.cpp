@@ -16,14 +16,17 @@
 // the BMP header up to and including the BITMAPINFOHEADER
 #define BMP_HEADER_SIZE     54
 
-#define LOAD_DELAY_FRAMES   6
+// longer than the key repeat delay (8 frames), so scrolling with a held dpad loads nothing
+#define LOAD_DELAY_FRAMES   20
+// the pixels are read in parts, so a load that isn't needed anymore stops early
+#define READ_CHUNK_SIZE     8192
 #define FADE_STEP           2
 
-// art visibility per screen line (out of 16): fully visible at the top, darkened towards the
-// info text band (see DsRunnerFileInfoCardView, the title starts at line 122)
-#define DARKEN_START_Y      92
-#define DARKEN_END_Y        118
-#define DARKEN_MIN          3
+// art visibility per screen line (out of 16): fully visible at the top, then a long soft
+// (smoothstep) fade towards the info text (see DsRunnerFileInfoCardView, the title starts at line 122)
+#define DARKEN_START_Y      64
+#define DARKEN_END_Y        140
+#define DARKEN_MIN          5
 
 // the blending runs on its own dma channel: channel 3 does the copies, channel 0 is stopped every vblank
 #define HBLANK_DMA_CHANNEL  1
@@ -44,7 +47,8 @@ DsRunnerTopArt::~DsRunnerTopArt()
 {
     if (_loadTask.IsValid())
     {
-        // the io thread may be writing into _pixels right now (a load takes well below 100 ms)
+        // the io thread may be writing into _pixels right now: make it stop and wait for it
+        _requestNumber = _requestNumber + 1;
         while (!_loadTask.GetTask().IsCompleted())
             VBlank::Wait();
         _loadTask.Dispose();
@@ -63,9 +67,9 @@ void DsRunnerTopArt::Request(const char* path, TaskQueueBase* ioTaskQueue)
 
     strlcpy(_requestedPath, path, sizeof(_requestedPath));
     _ioTaskQueue = ioTaskQueue;
-    // whatever was loading is not needed anymore
-    _loadTask.CancelTask();
-    _loadResult = LoadResult::None;
+    // a running load notices the new number and stops; the next one starts when it is done
+    _requestNumber = _requestNumber + 1;
+    _loadNeeded = path[0] != 0;
     _uploadPending = false;
     _loadDelay = LOAD_DELAY_FRAMES;
     // fade out the current art, the new one fades in once it's loaded
@@ -74,19 +78,23 @@ void DsRunnerTopArt::Request(const char* path, TaskQueueBase* ioTaskQueue)
 
 void DsRunnerTopArt::Update()
 {
-    if (_loadDelay > 0 && --_loadDelay == 0 && _requestedPath[0] != 0 && _ioTaskQueue)
-    {
-        StartLoad();
-    }
+    if (_loadDelay > 0)
+        _loadDelay--;
 
     if (_loadTask.IsValid() && _loadTask.GetTask().IsCompleted())
     {
         _loadTask.Dispose();
-        if (_loadResult == LoadResult::Ok)
+        if (_loadedNumber == _requestNumber && _loadResult == LoadResult::Ok)
         {
             // uploaded in vblank as soon as the old art is faded out
             _uploadPending = true;
         }
+    }
+
+    if (_loadNeeded && _loadDelay == 0 && !_loadTask.IsValid() && _ioTaskQueue)
+    {
+        _loadNeeded = false;
+        StartLoad();
     }
 
     if (_fade < _fadeTarget)
@@ -102,20 +110,19 @@ void DsRunnerTopArt::Update()
 
 void DsRunnerTopArt::StartLoad()
 {
-    _loadTask = _ioTaskQueue->Enqueue([this] (const vu8& cancelRequested)
+    u32 requestNumber = _requestNumber;
+    strlcpy(_loadingPath, _requestedPath, sizeof(_loadingPath));
+    _loadTask = _ioTaskQueue->Enqueue([this, requestNumber] (const vu8& cancelRequested)
     {
-        // the path can't change while this runs: a new request cancels this task first
-        // and its own task runs after this one on the same queue
-        char path[256];
-        strlcpy(path, _requestedPath, sizeof(path));
-        _loadResult = Load(path, cancelRequested);
+        _loadResult = Load(_loadingPath, requestNumber, cancelRequested);
+        _loadedNumber = requestNumber;
         return TaskResult<void>::Completed();
     });
 }
 
-DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, const vu8& cancelRequested)
+DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, u32 requestNumber, const vu8& cancelRequested)
 {
-    if (cancelRequested)
+    if (IsStale(requestNumber, cancelRequested))
         return LoadResult::None;
 
     auto file = std::make_unique<File>();
@@ -145,21 +152,24 @@ DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, const vu8& can
         return LoadResult::Failed;
     }
 
-    alignas(4) u8 bmpPalette[256 * 4];
-    memset(bmpPalette, 0, sizeof(bmpPalette));
+    u8* bmpPalette = _bmpPalette;
+    memset(bmpPalette, 0, sizeof(_bmpPalette));
     if (file->Seek(14 + dibSize) != FR_OK || !file->ReadExact(bmpPalette, colors * 4))
         return LoadResult::Failed;
-    if (cancelRequested)
+    if (IsStale(requestNumber, cancelRequested) || file->Seek(pixelOffset) != FR_OK)
         return LoadResult::None;
-    if (file->Seek(pixelOffset) != FR_OK || !file->ReadExact(_pixels, sizeof(_pixels)))
-        return LoadResult::Failed;
-    if (cancelRequested)
-        return LoadResult::None;
+    for (u32 offset = 0; offset < sizeof(_pixels); offset += READ_CHUNK_SIZE)
+    {
+        if (IsStale(requestNumber, cancelRequested))
+            return LoadResult::None;
+        if (!file->ReadExact(&_pixels[offset], std::min<u32>(READ_CHUNK_SIZE, sizeof(_pixels) - offset)))
+            return LoadResult::Failed;
+    }
 
     if (height > 0)
     {
         // bottom-up: flip the rows
-        alignas(4) u8 row[ART_WIDTH];
+        u8* row = _rowBuffer;
         for (int y = 0; y < ART_HEIGHT / 2; y++)
         {
             u8* top = &_pixels[y * ART_WIDTH];

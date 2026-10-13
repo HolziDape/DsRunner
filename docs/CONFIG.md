@@ -144,3 +144,26 @@ Regel: Pfad ab SD-Root, bei Dateien die Endung durch `.bmp` ersetzen, bei Ordner
 
 **DsRunner Art** legt außerdem `/_dsrunner/art/.dsrunner-art.json` an (welche Bilder vom Tool stammen) und liest eigene Bilder aus `/_dsrunner/art-override/` (gleicher Pfad wie das Spiel, beliebiges Bildformat). DsRunner selbst nutzt beides nicht.
 
+## Kachel-Bilder
+
+Im Kachelraster zeigt ein Spiel statt seines Icons (32 × 32, bei GBA-Spielen gar keins) ein **Kachel-Bild**, wenn es eins gibt. Sonst bleibt es beim Icon.
+
+**Ablage:** gleiche Regel wie bei den [Artworks](#artworks), nur mit `/_dsrunner/tiles` statt `/_dsrunner/art`, und **nur für Spiele** (Dateien), nicht für Ordner:
+
+| Spiel | Kachel-Bild |
+|---|---|
+| `/Games/NDS/Mario Kart DS.nds` | `/_dsrunner/tiles/Games/NDS/Mario Kart DS.bmp` |
+| `/Games/GBA/Rennen/Golden Sun.gba` | `/_dsrunner/tiles/Games/GBA/Rennen/Golden Sun.bmp` |
+
+Regel: Pfad ab SD-Root, Endung durch `.bmp` ersetzen (nur die letzte, `Platin.v1.2.nds` → `Platin.v1.2.bmp`). Der ganze Pfad muss wie bei den Artworks in 255 Bytes (UTF-8) passen. Groß-/Kleinschreibung spielt keine Rolle (FAT).
+
+**Format:**
+
+- Windows-BMP, genau **64 × 64 Pixel**, **8 bit pro Pixel** mit Palette, unkomprimiert (`BI_RGB`), Zeilen von unten nach oben oder von oben nach unten (negative Höhe). Die Dateien des Tools sind 5174 Bytes groß.
+- Höchstens 255 Farben, **Palettenfarbe 0 bleibt unbenutzt** (der DS behandelt sie als durchsichtig). Farben werden auf 15 bit gekürzt.
+- Sonst gelten dieselben Prüfregeln wie bei den Artworks, nur die Größe ist anders. Andere Dateien werden ignoriert (dann das Icon).
+
+**Inhalt** (erzeugt von [DsRunner Art](ART-TOOL.md#kachel-bilder)): das Cover des Spiels, auf 64 × 64 gefüllt und mittig beschnitten (beim DS- und GBA-Cover ohne den Streifen „NINTENDO DS“ bzw. „GAME BOY ADVANCE“). Ersatz der Reihe nach: Titelbild (oberer Bildschirm), Screenshot, zuletzt das Icon des Spiels doppelt groß (ohne Glätten) auf dunklem Grund.
+
+**DsRunner Art** führt die Liste der eigenen Kachel-Bilder in `/_dsrunner/tiles/.dsrunner-art.json` und liest eigene Kachel-Bilder aus `/_dsrunner/tile-override/` (gleicher Pfad wie das Spiel oder nur der Name, beliebiges Bildformat). DsRunner selbst nutzt beides nicht.
+

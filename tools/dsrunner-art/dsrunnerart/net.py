@@ -3,6 +3,7 @@ tracking, so an unreachable source is skipped instead of timing out for every ga
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
 import socket
@@ -78,6 +79,10 @@ class HttpClient:
                     break
             except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError, OSError) as error:
                 last_error = str(getattr(error, "reason", error))
+            except (http.client.HTTPException, ValueError) as error:
+                # broken transfers (IncompleteRead, BadStatusLine ...) are no OSError; without this they
+                # ended the whole game with an error instead of being treated as a network problem
+                last_error = f"{type(error).__name__}: {error}"
             if attempt < self.retries:
                 time.sleep(1.5 * (attempt + 1))
         with self._lock:

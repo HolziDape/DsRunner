@@ -144,6 +144,8 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
     console_var = tk.BooleanVar(value=settings.get("console_art", True))
     icon_var = tk.BooleanVar(value=settings.get("icon_fallback", True))
     clean_var = tk.BooleanVar(value=False)
+    tiles_var = tk.BooleanVar(value=settings.get("tiles", True))
+    replace_var = tk.BooleanVar(value=False)
     override_var = tk.StringVar(value=settings.get("override", ""))
     details_var = tk.BooleanVar(value=False)
     status_var = tk.StringVar(value="Bereit.")
@@ -156,7 +158,7 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
     main.columnconfigure(1, weight=1)
 
     ttk.Label(main, text="DsRunner Art", font=("Segoe UI", 14, "bold")).grid(row=0, column=0, columnspan=4, sticky="w")
-    ttk.Label(main, text="Lädt die großen Bilder für den oberen Bildschirm auf die SD-Karte.").grid(
+    ttk.Label(main, text="Lädt die großen Bilder für den oberen Bildschirm und die Kachel-Bilder auf die SD-Karte.").grid(
         row=1, column=0, columnspan=4, sticky="w", pady=(0, 10))
 
     # --- drive -------------------------------------------------------------------------------
@@ -231,20 +233,24 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
         row=3, column=0, columnspan=3, sticky="w")
     ttk.Checkbutton(options_frame, text="Spiel-Icon als Ersatzbild, wenn nichts gefunden wird", variable=icon_var).grid(
         row=4, column=0, columnspan=3, sticky="w")
+    ttk.Checkbutton(options_frame, text="Kachel-Bilder erzeugen (64 × 64 für das Raster im Launcher)",
+                    variable=tiles_var).grid(row=5, column=0, columnspan=3, sticky="w")
+    ttk.Checkbutton(options_frame, text="Auch von Hand abgelegte Bilder ersetzen", variable=replace_var).grid(
+        row=6, column=0, columnspan=3, sticky="w")
     ttk.Checkbutton(options_frame, text="Bilder gelöschter Spiele entfernen", variable=clean_var).grid(
-        row=5, column=0, columnspan=3, sticky="w")
+        row=7, column=0, columnspan=3, sticky="w")
 
-    ttk.Label(options_frame, text="Eigene Bilder:").grid(row=6, column=0, sticky="w", pady=(6, 0))
-    ttk.Entry(options_frame, textvariable=override_var).grid(row=6, column=1, sticky="ew", padx=(6, 6), pady=(6, 0))
+    ttk.Label(options_frame, text="Eigene Bilder:").grid(row=8, column=0, sticky="w", pady=(6, 0))
+    ttk.Entry(options_frame, textvariable=override_var).grid(row=8, column=1, sticky="ew", padx=(6, 6), pady=(6, 0))
 
     def choose_override():
         folder = filedialog.askdirectory(title="Ordner mit eigenen Bildern")
         if folder:
             override_var.set(os.path.normpath(folder))
 
-    ttk.Button(options_frame, text="Wählen …", command=choose_override).grid(row=6, column=2, pady=(6, 0))
+    ttk.Button(options_frame, text="Wählen …", command=choose_override).grid(row=8, column=2, pady=(6, 0))
     ttk.Label(options_frame, text="leer = " + OVERRIDE_FOLDER.replace("/", os.sep).lstrip(os.sep) + " auf der Karte",
-              foreground="#555").grid(row=7, column=1, columnspan=2, sticky="w", padx=(6, 0))
+              foreground="#555").grid(row=9, column=1, columnspan=2, sticky="w", padx=(6, 0))
 
     # --- actions -----------------------------------------------------------------------------
     actions = ttk.Frame(main)
@@ -307,11 +313,13 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
         override = override_var.get().strip()
         return Options(art_type=type_var.get(), force=force_var.get(), console_art=console_var.get(),
                        icon_fallback=icon_var.get(), region=region, clean=clean_var.get(),
-                       override_dir=Path(override) if override else None)
+                       override_dir=Path(override) if override else None, tiles=tiles_var.get(),
+                       replace_manual=replace_var.get())
 
     def remember(sd_root: Path, options: Options) -> None:
         settings.update({"sd": str(sd_root), "type": options.art_type, "region": options.region,
                          "console_art": options.console_art, "icon_fallback": options.icon_fallback,
+                         "tiles": options.tiles,
                          "override": override_var.get().strip()})
         _save_settings(settings)
 
@@ -340,7 +348,7 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
                                   progress=lambda done, total, name: messages.put(("progress", done, total, name)),
                                   cancel=cancel)
                 stats = updater.run()
-                summary = "Abgebrochen." if cancel.is_set() else f"Fertig: {stats.summary()}."
+                summary = "Abgebrochen." if cancel.is_set() else f"Fertig: {stats.short_summary()}."
             except Exception as error:  # noqa: BLE001 - shown to the user instead of a silent crash
                 messages.put(("log", f"Fehler: {type(error).__name__}: {error}", "error"))
                 summary = "Fehler, siehe Protokoll."
@@ -367,7 +375,7 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
 
         def work():
             bad = check_card(sd_root, lambda message, level="info": messages.put(("log", message, level)))
-            messages.put(("done", "Alle Artworks in Ordnung." if not bad else f"{bad} Artworks unbrauchbar."))
+            messages.put(("done", "Alle Bilder in Ordnung." if not bad else f"{bad} Bilder unbrauchbar."))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -383,10 +391,22 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
     open_button.configure(command=open_art)
 
     def on_close() -> None:
-        if state["thread"] is not None:
+        thread = state["thread"]
+        if thread is not None:
             if not messagebox.askyesno("DsRunner Art", "Die Aktualisierung läuft noch. Abbrechen und beenden?"):
                 return
             cancel_run()
+
+            # wait for the run to stop: it saves the list of written files on the way out (without it
+            # the files of this run would count as hand-placed next time)
+            def close_when_done(waited: int = 0) -> None:
+                if thread.is_alive() and waited < 300:
+                    root.after(100, close_when_done, waited + 1)
+                else:
+                    root.destroy()
+
+            close_when_done()
+            return
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)

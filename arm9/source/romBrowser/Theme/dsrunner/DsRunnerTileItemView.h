@@ -1,18 +1,28 @@
 #pragma once
 #include "core/math/Rgb.h"
+#include "gui/VBlankTextureLoader.h"
 #include "romBrowser/views/IconGridItemView.h"
 
 class IRomBrowserController;
 class FileInfo;
 
+#define DSRUNNER_TILE_IMAGE_SIZE    64
+
 /// @brief Large tile of the DsRunner tile grids (3x2 and 4x3).
 ///        The tile body is drawn with the 3D engine (any size, rounded corners, glow when selected),
 ///        the file icon is an OBJ on top of it and can be scaled up (2x in the 3x2 grid).
+///        Games with a tile image (/_dsrunner/tiles, 64x64 8 bpp, made by DsRunner Art) show it as a
+///        texture instead of the icon.
 class DsRunnerTileItemView : public IconGridItemView
 {
     SHARED_ONLY(DsRunnerTileItemView)
 
 public:
+    ~DsRunnerTileItemView() override;
+
+    void InitVram(const VramContext& vramContext) override;
+    void Update() override;
+
     Rectangle GetBounds() const override
     {
         return Rectangle(_position, _width, _height);
@@ -39,7 +49,12 @@ public:
         _item = item;
         // look the favorite state up again on the next draw
         _favoriteVersion = ~0u;
+        ClearTileImage();
     }
+
+    /// @brief Loads the tile image of the bound file. Called on the io thread while binding.
+    /// @return True when the image was loaded (it is shown once it reached vram).
+    bool LoadTileImage(const char* path, const vu8& cancelRequested);
 
 private:
     int _width;
@@ -54,8 +69,28 @@ private:
     u32 _favoriteVersion = ~0u;
     bool _isFavorite = false;
 
+    // tile image: loaded into the buffers on the io thread, then copied to vram during vblank
+    VBlankTextureLoader* _textureLoader;
+    u32 _texVramOffset = 0;
+    u32 _plttVramOffset = 0;
+    bool _hasTextureVram = false;
+    // changes with every bind, so a load for an earlier item is dropped
+    volatile u32 _bindNumber = 0;
+    volatile bool _tileImageLoaded = false;
+    bool _tileImageRequested = false;
+    VBlankTextureLoadRequest _textureLoadRequest;
+    alignas(32) u8 _tileTexels[DSRUNNER_TILE_IMAGE_SIZE * DSRUNNER_TILE_IMAGE_SIZE];
+    alignas(32) u16 _tilePalette[256];
+
     DsRunnerTileItemView(std::unique_ptr<IRomBrowserItemViewModel> viewModel, IRomBrowserController* romBrowserController,
-        int width, int height, int iconScale, int clipTop);
+        VBlankTextureLoader* textureLoader, int width, int height, int iconScale, int clipTop);
+
+    void ClearTileImage();
+    bool IsTileImageReady() const
+    {
+        return _tileImageRequested && _textureLoadRequest.GetState() == VBlankTextureLoadRequestState::LoadComplete;
+    }
+    void DrawTileImage();
 
     void DrawIcon(GraphicsContext& graphicsContext, const Rgb<8, 8, 8>& bodyColor);
     bool IsFavorite();

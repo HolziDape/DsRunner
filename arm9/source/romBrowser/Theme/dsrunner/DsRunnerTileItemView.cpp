@@ -8,6 +8,10 @@
 #include "themes/dsrunner/DsRunnerColorScheme.h"
 #include "romBrowser/IRomBrowserController.h"
 #include "romBrowser/FileInfo.h"
+#include <nds/arm9/cache.h>
+#include "gui/VramContext.h"
+#include "gui/IVramManager.h"
+#include "fat/File.h"
 #include "DsRunnerLibrary.h"
 #include "DsRunnerTileItemView.h"
 
@@ -24,8 +28,11 @@
 #define Z_BODY              (-320)
 #define Z_RING              (-200)
 #define Z_GLOW              (-100)
-// the favorite star is in front of the tile body
+// the tile image is in front of the body, the favorite star in front of both
+#define Z_IMAGE             (-330)
 #define Z_STAR              (-340)
+// tile image size in the 4x3 grid: the tile height minus a small margin (64 px in the 3x2 grid)
+#define IMAGE_MARGIN        3
 
 // favorite star: outer radius in the 3x2 / 4x3 grid and distance of its center to the top right
 // corner. It sits on the rounded corner like a badge, the large icons of the 3x2 grid leave no room
@@ -165,9 +172,163 @@ static void drawStar(int centerX, int centerY, int radius, const Rgb888& color, 
 }
 
 DsRunnerTileItemView::DsRunnerTileItemView(std::unique_ptr<IRomBrowserItemViewModel> viewModel,
-    IRomBrowserController* romBrowserController, int width, int height, int iconScale, int clipTop)
+    IRomBrowserController* romBrowserController, VBlankTextureLoader* textureLoader,
+    int width, int height, int iconScale, int clipTop)
     : IconGridItemView(std::move(viewModel)), _width(width), _height(height), _iconScale(iconScale)
-    , _clipTop(clipTop), _romBrowserController(romBrowserController) { }
+    , _clipTop(clipTop), _romBrowserController(romBrowserController), _textureLoader(textureLoader) { }
+
+DsRunnerTileItemView::~DsRunnerTileItemView()
+{
+    if (_textureLoader)
+        _textureLoader->CancelLoad(_textureLoadRequest);
+}
+
+void DsRunnerTileItemView::InitVram(const VramContext& vramContext)
+{
+    IconGridItemView::InitVram(vramContext);
+    const auto texVramManager = vramContext.GetTexVramManager();
+    const auto texPlttVramManager = vramContext.GetTexPlttVramManager();
+    if (texVramManager && texPlttVramManager && _textureLoader)
+    {
+        _texVramOffset = texVramManager->Alloc(sizeof(_tileTexels));
+        _plttVramOffset = texPlttVramManager->Alloc(sizeof(_tilePalette));
+        _hasTextureVram = true;
+    }
+}
+
+void DsRunnerTileItemView::ClearTileImage()
+{
+    _bindNumber = _bindNumber + 1;
+    _tileImageLoaded = false;
+    if (_tileImageRequested)
+    {
+        _textureLoader->CancelLoad(_textureLoadRequest);
+        _tileImageRequested = false;
+    }
+}
+
+static inline u32 readLe32(const u8* data)
+{
+    return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+}
+
+bool DsRunnerTileItemView::LoadTileImage(const char* path, const vu8& cancelRequested)
+{
+    if (!_hasTextureVram || cancelRequested)
+        return false;
+    u32 bindNumber = _bindNumber;
+
+    auto file = std::make_unique<File>();
+    if (file->Open(path, FA_READ | FA_OPEN_EXISTING) != FR_OK)
+        return false;
+
+    // 64x64, 8 bits per pixel, uncompressed (see "Kachel-Bilder" in docs/CONFIG.md)
+    alignas(4) u8 header[54];
+    if (!file->ReadExact(header, sizeof(header)) || header[0] != 'B' || header[1] != 'M')
+        return false;
+    u32 pixelOffset = readLe32(&header[0x0A]);
+    u32 dibSize = readLe32(&header[0x0E]);
+    s32 width = (s32)readLe32(&header[0x12]);
+    s32 height = (s32)readLe32(&header[0x16]);
+    u32 bpp = header[0x1C] | (header[0x1D] << 8);
+    u32 colors = readLe32(&header[0x2E]);
+    if (colors == 0 || colors > 256)
+        colors = 256;
+    if (dibSize < 40 || width != DSRUNNER_TILE_IMAGE_SIZE || bpp != 8 || readLe32(&header[0x1E]) != 0 ||
+        (height != DSRUNNER_TILE_IMAGE_SIZE && height != -DSRUNNER_TILE_IMAGE_SIZE))
+    {
+        return false;
+    }
+
+    // only the io thread loads tile images, so one buffer for the BMP palette is enough
+    alignas(4) static u8 sBmpPalette[256 * 4];
+    if (file->Seek(14 + dibSize) != FR_OK || !file->ReadExact(sBmpPalette, colors * 4) ||
+        file->Seek(pixelOffset) != FR_OK || !file->ReadExact(_tileTexels, sizeof(_tileTexels)))
+    {
+        return false;
+    }
+    if (cancelRequested || bindNumber != _bindNumber)
+        return false;
+
+    if (height > 0)
+    {
+        // bottom-up: textures go from the top row down
+        for (int y = 0; y < DSRUNNER_TILE_IMAGE_SIZE / 2; y++)
+        {
+            u32* top = (u32*)&_tileTexels[y * DSRUNNER_TILE_IMAGE_SIZE];
+            u32* bottom = (u32*)&_tileTexels[(DSRUNNER_TILE_IMAGE_SIZE - 1 - y) * DSRUNNER_TILE_IMAGE_SIZE];
+            for (int x = 0; x < DSRUNNER_TILE_IMAGE_SIZE / 4; x++)
+                std::swap(top[x], bottom[x]);
+        }
+    }
+    for (u32 i = 0; i < 256; i++)
+    {
+        const u8* bgra = &sBmpPalette[i * 4];
+        _tilePalette[i] = i < colors ? ((bgra[2] >> 3) | ((bgra[1] >> 3) << 5) | ((bgra[0] >> 3) << 10)) : 0;
+    }
+    // the vblank texture loader copies the buffers with dma
+    DC_FlushRange(_tileTexels, sizeof(_tileTexels));
+    DC_FlushRange(_tilePalette, sizeof(_tilePalette));
+
+    if (cancelRequested || bindNumber != _bindNumber)
+        return false;
+    _tileImageLoaded = true;
+    return true;
+}
+
+void DsRunnerTileItemView::Update()
+{
+    IconGridItemView::Update();
+    if (_tileImageLoaded && !_tileImageRequested)
+    {
+        _textureLoadRequest = VBlankTextureLoadRequest(_tileTexels, sizeof(_tileTexels), _texVramOffset,
+            _tilePalette, sizeof(_tilePalette), _plttVramOffset, nullptr, nullptr);
+        _textureLoader->RequestLoad(_textureLoadRequest);
+        _tileImageRequested = true;
+    }
+}
+
+void DsRunnerTileItemView::DrawTileImage()
+{
+    // the image sits in the middle of the tile, 1:1 in the 3x2 grid and scaled down in the 4x3 grid
+    int size = std::min(DSRUNNER_TILE_IMAGE_SIZE, std::min(_width, _height) - 2 * IMAGE_MARGIN);
+    int x0 = _position.x + (_width - size) / 2;
+    int y0 = _position.y + (_height - size) / 2;
+    int x1 = x0 + size;
+    int y1 = y0 + size;
+    if (y1 <= _clipTop)
+        return;
+    // cut off under the app bar like the tile body: move the top edge and its texture row down
+    int texTop64 = 0;
+    int top64 = y0 << 6;
+    if (y0 < _clipTop)
+    {
+        texTop64 = (_clipTop - y0) * DSRUNNER_TILE_IMAGE_SIZE * 64 / size;
+        top64 = _clipTop << 6;
+    }
+
+    Gx::TexImageParam(_texVramOffset >> 3, false, false, false, false, GX_TEXSIZE_64, GX_TEXSIZE_64,
+        GX_TEXFMT_PLTT256, false, GX_TEXGEN_NONE);
+    Gx::TexPlttBase(_plttVramOffset >> 4);
+    Gx::Color(0x7FFF);
+    auto texTop = fix16<4>::FromRawValue(texTop64 >> 2);
+    auto texBottom = fix16<4>(DSRUNNER_TILE_IMAGE_SIZE);
+    auto texRight = fix16<4>(DSRUNNER_TILE_IMAGE_SIZE);
+    Gx::Begin(GX_PRIMITIVE_QUAD);
+    Gx::TexCoord(0, texTop);
+    vertex(x0 << 6, top64, Z_IMAGE);
+    Gx::TexCoord(0, texBottom);
+    vertex(x0 << 6, y1 << 6, Z_IMAGE);
+    Gx::TexCoord(texRight, texBottom);
+    vertex(x1 << 6, y1 << 6, Z_IMAGE);
+    Gx::TexCoord(texRight, texTop);
+    vertex(x1 << 6, top64, Z_IMAGE);
+    Gx::End();
+
+    // back to untextured polygons for the rest of the tile
+    Gx::TexImageParam(0, false, false, false, false, GX_TEXSIZE_8, GX_TEXSIZE_8,
+        GX_TEXFMT_NONE, false, GX_TEXGEN_NONE);
+}
 
 bool DsRunnerTileItemView::IsFavorite()
 {
@@ -229,6 +390,10 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
         false, false, false, GX_DEPTH_FUNC_LESS, false, 31, graphicsContext.GetPolygonId());
     drawRoundedRect(_position.x, _position.y, _width, _height, CORNER_RADIUS, top, bottom, Z_BODY, _clipTop);
 
+    bool showTileImage = IsTileImageReady();
+    if (showTileImage)
+        DrawTileImage();
+
     // favorites get a small star in the top right corner
     int starRadius = _iconScale == 2 ? STAR_RADIUS_LARGE : STAR_RADIUS_SMALL;
     int starX = _position.x + _width - STAR_INSET;
@@ -262,7 +427,7 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
     // sprites can't be cut off: the icon of a tile that scrolls under the app bar disappears
     // as soon as it would reach into it
     int iconHalfSize = 16 * _iconScale;
-    if (_icon && _position.y + _height / 2 - iconHalfSize >= _clipTop)
+    if (!showTileImage && _icon && _position.y + _height / 2 - iconHalfSize >= _clipTop)
     {
         // the icon blends into the middle of the body gradient
         DrawIcon(graphicsContext, RgbMixer::Lerp(top, bottom, 1, 2));

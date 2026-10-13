@@ -10,7 +10,7 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 
 - **Startet automatisch** beim Einschalten des DS, ohne Umweg über ein anderes Menü
 - **Zwei Ebenen:** erst die Konsolen (NDS, GBA, …), dann deren Spiele
-- **Große Kacheln** im Raster 3×2 oder 4×3, Konsolen in ihrer eigenen Farbe
+- **Große Kacheln** im Raster 3×2 oder 4×3 mit Cover-Bildern, Konsolen in ihrer eigenen Farbe
 - **Artwork oben** für jede Konsole und jedes Spiel, mit weichem Überblenden
 - **Spielanzahl** pro Konsole und Sortierung nach **zuletzt gespielt**
 - **Favoriten** mit X, gesammelt in der Kachel „★ Favoriten“
@@ -83,7 +83,7 @@ Der Touchscreen funktioniert ebenfalls.
 
 ## Artworks
 
-Die großen Bilder für den oberen Bildschirm besorgt das PC-Programm **DsRunner Art** automatisch: SD-Karte einstecken, Programm starten, **„Artworks aktualisieren“** klicken. Es erkennt die Spiele (DS und GBA am Game-Code, andere Konsolen an Prüfsumme oder Dateiname), lädt Titelbilder, Screenshots oder Cover von [libretro-thumbnails](https://github.com/libretro-thumbnails) und erzeugt Bilder für die Konsolen-Ordner. Eigene Bilder haben Vorrang.
+Die großen Bilder für den oberen Bildschirm besorgt das PC-Programm **DsRunner Art** automatisch: SD-Karte einstecken, Programm starten, **„Artworks aktualisieren“** klicken. Es erkennt die Spiele (DS und GBA am Game-Code, andere Konsolen an Prüfsumme oder Dateiname), lädt Titelbilder, Screenshots oder Cover von [libretro-thumbnails](https://github.com/libretro-thumbnails) und erzeugt Bilder für die Konsolen-Ordner. Außerdem legt es für jedes Spiel ein kleines **Cover für die Kachel** an (auch für GBA-Spiele, die kein eigenes Icon haben). Eigene Bilder haben Vorrang.
 
 - Windows: `DsRunnerArt.exe` aus dem [Release](https://github.com/HolziDape/DsRunner/releases/latest), oder mit Python aus `tools/dsrunner-art`
 - Anleitung, Optionen und Fehlerbehebung: **[docs/ART-TOOL.md](docs/ART-TOOL.md)**

@@ -103,7 +103,7 @@ class NameIndexTests(unittest.TestCase):
 class DatTests(unittest.TestCase):
     def test_parse(self):
         dat = Dat.parse(DAT_NDS)
-        self.assertEqual(len(dat.games), 4)
+        self.assertEqual(len(dat.games), 9)
         self.assertEqual(dat.names_for_serial("amcp"), ["Mario Kart DS (Europe) (En,Fr,De,Es,It)"])
         self.assertEqual(dat.by_crc[0x94E8127E], ["Mario Kart DS (Europe) (En,Fr,De,Es,It)"])
         self.assertEqual(dat.index.exact("mario kart ds"),

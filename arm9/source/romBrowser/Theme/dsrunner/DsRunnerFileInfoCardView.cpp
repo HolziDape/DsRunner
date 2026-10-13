@@ -122,32 +122,11 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
 
 void DsRunnerFileInfoCardView::RequestArt(const TCHAR* fileName)
 {
-    const char* folder = DsRunnerPaths::SkipDrive(_folderPath);
-    u32 folderLength = strlen(folder);
-    while (folderLength > 0 && folder[folderLength - 1] == '/')
-        folderLength--;
-    // files lose their extension, folder names are kept as they are
-    u32 nameLength = strlen(fileName);
-    const char* extension = _isFolder ? nullptr : strrchr(fileName, '.');
-    if (extension && extension != fileName)
-        nameLength = extension - fileName;
-
     char path[256];
-    if (sizeof(ART_FOLDER) - 1 + folderLength + 1 + nameLength + 4 >= sizeof(path))
-    {
+    if (DsRunnerPaths::MirrorPath(ART_FOLDER, _folderPath, fileName, _isFolder, path, sizeof(path)))
+        _heroState->SetArt(path, _ioTaskQueue);
+    else
         _heroState->SetArt(nullptr, _ioTaskQueue);
-        return;
-    }
-    char* p = path;
-    memcpy(p, ART_FOLDER, sizeof(ART_FOLDER) - 1);
-    p += sizeof(ART_FOLDER) - 1;
-    memcpy(p, folder, folderLength);
-    p += folderLength;
-    *p++ = '/';
-    memcpy(p, fileName, nameLength);
-    p += nameLength;
-    strcpy(p, ".bmp");
-    _heroState->SetArt(path, _ioTaskQueue);
 }
 
 bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName)
