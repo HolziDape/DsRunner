@@ -38,6 +38,17 @@ public:
         }
     }
 
+    /// @brief DsRunner: clock in the status bar on/off.
+    bool GetShowClock() const
+    {
+        return _romBrowserController->GetShowClock();
+    }
+
+    void SetShowClock(bool showClock)
+    {
+        _romBrowserController->SetShowClock(showClock);
+    }
+
     void Close()
     {
         _romBrowserController->HideDisplaySettings();

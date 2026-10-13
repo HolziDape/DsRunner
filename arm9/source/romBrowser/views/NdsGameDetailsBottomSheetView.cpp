@@ -19,7 +19,7 @@ NdsGameDetailsBottomSheetView::NdsGameDetailsBottomSheetView(
     _cheatsChip->SetText(u"Cheats");
     _cheatsChip->SetSelected(false);
     AddChildTail(_cheatsChip.GetPointer());
-    _favoriteChip->SetText(u"Favorite");
+    _favoriteChip->SetText(u"Favorit"); // DsRunner: German text
     _favoriteChip->SetSelected(true);
     AddChildTail(_favoriteChip.GetPointer());
 }

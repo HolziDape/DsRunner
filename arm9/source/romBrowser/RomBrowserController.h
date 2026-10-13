@@ -12,6 +12,7 @@
 #include "FileType/ExtensionFileTypeProvider.h"
 #include "services/settings/IAppSettingsService.h"
 #include "cheats/ICheatRepository.h"
+#include "Theme/dsrunner/DsRunnerLibrary.h"
 
 class RomBrowserController : public IRomBrowserController
 {
@@ -57,6 +58,13 @@ public:
     bool IsCurrentFolderLibraryRoot() const override { return _currentFolderIsLibraryRoot; }
     const TCHAR* GetCurrentFolderPath() const override { return _currentFolderPath; }
 
+    // DsRunner: favorites, "Weiterspielen" and options of the DsRunner theme
+    const TCHAR* GetItemFolderPath(const FileInfo& fileInfo) const override;
+    void ToggleFavorite(const FileInfo& fileInfo) override;
+    bool ContinueLastGame() override;
+    void SetShowClock(bool showClock) override;
+    bool GetShowClock() const override { return _appSettingsService->GetAppSettings().showClock; }
+
 private:
     IAppSettingsService* _appSettingsService;
     TaskQueueBase* _ioTaskQueue;
@@ -77,6 +85,18 @@ private:
     TCHAR _currentFolderName[256] = { 0 };
     TCHAR _currentFolderPath[256] = { 0 };
     bool _currentFolderIsLibraryRoot = false;
+    // DsRunner: the virtual favorites folder (see DsRunnerFavoritesFolder)
+    bool _navigateToFavorites = false;
+    bool _newFolderIsFavorites = false;
+    bool _currentFolderIsFavorites = false;
+    std::unique_ptr<DsRunnerFavoritesFolder> _newFavoritesFolder;
+    std::unique_ptr<DsRunnerFavoritesFolder> _favoritesFolder;
+    // DsRunner: launch the selected file once the folder is loaded ("Weiterspielen")
+    bool _launchAfterNavigate = false;
+    // DsRunner: the game START continues, found while loading the console level
+    TCHAR _newContinuePath[256] = { 0 };
+    // DsRunner: folder of the file being launched (for files of the favorites folder)
+    TCHAR _launchFolderPath[256] = { 0 };
     FileInfo _triggerFileInfo;
     QueueTask<void> _navigateTask;
     QueueTask<void> _gameCountTask;
@@ -94,6 +114,7 @@ private:
     void HandleChangeDisplayModeTrigger();
     void HandleGotoSettingsScreenTrigger();
     void StartGameCount();
+    void FindContinueGame();
     void UpdateLastUsedFilepath();
     void SetPicoLoaderParams() const;
     void LoadCheats() const;

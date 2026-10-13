@@ -1,5 +1,8 @@
 #include "common.h"
+#include <string.h>
+#include <algorithm>
 #include "gui/GraphicsContext.h"
+#include "services/settings/AppSettings.h"
 #include "gui/VramContext.h"
 #include "themes/material/MaterialColorScheme.h"
 #include "themes/IFontRepository.h"
@@ -74,10 +77,47 @@ void DsRunnerFileInfoCardView::SetFileNameAsync(TaskQueueBase* taskQueue, const 
         _textTaskQueue = taskQueue;
     }
 
-    if (taskQueue)
-        _filenameLabelView->SetTextAsync(taskQueue, fileName);
+    strlcpy(_fileName, fileName, sizeof(_fileName));
+    _fileNameTaskQueue = taskQueue;
+    UpdateFileNameLine();
+}
+
+void DsRunnerFileInfoCardView::UpdateFileNameLine()
+{
+    // The bottom line shows the file name. Favorites get a star in front of it. On the console level,
+    // where the folder name says nothing new, it tells which game START continues.
+    _favoriteVersion = gDsRunnerLibrary.favorites.GetVersion();
+    char text[sizeof(_fileName) + 40];
+    const auto* appSettings = gDsRunnerLibrary.appSettings;
+    const char* continuePath = gDsRunnerLibrary.continuePath;
+    if (_isFolder && continuePath[0] != 0 && appSettings &&
+        DsRunnerPaths::IsSameFolder(_folderPath, appSettings->libraryPath.GetString()))
+    {
+        // the game name without folder and extension
+        const char* name = strrchr(continuePath, '/');
+        name = name ? name + 1 : continuePath;
+        const char* extension = strrchr(name, '.');
+        u32 nameLength = extension && extension != name ? extension - name : strlen(name);
+        static constexpr char sPrefix[] = "START: Weiterspielen (";
+        nameLength = std::min<u32>(nameLength, sizeof(text) - sizeof(sPrefix) - 1);
+        memcpy(text, sPrefix, sizeof(sPrefix) - 1);
+        memcpy(&text[sizeof(sPrefix) - 1], name, nameLength);
+        strcpy(&text[sizeof(sPrefix) - 1 + nameLength], ")");
+    }
+    else if (!_isFolder && gDsRunnerLibrary.favorites.Contains(_folderPath, _fileName))
+    {
+        strcpy(text, "\xE2\x98\x85 ");
+        strlcat(text, _fileName, sizeof(text));
+    }
     else
-        _filenameLabelView->SetText(fileName);
+    {
+        strlcpy(text, _fileName, sizeof(text));
+    }
+
+    if (_fileNameTaskQueue)
+        _filenameLabelView->SetTextAsync(_fileNameTaskQueue, text);
+    else
+        _filenameLabelView->SetText(text);
 }
 
 void DsRunnerFileInfoCardView::RequestArt(const TCHAR* fileName)
@@ -112,7 +152,10 @@ void DsRunnerFileInfoCardView::RequestArt(const TCHAR* fileName)
 
 bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName)
 {
-    int count = gDsRunnerLibrary.gameCounts.Get(_folderPath, folderName);
+    // the favorites tile counts the favorites
+    int count = DsRunnerFavoritesFolder::IsEntry(folderName)
+        ? (int)gDsRunnerLibrary.favorites.GetCount()
+        : gDsRunnerLibrary.gameCounts.Get(_folderPath, folderName);
     if (count == DsRunnerGameCounts::Unknown)
         return false;
 
@@ -145,6 +188,11 @@ void DsRunnerFileInfoCardView::Update()
     if (_pendingCountFolder[0] != 0 && ShowGameCount(_textTaskQueue, _pendingCountFolder))
     {
         _pendingCountFolder[0] = 0;
+    }
+    if (_favoriteVersion != gDsRunnerLibrary.favorites.GetVersion() && _fileName[0] != 0)
+    {
+        // a favorite was added or removed (X): update the star
+        UpdateFileNameLine();
     }
 
     BannerView::Update();

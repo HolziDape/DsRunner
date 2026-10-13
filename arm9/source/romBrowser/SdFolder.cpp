@@ -130,6 +130,13 @@ bool SdFolder::CompareName(const FileInfo* a, const FileInfo* b)
     return strcasecmp(a->GetFileName(), b->GetFileName()) < 0;
 }
 
+void SdFolder::AddFile(FileInfo* file)
+{
+    // the array comes from malloc (see SdFolderFactory)
+    _files = (FileInfo**)realloc(_files, sizeof(FileInfo*) * (_fileCount + 1));
+    _files[_fileCount++] = file;
+}
+
 void SdFolder::SortByNameInPlace()
 {
     std::sort(_files, _files + _fileCount, CompareName);

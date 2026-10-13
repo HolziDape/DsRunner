@@ -34,4 +34,5 @@ private:
     int _lastMinute = -1;
     u16 _lastBattery = 0xFFFF;
     u32 _framesSinceRtcRead = 0;
+    bool _showClock = true;
 };

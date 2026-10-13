@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+# artworks are only ever written to the SD card, never committed
+*.bmp

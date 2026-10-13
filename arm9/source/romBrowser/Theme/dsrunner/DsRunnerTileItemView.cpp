@@ -6,6 +6,9 @@
 #include "gui/PaletteManager.h"
 #include "core/math/RgbMixer.h"
 #include "themes/dsrunner/DsRunnerColorScheme.h"
+#include "romBrowser/IRomBrowserController.h"
+#include "romBrowser/FileInfo.h"
+#include "DsRunnerLibrary.h"
 #include "DsRunnerTileItemView.h"
 
 // corner radius of the tile body in pixels
@@ -21,6 +24,15 @@
 #define Z_BODY              (-320)
 #define Z_RING              (-200)
 #define Z_GLOW              (-100)
+// the favorite star is in front of the tile body
+#define Z_STAR              (-340)
+
+// favorite star: outer radius in the 3x2 / 4x3 grid and distance of its center to the top right
+// corner. It sits on the rounded corner like a badge, the large icons of the 3x2 grid leave no room
+// inside the tile (sprites are drawn over the 3D layer, so the icon may cover a few pixels of it).
+#define STAR_RADIUS_LARGE   6
+#define STAR_RADIUS_SMALL   5
+#define STAR_INSET          5
 
 // polygon ids of the two translucent glow layers: translucent polygons only blend
 // over each other when their ids differ
@@ -127,10 +139,48 @@ static void getObjSize(const gfx_oam_entry_t& oam, int& width, int& height)
     height = sSizes[shape][size][1];
 }
 
+// Points of a five-pointed star, alternating outer (radius 256) and inner (radius 98) points,
+// clockwise from the top, in 1/256 of the outer radius.
+static constexpr s16 sStarX[] = { 0, 58, 243, 93, 150, 0, -150, -93, -243, -58 };
+static constexpr s16 sStarY[] = { -256, -79, -79, 30, 207, 98, 207, 30, -79, -79 };
+static constexpr int sStarPoints = sizeof(sStarX) / sizeof(sStarX[0]);
+
+/// @brief Draws a filled star as triangles around its center.
+/// @param centerX, centerY The center in pixels.
+/// @param radius The outer radius in pixels.
+static void drawStar(int centerX, int centerY, int radius, const Rgb888& color, int z)
+{
+    int cx64 = centerX << 6;
+    int cy64 = centerY << 6;
+    Gx::Begin(GX_PRIMITIVE_TRIANGLE);
+    Gx::Color(Rgb<5, 5, 5>(color));
+    for (int i = 0; i < sStarPoints; i++)
+    {
+        int next = i + 1 < sStarPoints ? i + 1 : 0;
+        vertex(cx64, cy64, z);
+        vertex(cx64 + ((sStarX[i] * radius) >> 2), cy64 + ((sStarY[i] * radius) >> 2), z);
+        vertex(cx64 + ((sStarX[next] * radius) >> 2), cy64 + ((sStarY[next] * radius) >> 2), z);
+    }
+    Gx::End();
+}
+
 DsRunnerTileItemView::DsRunnerTileItemView(std::unique_ptr<IRomBrowserItemViewModel> viewModel,
-    int width, int height, int iconScale, int clipTop)
+    IRomBrowserController* romBrowserController, int width, int height, int iconScale, int clipTop)
     : IconGridItemView(std::move(viewModel)), _width(width), _height(height), _iconScale(iconScale)
-    , _clipTop(clipTop) { }
+    , _clipTop(clipTop), _romBrowserController(romBrowserController) { }
+
+bool DsRunnerTileItemView::IsFavorite()
+{
+    const auto& favorites = gDsRunnerLibrary.favorites;
+    if (_favoriteVersion != favorites.GetVersion())
+    {
+        _favoriteVersion = favorites.GetVersion();
+        _isFavorite = _item && favorites.GetCount() > 0 &&
+            _item->GetFileType()->GetClassification() != FileTypeClassification::Folder &&
+            favorites.Contains(_romBrowserController->GetItemFolderPath(*_item), _item->GetFileName());
+    }
+    return _isFavorite;
+}
 
 void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
 {
@@ -178,6 +228,15 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
     Gx::PolygonAttr(GX_LIGHTMASK_NONE, GX_POLYGON_MODE_MODULATE, GX_DISPLAY_MODE_BOTH,
         false, false, false, GX_DEPTH_FUNC_LESS, false, 31, graphicsContext.GetPolygonId());
     drawRoundedRect(_position.x, _position.y, _width, _height, CORNER_RADIUS, top, bottom, Z_BODY, _clipTop);
+
+    // favorites get a small star in the top right corner
+    int starRadius = _iconScale == 2 ? STAR_RADIUS_LARGE : STAR_RADIUS_SMALL;
+    int starX = _position.x + _width - STAR_INSET;
+    int starY = _position.y + STAR_INSET;
+    if (starY - starRadius >= _clipTop && IsFavorite())
+    {
+        drawStar(starX, starY, starRadius, DsRunnerColors::Favorite, Z_STAR);
+    }
 
     if (isSelected)
     {

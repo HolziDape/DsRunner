@@ -10,11 +10,12 @@
 ThemeListTopView::ThemeListTopView(SharedPtr<ThemeListViewModel> viewModel, const MaterialColorScheme* materialColorScheme,
     const IFontRepository* fontRepository)
     : _viewModel(viewModel)
-    , _noPreviewLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Medium11)))
+    , _noPreviewLabel(Label2DView::CreateShared(96, 16, 25, fontRepository->GetFont(FontType::Medium11)))
 {
     _noPreviewLabel->SetHorizontalAlignment(Alignment::Center);
-    _noPreviewLabel->SetText("No preview");
-    _noPreviewLabel->SetPosition(128 - 32, 96 - 8);
+    // DsRunner: German text, the label is wider for it
+    _noPreviewLabel->SetText("Keine Vorschau");
+    _noPreviewLabel->SetPosition(128 - 48, 96 - 8);
     _noPreviewLabel->SetBackgroundColor(materialColorScheme->inverseOnSurface);
     _noPreviewLabel->SetForegroundColor(materialColorScheme->onSurfaceVariant);
     AddChildTail(_noPreviewLabel.GetPointer());

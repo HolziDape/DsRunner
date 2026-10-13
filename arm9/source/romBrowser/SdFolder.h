@@ -30,6 +30,9 @@ public:
     std::unique_ptr<const FileInfo*[]> FilterAndSort(
         const SdFolderFilterSortParams& filterSortParams, u32& resultCount) const;
 
+    /// @brief DsRunner: adds a file to the folder (e.g. a virtual entry), the folder takes ownership.
+    void AddFile(FileInfo* file);
+
     void SortByNameInPlace();
     const FileInfo* BinarySearch(const char* fileName) const;
 

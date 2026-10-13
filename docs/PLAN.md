@@ -7,11 +7,15 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | Phase | Stand |
 |---|---|
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
-| 1 Design-System | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** |
-| 2 Konsolen-Ebene | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** (ohne Spielanzahl und Favoriten, siehe unten) |
-| 3 Kachel-Raster | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** (ohne Cover in den Kacheln, siehe unten) |
-| 4 Großes Artwork oben | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** |
-| 5–9 | offen |
+| 1 Design-System | ✅ erledigt, auf dem DS getestet |
+| 2 Konsolen-Ebene | ✅ erledigt, auf dem DS getestet (Spielanzahl kam mit Phase 3, Favoriten mit Phase 6) |
+| 3 Kachel-Raster | ✅ im Code, in DeSmuME geprüft. Auf dem DS: Spielanzahl ok, **Test der Kacheln steht aus** (ohne Cover in den Kacheln, siehe unten) |
+| 4 Großes Artwork oben | ✅ erledigt, auf dem DS getestet (Testbilder werden angezeigt und überblendet) |
+| 5 PC-Tool „DsRunner Art“ | ✅ im Code (Tests, echte Downloads von libretro-thumbnails, erzeugte Bilder in DeSmuME angezeigt), **Test unter Windows mit der Karte steht aus** |
+| 6 Komfort | ✅ im Code, gebaut und in DeSmuME geprüft (deutsche Oberfläche, Favoriten, Weiterspielen, Uhr im Menü), **Test auf dem DS steht aus** |
+| 7–9 | offen |
+
+**Test auf dem DS (13.10.2026, Phase 1–4):** dunkles Theme, Konsolen-Ebene mit Spielanzahl und Artworks laufen. Die neue Kachel-Ansicht war noch nicht eingeschaltet, weil eine vorhandene `settings.json` die alte Ansicht behält.
 
 **Test auf dem DS (13.10.2026, Phase 0):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Aufgefallen waren das helle Pico-Theme, die Bannerliste, der Start im zuletzt geöffneten Ordner und der leere GBA-Ordner. Phase 1 und 2 beheben das.
 
@@ -83,7 +87,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 
 **Zurückgestellt:**
 - **Spielanzahl** („34 Spiele“): Ein Zählen im Hintergrund braucht eine eigene Aufgabe in der IO-Warteschlange und einen Cache. Kommt mit Phase 3, wenn Cover ohnehin im Hintergrund geladen werden.
-- **Favoriten-Kachel:** braucht Speicherung der Favoriten, siehe Phase 6.
+- **Favoriten-Kachel:** braucht Speicherung der Favoriten, siehe Phase 6 (dort umgesetzt).
 - **`systems.json`** (frei konfigurierbare Konsolen mit eigenem Start-Programm): erst nötig, wenn weitere Emulatoren dazukommen (Phase 7). Bis dahin reichen Ordnername und Dateizuordnungen in `settings.json`.
 
 ### Phase 3: Spiele-Raster mit Covern
@@ -122,11 +126,41 @@ Ein eigener Launcher als Ersatz für YSMenu:
 4. Eigene Bilder in einem Override-Ordner haben Vorrang
 5. Einfache Bedienung: Laufwerk wählen → „Artworks aktualisieren“
 
+**Ergebnis:** ✅ Umgesetzt in `tools/dsrunner-art/` (Anleitung: [ART-TOOL.md](ART-TOOL.md)):
+- Python 3.10+ mit Pillow, sonst nur Standardbibliothek. Fenster (tkinter, deutsch) und Kommandozeile (`py dsrunner_art.py --sd E:\`). Der Release-Workflow baut zusätzlich eine `DsRunnerArt.exe` (PyInstaller, eigener Job auf `windows-latest`).
+- Scan der Bibliothek aus `libraryPath`. Erkennung: NDS/GBA über den Game-Code im Header, nachgeschlagen in den No-Intro-Listen von libretro-database (dort steht der Code als `serial`), andere Konsolen über CRC32, sonst über Dateiname bzw. DS-Bannertitel (exakt, dann ähnlichster Name mit gleichen Zahlen).
+- Quellen: libretro-thumbnails (Titelbild, Screenshot, Cover; Symlinks der Repos werden aufgelöst), GameTDB-Cover für NDS als Ausweichquelle. Quellen sind austauschbar (`sources.py`), SteamGridDB/ScreenScraper lassen sich dort ergänzen.
+- Standard ist das **Titelbild**: Bei DS-Spielen ist es in libretro-thumbnails 256 × 384 (beide Bildschirme), der obere Bildschirm passt genau. Cover werden oben angeschnitten bzw. bei hohen Verpackungen vor einen unscharfen Hintergrund gesetzt.
+- Umwandlung: 256 × 192, Palette aus 255 DS-Farben (15 bit), Floyd-Steinberg-Dithering, Palettenfarbe 0 bleibt frei. Jede Datei wird vor dem Schreiben wie in `DsRunnerTopArt::Load` geprüft.
+- Konsolen-Ordner und Unterordner bekommen ein erzeugtes Bild (Verlauf in der Konsolenfarbe, großes Kürzel). DS-Spiele ohne Fund bekommen ein Ersatzbild aus dem Banner-Icon, das bei späteren Läufen durch ein echtes Bild ersetzt wird.
+- Eigene Bilder in `/_dsrunner/art-override/` (gleicher Pfad oder nur der Name) haben Vorrang. `/_dsrunner/art/.dsrunner-art.json` merkt sich, welche Bilder vom Tool stammen: von Hand abgelegte werden nie überschrieben, weitere Läufe laden nur, was fehlt. Cache auf dem PC für Listen, Bilder, Prüfsummen und Fehlversuche.
+
+**Offen:**
+- Test unter Windows mit echter Karte und größerer Sammlung (Trefferquote der Namenssuche bei frei benannten Dateien, Laufzeit der Prüfsummen über USB).
+- GameTDB-Adressen (`art.gametdb.com/ds/coverHQ|coverM|cover|coverS/<Region>/<Code>`) konnten in der Entwicklungsumgebung nicht geprüft werden (Host gesperrt). Das Tool überspringt die Quelle, wenn sie nicht antwortet.
+- Die Dateiliste der Thumbnail-Repos kommt über die GitHub-API (ohne Anmeldung 60 Anfragen pro Stunde, eine pro Konsole und Woche). Ohne sie werden Bilder direkt per Name versucht.
+- Kleine Cover für die Kacheln (Phase 3, „Cover in den Kacheln“) erzeugt das Tool noch nicht.
+
 ### Phase 6: Komfort
 1. Deutsche Oberfläche (prüfen, ob die Pico-Fonts Umlaute haben)
 2. Favoriten (Taste X), Verlauf „zuletzt gespielt“, Menüpunkt „Weiterspielen“
 3. Einstellungen im Menü: Rastergröße, Sortierung, Theme, Uhr ein/aus
 4. Optional Hintergrundmusik (Pico unterstützt `.bcstm` pro Theme)
+
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#favoriten)):
+- **Deutsch:** Die NotoSansJP-Schriften (alle vier Größen bis Medium 11) enthalten ä ö ü Ä Ö Ü ß, ein Ersatz (ae/oe/ue) ist nicht nötig. Übersetzt: Menü „Anzeige“ (Ansicht, Sortieren, Uhr), Cheats („Keine Cheats gefunden.“), Theme-Auswahl („Keine Vorschau“), Beschreibung des DsRunner-Themes. Picos `language` wird wie bisher nicht ausgewertet, die Oberfläche ist immer deutsch. Nicht enthalten: `–` (Gedankenstrich), deshalb nicht in Texten verwenden.
+- **Favoriten:** X schaltet das ausgewählte Spiel um (in allen Ansichten), gespeichert in `/_dsrunner/favorites.txt` (Format wie `recent.txt`, Schreiben auf der IO-Warteschlange mit eigener Kopie des Inhalts). In den Kachelrastern zeigt ein goldener Stern auf der rechten oberen Ecke den Favoriten an. Der Stern ist ein 3D-Polygon wie die Kachel selbst, kostet also keine OBJ-Palettenzeile. Oben steht ein ★ vor dem Dateinamen.
+- **Kachel „★ Favoriten“:** Ein virtueller Ordner auf der Konsolen-Ebene (immer vorne, gold, Stern als Kürzel), sobald es Favoriten gibt. Er wird beim Laden der Bibliothek an die Dateiliste angehängt. Öffnen baut die Liste aus den Favoriten (jeder Ordner wird einmal gelesen, Dateien mit `FastFileRef` wie in einem echten Ordner). Der Controller merkt sich zu jeder Datei ihren Ordner (`GetItemFolderPath`) für Start, Artwork und Stern. Das aktuelle Verzeichnis bleibt dabei die Bibliothek.
+- **Weiterspielen:** START auf der Konsolen-Ebene. DsRunner öffnet den Ordner des zuletzt gespielten Spiels mit dem Spiel ausgewählt und startet es über `LaunchFile`, also genau wie mit A. Der Hinweis „START: Weiterspielen (Name)“ steht oben in der untersten Zeile (statt des Ordnernamens). Das Spiel wird beim Laden der Konsolen-Ebene gesucht (neuester vorhandener Eintrag aus `recent.txt`, sonst `lastUsedFilePath`).
+- **Menü:** dritte Zeile „Uhr“ im Menü „Anzeige“ (Taste mit Uhr-Symbol, `tools/make_menu_icons.py`), gespeichert als `showClock` in `settings.json`. Ohne Uhr zeigt die Statusleiste nur den Akku und liest die RTC nicht mehr. Rastergröße, Sortierung und Theme waren schon im Menü.
+- **Hintergrundmusik:** nur dokumentiert ([CONFIG.md](CONFIG.md#hintergrundmusik)), Picos `bgm`-Ordner pro Theme funktioniert unverändert.
+
+**Offen:**
+- **Build und Test:** In der Sitzung, in der Phase 6 entstand, war Docker nicht erreichbar. Der Code ist nur mit dem Host-Compiler auf Syntax geprüft. Vor dem Merge: `./build.sh`, DeSmuME-Screenshots (Konsolen-Ebene mit Favoriten-Kachel, Stern auf Kacheln, Menü mit Uhr) und Test auf dem DS (Spielstart aus den Favoriten und mit START, auch GBA).
+- Favoriten-Stern nur in den Kachelrastern, nicht in Picos Ansichten (dort nur der ★ oben).
+- Die Favoriten-Liste sortiert nach Namen. „Zuletzt gespielt“ bräuchte den Spielverlauf pro Datei statt pro Ordner.
+- Ein Favorit, der in der Favoriten-Liste mit X entfernt wird, bleibt bis zum nächsten Öffnen sichtbar.
+- Englische Oberfläche über `language`: bei Bedarf eine kleine Texttabelle statt der festen deutschen Texte.
 
 ### Phase 7: Weitere Konsolen (optional)
 Emulator-Homebrew einbinden (GBARunner2, nesDS, GameYob, S8DS, jEnesisDS …) über `systems.json`, mit passenden Kacheln und Artworks.
@@ -151,4 +185,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 3 + 4 auf dem DS testen (Kacheln, Blättern, Spielanzahl, Sortierung nach Spielstart, Artworks mit Test-Bildern). Danach Phase 5: das PC-Tool erzeugt die Artworks im Format aus [CONFIG.md](CONFIG.md#artworks).
+Phase 5 + 6 auf dem DS und unter Windows testen: Artworks mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden, Favoriten (X), Weiterspielen (START), Uhr im Menü, Start von Spielen aus der Favoritenliste (NDS und GBA) und Spielstände.

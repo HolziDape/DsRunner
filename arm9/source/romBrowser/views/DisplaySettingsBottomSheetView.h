@@ -38,6 +38,9 @@ private:
     SharedPtr<IconButton2DView> _themeButton;
     SharedPtr<Label2DView> _layoutLabel;
     SharedPtr<Label2DView> _sortingLabel;
+    // DsRunner: clock of the status bar on/off
+    SharedPtr<Label2DView> _clockLabel;
+    SharedPtr<IconButton2DView> _clockButton;
 
     std::array<SharedPtr<IconButton2DView>, 6> _layoutOptions;
     std::array<SharedPtr<IconButton2DView>, 3> _sortOptions;
