@@ -19,10 +19,7 @@ public:
     RomBrowserController(IAppSettingsService* appSettingsService,
         TaskQueueBase* ioTaskQueue, TaskQueueBase* bgTaskQueue);
 
-    void NavigateUp() override
-    {
-        NavigateToPath("..");
-    }
+    void NavigateUp() override;
 
     void NavigateToPath(const TCHAR* name) override;
     void LaunchFile(const FileInfo& fileInfo) override;
@@ -56,6 +53,9 @@ public:
 
     virtual const FileInfo& GetTriggerFileInfo() const override { return _triggerFileInfo; }
 
+    const TCHAR* GetCurrentFolderName() const override { return _currentFolderName; }
+    bool IsCurrentFolderLibraryRoot() const override { return _currentFolderIsLibraryRoot; }
+
 private:
     IAppSettingsService* _appSettingsService;
     TaskQueueBase* _ioTaskQueue;
@@ -67,6 +67,13 @@ private:
     RomBrowserStateMachine _stateMachine;
     TCHAR _navigatePath[256];
     TCHAR* _navigateFileName;
+    // entry to select after navigating to a folder (the console of the last played game)
+    TCHAR _navigateSelect[256] = { 0 };
+    // info about the folder being loaded, filled by the io thread and taken over when loading is done
+    TCHAR _newFolderName[256] = { 0 };
+    bool _newFolderIsLibraryRoot = false;
+    TCHAR _currentFolderName[256] = { 0 };
+    bool _currentFolderIsLibraryRoot = false;
     FileInfo _triggerFileInfo;
     QueueTask<void> _navigateTask;
     bool _saveSettingsPending = false;

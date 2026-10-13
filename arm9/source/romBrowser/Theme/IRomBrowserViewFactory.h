@@ -40,6 +40,9 @@ public:
         VBlankTextureLoader* vblankTextureLoader) const = 0;
 
     virtual Point GetTopCoverPosition() const = 0;
+
+    /// @brief Creates the status bar (clock, battery) shown on the top screen, or nullptr for none.
+    virtual SharedPtr<View> CreateStatusBarView() const { return nullptr; }
 };
 
 inline IRomBrowserViewFactory::~IRomBrowserViewFactory() { }

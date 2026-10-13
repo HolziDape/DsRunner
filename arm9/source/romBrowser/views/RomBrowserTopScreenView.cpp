@@ -9,7 +9,7 @@
 #include "gui/IVramManager.h"
 #include "themes/material/MaterialColorScheme.h"
 #include "../Theme/IRomBrowserViewFactory.h"
-#include "StatusBarView.h"
+#include "../Theme/IThemeFileIconFactory.h"
 #include "RomBrowserTopScreenView.h"
 
 RomBrowserTopScreenView::RomBrowserTopScreenView(
@@ -20,12 +20,15 @@ RomBrowserTopScreenView::RomBrowserTopScreenView(
     : _viewModel(std::move(viewModel))
     , _themeFileIconFactory(themeFileIconFactory)
     , _fileInfoView(romBrowserViewFactory->CreateFileInfoView())
-    , _statusBarView(StatusBarView::CreateShared())
+    , _statusBarView(romBrowserViewFactory->CreateStatusBarView())
     , _showCover(displayMode->ShowCoverOnTopScreen())
     , _coverPosition(romBrowserViewFactory->GetTopCoverPosition())
 {
     AddChildTail(_fileInfoView.GetPointer());
-    AddChildTail(_statusBarView.GetPointer());
+    if (_statusBarView)
+    {
+        AddChildTail(_statusBarView.GetPointer());
+    }
 }
 
 void RomBrowserTopScreenView::InitVram(const VramContext& vramContext)
@@ -72,7 +75,9 @@ void RomBrowserTopScreenView::Update()
             _selectedFileIcon = info ? info->CreateGameIcon() : nullptr;
             if (!_selectedFileIcon)
             {
-                _selectedFileIcon = item.GetFileType()->CreateFileIcon("", _themeFileIconFactory);
+                _selectedFileIcon = item.GetFileType()->CreateFileIcon(
+                    _themeFileIconFactory->UseFileNameForInfoIcon() ? item.GetFileName() : "",
+                    _themeFileIconFactory);
             }
             if (_selectedFileIcon)
             {

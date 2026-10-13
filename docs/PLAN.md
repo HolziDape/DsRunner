@@ -7,11 +7,12 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | Phase | Stand |
 |---|---|
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
-| 1 Design-System | ⏳ als Nächstes |
-| 2 Konsolen-Ebene | ⏳ als Nächstes |
-| 3–9 | offen |
+| 1 Design-System | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** |
+| 2 Konsolen-Ebene | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** (ohne Spielanzahl und Favoriten, siehe unten) |
+| 3 Cover-Raster | ⏳ als Nächstes |
+| 4–9 | offen |
 
-**Test auf dem DS (13.10.2026):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Erwartete Lücken (Theme, Ansicht, Startordner, GBA) sind den Phasen unten zugeordnet.
+**Test auf dem DS (13.10.2026, Phase 0):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Aufgefallen waren das helle Pico-Theme, die Bannerliste, der Start im zuletzt geöffneten Ordner und der leere GBA-Ordner. Phase 1 und 2 beheben das.
 
 ## Ziel
 
@@ -61,13 +62,28 @@ Ein eigener Launcher als Ersatz für YSMenu:
 4. Statusleiste oben rechts: Uhrzeit (RTC) und Akku. **Hinweis:** Der DS Lite kennt beim Akku nur „gut“ und „schwach“, keine Prozentanzeige.
 5. Das dunkle DsRunner-Theme ist Standard (ersetzt Picos helles „Material“-Theme)
 
+**Ergebnis:** ✅ Theme `DsRunner` (`_pico/themes/dsrunner`), Statusleiste nur in diesem Theme, Kacheln mit 4 px Abstand und Leucht-Rahmen, Verlauf auf dem oberen Bildschirm in der Farbe der gewählten Konsole.
+
+**Umsetzung / Abweichungen vom Entwurf:**
+- Obere Hälfte des oberen Bildschirms ist ein Farbverlauf (192 Palettenzeilen, nur die Palette wird beim Wechsel neu geschrieben), darunter ein flaches dunkles Band für den Text. Große Konsolen- und Spiel-Artworks folgen in Phase 4.
+- Schriften: Es gibt nur NotoSansJP bis 11 pt. Der große Titel aus dem Entwurf ist damit nicht möglich.
+- Das Kachel-Raster ist noch Picos Raster (44-px-Zellen, spaltenweise). Die großen 3×2/4×3-Kacheln kommen in Phase 3.
+- Die Statusleiste liest die Uhr einmal pro Sekunde und den Akku alle 64 Bilder. Akku: nur „gut“ / „schwach“ / „lädt“.
 ### Phase 2: Konsolen-Ebene
-1. Startbildschirm „Konsolen“: Raster aus Konsolen-Kacheln, oben das Artwork der Konsole mit „34 Spiele · zuletzt: …“
-2. Konfiguration `/_dsrunner/systems.json`: Konsole → Ordner/Dateiendungen → Start-Programm (NDS: Pico Loader, GBA: GBARunner2, NES: nesDS …). Ohne Datei werden `Games\NDS`, `Games\GBA` usw. automatisch erkannt.
-3. Spezial-Kacheln: **Favoriten** und **Apps** (Homebrew)
-4. A = Konsole öffnen, B = zurück
-5. **DsRunner startet immer auf dem Konsolen-Bildschirm**, nicht im zuletzt geöffneten Ordner. Das zuletzt gespielte Spiel ist in der Konsole vorausgewählt.
-6. **GBA-Spiele** öffnen GBARunner2 über die Dateizuordnung. Im Test war der GBA-Ordner noch leer, weil kein Start-Programm hinterlegt war.
+1. Startbildschirm „Konsolen“: Kacheln der Unterordner der Bibliothek, oben Name der Konsole
+2. A = Konsole öffnen, B = zurück. Auf der Konsolen-Ebene bleibt B wirkungslos.
+3. **DsRunner startet immer auf dem Konsolen-Bildschirm**, nicht im zuletzt geöffneten Ordner. Die Konsole des zuletzt gespielten Spiels ist vorausgewählt, beim Zurückgehen ebenfalls der Ordner, aus dem man kommt.
+4. **GBA-Spiele** öffnen GBARunner2 über die Dateizuordnung. Ist keine `gba`-Zuordnung eingetragen, wird GBARunner2 automatisch an den üblichen Pfaden gesucht.
+
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md)):
+- Bibliothek = Einstellung `libraryPath` (Standard `/Games`). Fehlt der Ordner, startet DsRunner im SD-Root wie Pico.
+- Konsolen werden am **Ordnernamen** erkannt (NDS, GBA, GBC, GB, NES, SNES, SMS, GG, MD, PCE, Apps): farbige Kachel mit Kürzel, passender Verlauf oben. Unbekannte Ordner bekommen eine neutrale Kachel mit den ersten Buchstaben.
+- Der App-Leisten-Titel ist „Konsolen“ auf der Bibliotheksebene, sonst der Ordnername.
+
+**Zurückgestellt:**
+- **Spielanzahl** („34 Spiele“): Ein Zählen im Hintergrund braucht eine eigene Aufgabe in der IO-Warteschlange und einen Cache. Kommt mit Phase 3, wenn Cover ohnehin im Hintergrund geladen werden.
+- **Favoriten-Kachel:** braucht Speicherung der Favoriten, siehe Phase 6.
+- **`systems.json`** (frei konfigurierbare Konsolen mit eigenem Start-Programm): erst nötig, wenn weitere Emulatoren dazukommen (Phase 7). Bis dahin reichen Ordnername und Dateizuordnungen in `settings.json`.
 
 ### Phase 3: Spiele-Raster mit Covern
 1. Neue DisplayModes **3×2** (72-px-Kacheln) und **4×3** (51 px), im Menü umschaltbar. Sie ersetzen Picos Bannerliste als Standard (im Test: „schlechte Auswahl“).

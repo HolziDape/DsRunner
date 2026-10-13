@@ -225,6 +225,7 @@ int main()
     sState = Arm7State::Idle;
     initializeArm7();
 
+    u32 batteryPollCounter = 0;
     while (true)
     {
         rtos_waitEvent(&sVCountEvent, true, true);
@@ -237,7 +238,11 @@ int main()
             SHARED_TOUCH_Y = touchPos.py;
         }
         SHARED_KEY_XY = keys;
-        SHARED_BATTERY = (pmic_isBatteryLow() ? 1 : 0) | (pmic_isExternalPowerConnected() ? 2 : 0);
+        // battery state changes slowly: poll the pmic about once a second instead of every frame
+        if ((batteryPollCounter++ & 63) == 0)
+        {
+            SHARED_BATTERY = (pmic_isBatteryLow() ? 1 : 0) | (pmic_isExternalPowerConnected() ? 2 : 0);
+        }
         updateArm7();
     }
 

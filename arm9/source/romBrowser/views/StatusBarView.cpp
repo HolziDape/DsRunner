@@ -1,6 +1,7 @@
 #include "common.h"
 #include <string.h>
 #include <libtwl/dma/dmaNitro.h>
+#include <nds/arm9/cache.h>
 #include "gui/OamManager.h"
 #include "gui/OamBuilder.h"
 #include "gui/IVramManager.h"
@@ -160,6 +161,14 @@ void StatusBarView::Update()
 {
     View::Update();
 
+    // The rtc is read through an ipc request to the arm7 that blocks the caller, so only
+    // ask for it about once a second. The minute display can't change faster than that.
+    if (_lastHour >= 0 && ++_framesSinceRtcRead < 60)
+    {
+        return;
+    }
+    _framesSinceRtcRead = 0;
+
     rtc_datetime_t dt;
     rtc_readDateTime(&dt);
 
@@ -213,6 +222,8 @@ void StatusBarView::VBlank()
 
     if (_needsUpload && _vramAddress)
     {
+        // _tileBuffer is written by the cpu, so it has to leave the data cache before dma reads it
+        DC_FlushRange(_tileBuffer, sizeof(_tileBuffer));
         dma_ntrCopy32(3, _tileBuffer, (void*)_vramAddress, sizeof(_tileBuffer));
         _needsUpload = false;
     }

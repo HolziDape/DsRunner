@@ -33,4 +33,5 @@ private:
     int _lastHour = -1;
     int _lastMinute = -1;
     u16 _lastBattery = 0xFFFF;
+    u32 _framesSinceRtcRead = 0;
 };

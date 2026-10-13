@@ -22,7 +22,10 @@ DsRunnerIconGridItemView::DsRunnerIconGridItemView(
 
 void DsRunnerIconGridItemView::Draw(GraphicsContext& graphicsContext)
 {
-    if (!graphicsContext.IsVisible(Rectangle(_position.x - 2, _position.y - 2, 48, 48)))
+    // The tile sprite is 64x64 with the 40x40 body at (12, 12): drawn at position - 10 the body
+    // sits 2px inside the 44x44 grid cell, leaving the 4px grid spacing for the selection glow.
+    constexpr int SpriteOffset = -10;
+    if (!graphicsContext.IsVisible(Rectangle(_position.x + SpriteOffset, _position.y + SpriteOffset, 64, 64)))
         return;
 
     bool isSelected = (_isFocused || _inputHandler.IsPenDown());
@@ -40,7 +43,7 @@ void DsRunnerIconGridItemView::Draw(GraphicsContext& graphicsContext)
             pal565[i] = ColorConverter::ToGBGR565(Rgb<8, 8, 8>(ColorConverter::FromXBGR555(dsrunnerTileSelectedPal[i])));
         }
         cellPaletteRow = graphicsContext.GetPaletteManager().AllocRow(
-            DirectPalette(pal565), _position.y - 2, _position.y - 2 + 48);
+            DirectPalette(pal565), _position.y + SpriteOffset, _position.y + SpriteOffset + 64);
     }
     else
     {
@@ -59,13 +62,13 @@ void DsRunnerIconGridItemView::Draw(GraphicsContext& graphicsContext)
             pal565[i] = ColorConverter::ToGBGR565(palColor);
         }
         cellPaletteRow = graphicsContext.GetPaletteManager().AllocRow(
-            DirectPalette(pal565), _position.y - 2, _position.y - 2 + 48);
+            DirectPalette(pal565), _position.y + SpriteOffset, _position.y + SpriteOffset + 64);
     }
 
     gfx_oam_entry_t* oam = graphicsContext.GetOamManager().AllocOams(1);
     OamBuilder::OamWithSize<64, 64>(
-            _position.x - 2,
-            _position.y - 2, tileOffset >> 7)
+            _position.x + SpriteOffset,
+            _position.y + SpriteOffset, tileOffset >> 7)
         .WithPalette16(cellPaletteRow)
         .WithPriority(graphicsContext.GetPriority())
         .Build(oam[0]);
@@ -73,7 +76,8 @@ void DsRunnerIconGridItemView::Draw(GraphicsContext& graphicsContext)
     if (_icon)
     {
         _icon->SetPosition(6 + _position.x, 6 + _position.y);
-        _icon->Draw(graphicsContext, isSelected ? DsRunnerColors::Text : DsRunnerColors::TextDim);
+        // icons sit on the tile body, so that is the color they have to blend into
+        _icon->Draw(graphicsContext, isSelected ? DsRunnerColors::Tile : DsRunnerColors::TileDim);
     }
 }
 

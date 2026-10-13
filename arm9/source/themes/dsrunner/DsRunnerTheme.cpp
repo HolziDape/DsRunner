@@ -6,7 +6,7 @@
 DsRunnerTheme::DsRunnerTheme(const TCHAR* folderName, const Rgb<8, 8, 8>& primaryColor, bool darkMode)
     : Theme(folderName, primaryColor, darkMode)
     , _themeFileIconFactory(&_materialColorScheme, &_fontRepository)
-    , _romBrowserViewFactory(&_materialColorScheme, &_fontRepository)
+    , _romBrowserViewFactory(&_materialColorScheme, &_fontRepository, &_heroState)
 {
     // Apply DsRunner dark colors to the color scheme
     DsRunnerColors::ApplyDarkScheme(_materialColorScheme);

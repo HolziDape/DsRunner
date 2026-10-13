@@ -6,6 +6,9 @@ import math
 from PIL import Image, ImageDraw, ImageFilter
 
 W, H = 64, 64
+BODY = 40      # tile body size in px
+BODY_X = 12    # body offset in the 64x64 sprite; drawn at cell position - 10
+RADIUS = 7
 
 # DsRunner dark palette
 BG_DARK = (15, 17, 23)        # #0F1117
@@ -22,10 +25,11 @@ def make_unselected_tile():
     im = Image.new("L", (sw, sh), 0)
     d = ImageDraw.Draw(im)
     
-    # 48x48 rect positioned at (8, 8) in 64x64 -> bounds (8*8, 8*8, 56*8, 56*8)
-    x0, y0 = 8 * SCALE, 8 * SCALE
-    x1, y1 = 56 * SCALE - 1, 56 * SCALE - 1
-    radius = 8 * SCALE
+    # 40x40 body centered in 64x64 (12..51). The grid cell is 44x44 with 4px spacing,
+    # so the body leaves 2px inside the cell plus 4px spacing for the selection glow.
+    x0, y0 = BODY_X * SCALE, BODY_X * SCALE
+    x1, y1 = (BODY_X + BODY) * SCALE - 1, (BODY_X + BODY) * SCALE - 1
+    radius = RADIUS * SCALE
     d.rounded_rectangle((x0, y0, x1, y1), radius, fill=255)
     
     # Downsample
@@ -65,9 +69,9 @@ def make_selected_tile():
     # We create high-res RGBA image
     base = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
     
-    x0, y0 = 8 * SCALE, 8 * SCALE
-    x1, y1 = 56 * SCALE - 1, 56 * SCALE - 1
-    radius = 8 * SCALE
+    x0, y0 = BODY_X * SCALE, BODY_X * SCALE
+    x1, y1 = (BODY_X + BODY) * SCALE - 1, (BODY_X + BODY) * SCALE - 1
+    radius = RADIUS * SCALE
     
     # 1. Glow border (expanded by 3px with blur)
     glow = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
