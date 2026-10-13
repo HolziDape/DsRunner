@@ -2,10 +2,6 @@
 #include "gui/GraphicsContext.h"
 #include "gui/VramContext.h"
 #include "gui/IVramManager.h"
-#include "hGridIcon.h"
-#include "vGridIcon.h"
-#include "bannerListIcon.h"
-#include "listIcon.h"
 #include "sortNameAscendingIcon.h"
 #include "sortNameDescendingIcon.h"
 #include "recentIcon.h"
@@ -45,15 +41,13 @@
 #define FILTERS_LABEL_X     20
 #define FILTERS_LABEL_Y     112
 
-// DsRunner: the tile grids come first
-static RomBrowserLayout sRomBrowserDisplayModes[6] =
+// DsRunner: only the tile grids and the cover flow (Pico's icon grids and banner list are gone,
+// see JsonAppSettingsSerializer for old settings)
+static RomBrowserLayout sRomBrowserDisplayModes[3] =
 {
     [0] = RomBrowserLayout::TileGrid3x2,
     [1] = RomBrowserLayout::TileGrid4x3,
-    [2] = RomBrowserLayout::HorizontalIconGrid,
-    [3] = RomBrowserLayout::VerticalIconGrid,
-    [4] = RomBrowserLayout::BannerList,
-    [5] = RomBrowserLayout::CoverFlow
+    [2] = RomBrowserLayout::CoverFlow
 };
 
 // DsRunner: last played instead of Pico's (unimplemented) last modified
@@ -183,10 +177,7 @@ void DisplaySettingsBottomSheetView::InitVram(const VramContext& vramContext)
         // layout options
         _layoutOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, tileGrid3x2IconTiles, tileGrid3x2IconTilesLen));
         _layoutOptions[1]->SetIconVramOffset(LoadIcon(*objVramManager, tileGrid4x3IconTiles, tileGrid4x3IconTilesLen));
-        _layoutOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, hGridIconTiles, hGridIconTilesLen));
-        _layoutOptions[3]->SetIconVramOffset(LoadIcon(*objVramManager, vGridIconTiles, vGridIconTilesLen));
-        _layoutOptions[4]->SetIconVramOffset(LoadIcon(*objVramManager, bannerListIconTiles, bannerListIconTilesLen));
-        _layoutOptions[5]->SetIconVramOffset(LoadIcon(*objVramManager, coverflowIconTiles, coverflowIconTilesLen));
+        _layoutOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, coverflowIconTiles, coverflowIconTilesLen));
 
         // sort options
         _sortOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, sortNameAscendingIconTiles, sortNameAscendingIconTilesLen));

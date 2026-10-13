@@ -8,9 +8,9 @@
 class DsRunnerTileGridDisplayMode : public RomBrowserDisplayMode
 {
 public:
-    /// 3 columns x 2 rows of 76x70 tiles, icons scaled 2x
+    /// 3 columns x 2 rows of 76x70 tiles, icons scaled 2x, games show their 64x64 tile image
     static const DsRunnerTileGridDisplayMode sInstance3x2;
-    /// 4 columns x 3 rows of 55x44 tiles, icons at their normal size
+    /// 4 columns x 3 rows of 55x44 tiles, only the 32x32 icons at their normal size (no tile images)
     static const DsRunnerTileGridDisplayMode sInstance4x3;
 
     bool IsVertical() const override { return false; }
@@ -33,7 +33,7 @@ public:
         return SharedPtr<DsRunnerTileGridFileRecyclerAdapter>::MakeShared(viewModel->GetRomBrowserController(),
             &viewModel->GetFileInfoManager(), viewModel->GetIoTaskQueue(),
             themeFileIconFactory, romBrowserViewFactory, vblankTextureLoader,
-            TileWidth(), TileHeight(), _iconScale, ClipTop);
+            TileWidth(), TileHeight(), _iconScale, ClipTop, _useTileImages);
     }
 
 private:
@@ -43,10 +43,13 @@ private:
     int _yPadding;
     int _spacing;
     int _iconScale;
+    // load the tile images of /_dsrunner/tiles (else the tiles only show the icon)
+    bool _useTileImages;
 
-    constexpr DsRunnerTileGridDisplayMode(int columns, int rows, int xPadding, int yPadding, int spacing, int iconScale)
+    constexpr DsRunnerTileGridDisplayMode(int columns, int rows, int xPadding, int yPadding, int spacing,
+        int iconScale, bool useTileImages)
         : _columns(columns), _rows(rows), _xPadding(xPadding), _yPadding(yPadding)
-        , _spacing(spacing), _iconScale(iconScale) { }
+        , _spacing(spacing), _iconScale(iconScale), _useTileImages(useTileImages) { }
 
     // the grid area is the screen below the app bar
     static constexpr int GridY = 40;

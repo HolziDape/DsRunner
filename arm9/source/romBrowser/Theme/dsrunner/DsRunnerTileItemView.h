@@ -11,8 +11,9 @@ class FileInfo;
 /// @brief Large tile of the DsRunner tile grids (3x2 and 4x3).
 ///        The tile body is drawn with the 3D engine (any size, rounded corners, glow when selected),
 ///        the file icon is an OBJ on top of it and can be scaled up (2x in the 3x2 grid).
-///        Games with a tile image (/_dsrunner/tiles, 64x64 8 bpp, made by DsRunner Art) show it as a
-///        texture instead of the icon.
+///        In the 3x2 grid games with a tile image (/_dsrunner/tiles, 64x64 8 bpp, made by DsRunner Art)
+///        show it as a texture instead of the icon. The 4x3 grid passes no texture loader: no texture
+///        vram, no tile images, only the icon 1:1.
 class DsRunnerTileItemView : public IconGridItemView
 {
     SHARED_ONLY(DsRunnerTileItemView)

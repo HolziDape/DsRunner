@@ -42,7 +42,8 @@ private:
     SharedPtr<Label2DView> _clockLabel;
     SharedPtr<IconButton2DView> _clockButton;
 
-    std::array<SharedPtr<IconButton2DView>, 6> _layoutOptions;
+    // DsRunner: 3x2 tiles, 4x3 tiles, cover flow
+    std::array<SharedPtr<IconButton2DView>, 3> _layoutOptions;
     std::array<SharedPtr<IconButton2DView>, 3> _sortOptions;
 
     const MaterialColorScheme* _materialColorScheme;
