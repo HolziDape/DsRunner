@@ -11,7 +11,8 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 2 Konsolen-Ebene | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** (ohne Spielanzahl und Favoriten, siehe unten) |
 | 3 Kachel-Raster | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** (ohne Cover in den Kacheln, siehe unten) |
 | 4 Großes Artwork oben | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** |
-| 5–9 | offen |
+| 5 PC-Tool „DsRunner Art“ | ✅ im Code (Tests, echte Downloads von libretro-thumbnails geprüft), **Test unter Windows mit der Karte steht aus** |
+| 6–9 | offen |
 
 **Test auf dem DS (13.10.2026, Phase 0):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Aufgefallen waren das helle Pico-Theme, die Bannerliste, der Start im zuletzt geöffneten Ordner und der leere GBA-Ordner. Phase 1 und 2 beheben das.
 
@@ -122,6 +123,21 @@ Ein eigener Launcher als Ersatz für YSMenu:
 4. Eigene Bilder in einem Override-Ordner haben Vorrang
 5. Einfache Bedienung: Laufwerk wählen → „Artworks aktualisieren“
 
+**Ergebnis:** ✅ Umgesetzt in `tools/dsrunner-art/` (Anleitung: [ART-TOOL.md](ART-TOOL.md)):
+- Python 3.10+ mit Pillow, sonst nur Standardbibliothek. Fenster (tkinter, deutsch) und Kommandozeile (`py dsrunner_art.py --sd E:\`). Der Release-Workflow baut zusätzlich eine `DsRunnerArt.exe` (PyInstaller, eigener Job auf `windows-latest`).
+- Scan der Bibliothek aus `libraryPath`. Erkennung: NDS/GBA über den Game-Code im Header, nachgeschlagen in den No-Intro-Listen von libretro-database (dort steht der Code als `serial`), andere Konsolen über CRC32, sonst über Dateiname bzw. DS-Bannertitel (exakt, dann ähnlichster Name mit gleichen Zahlen).
+- Quellen: libretro-thumbnails (Titelbild, Screenshot, Cover; Symlinks der Repos werden aufgelöst), GameTDB-Cover für NDS als Ausweichquelle. Quellen sind austauschbar (`sources.py`), SteamGridDB/ScreenScraper lassen sich dort ergänzen.
+- Standard ist das **Titelbild**: Bei DS-Spielen ist es in libretro-thumbnails 256 × 384 (beide Bildschirme), der obere Bildschirm passt genau. Cover werden oben angeschnitten bzw. bei hohen Verpackungen vor einen unscharfen Hintergrund gesetzt.
+- Umwandlung: 256 × 192, Palette aus 255 DS-Farben (15 bit), Floyd-Steinberg-Dithering, Palettenfarbe 0 bleibt frei. Jede Datei wird vor dem Schreiben wie in `DsRunnerTopArt::Load` geprüft.
+- Konsolen-Ordner und Unterordner bekommen ein erzeugtes Bild (Verlauf in der Konsolenfarbe, großes Kürzel). DS-Spiele ohne Fund bekommen ein Ersatzbild aus dem Banner-Icon, das bei späteren Läufen durch ein echtes Bild ersetzt wird.
+- Eigene Bilder in `/_dsrunner/art-override/` (gleicher Pfad oder nur der Name) haben Vorrang. `/_dsrunner/art/.dsrunner-art.json` merkt sich, welche Bilder vom Tool stammen: von Hand abgelegte werden nie überschrieben, weitere Läufe laden nur, was fehlt. Cache auf dem PC für Listen, Bilder, Prüfsummen und Fehlversuche.
+
+**Offen:**
+- Test unter Windows mit echter Karte und größerer Sammlung (Trefferquote der Namenssuche bei frei benannten Dateien, Laufzeit der Prüfsummen über USB).
+- GameTDB-Adressen (`art.gametdb.com/ds/coverHQ|coverM|cover|coverS/<Region>/<Code>`) konnten in der Entwicklungsumgebung nicht geprüft werden (Host gesperrt). Das Tool überspringt die Quelle, wenn sie nicht antwortet.
+- Die Dateiliste der Thumbnail-Repos kommt über die GitHub-API (ohne Anmeldung 60 Anfragen pro Stunde, eine pro Konsole und Woche). Ohne sie werden Bilder direkt per Name versucht.
+- Kleine Cover für die Kacheln (Phase 3, „Cover in den Kacheln“) erzeugt das Tool noch nicht.
+
 ### Phase 6: Komfort
 1. Deutsche Oberfläche (prüfen, ob die Pico-Fonts Umlaute haben)
 2. Favoriten (Taste X), Verlauf „zuletzt gespielt“, Menüpunkt „Weiterspielen“
@@ -151,4 +167,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 3 + 4 auf dem DS testen (Kacheln, Blättern, Spielanzahl, Sortierung nach Spielstart, Artworks mit Test-Bildern). Danach Phase 5: das PC-Tool erzeugt die Artworks im Format aus [CONFIG.md](CONFIG.md#artworks).
+Phase 3 + 4 auf dem DS testen (Kacheln, Blättern, Spielanzahl, Sortierung nach Spielstart), dabei die Artworks mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden. Danach Phase 6.

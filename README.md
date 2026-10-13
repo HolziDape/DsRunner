@@ -20,12 +20,13 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 
 **[⬇ Neueste Version herunterladen](https://github.com/HolziDape/DsRunner/releases/latest)**
 
-Dort gibt es zwei Dateien:
+Dort gibt es diese Dateien:
 
 | Datei | Für wen |
 |---|---|
 | **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart und Pico Loader |
 | `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
+| `DsRunnerArt.exe` | PC-Programm für Windows, lädt die [Artworks](#artworks) auf die Karte |
 
 ## Installation (M3 DS Real)
 
@@ -78,14 +79,19 @@ Der Touchscreen funktioniert ebenfalls.
 
 ## Artworks
 
-Für das große Bild oben legst du ein BMP mit **256 × 192 Pixeln und 256 Farben** unter `/_dsrunner/art` ab, im selben Pfad wie das Spiel:
+Die großen Bilder für den oberen Bildschirm besorgt das PC-Programm **DsRunner Art** automatisch: SD-Karte einstecken, Programm starten, **„Artworks aktualisieren“** klicken. Es erkennt die Spiele (DS und GBA am Game-Code, andere Konsolen an Prüfsumme oder Dateiname), lädt Titelbilder, Screenshots oder Cover von [libretro-thumbnails](https://github.com/libretro-thumbnails) und erzeugt Bilder für die Konsolen-Ordner. Eigene Bilder haben Vorrang.
+
+- Windows: `DsRunnerArt.exe` aus dem [Release](https://github.com/HolziDape/DsRunner/releases/latest), oder mit Python aus `tools/dsrunner-art`
+- Anleitung, Optionen und Fehlerbehebung: **[docs/ART-TOOL.md](docs/ART-TOOL.md)**
+
+Von Hand geht es auch: ein BMP mit **256 × 192 Pixeln und 256 Farben** unter `/_dsrunner/art` ablegen, im selben Pfad wie das Spiel:
 
 | Für | Datei |
 |---|---|
 | Konsole `/Games/NDS` | `/_dsrunner/art/Games/NDS.bmp` |
 | Spiel `/Games/NDS/Mario Kart DS.nds` | `/_dsrunner/art/Games/NDS/Mario Kart DS.bmp` |
 
-Zum Ausprobieren reicht Paint: Bild auf 256 × 192 Pixel bringen und mit „Speichern unter“ als **256-Farben-Bitmap** speichern. Ein PC-Tool, das Artworks automatisch besorgt, ist in Arbeit.
+Dafür reicht Paint: Bild auf 256 × 192 Pixel bringen und mit „Speichern unter“ als **256-Farben-Bitmap** speichern. Von Hand abgelegte Bilder überschreibt DsRunner Art nicht.
 
 Alle Einstellungen und Dateiformate stehen in **[docs/CONFIG.md](docs/CONFIG.md)**.
 
