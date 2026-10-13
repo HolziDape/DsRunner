@@ -8,6 +8,8 @@
 #                        firmware -> SYSTEM/g6dsload.eng -> r4i.sys (TWiLight booter with
 #                        the M3 DLDI driver) -> /_nds/TWiLightMenu/main.srldr
 #   BOOT.NDS             DsRunner again, to start it manually from other menus
+#   LIESMICH.txt         short German installation and update guide with the version
+#                        (from VERSION, marked as development state unless DSRUNNER_RELEASE=1)
 # Usage: tools/make-sd-package.sh [output dir]   (run after make, needs curl, unzip, 7z)
 set -e
 
@@ -81,20 +83,50 @@ for f in $AUTOBOOT_FILES; do
 	verify_sha256 "$OUT/$f" "$(echo "$SHA256_AUTOBOOT" | grep "  $f\$" | cut -d' ' -f1)"
 done
 
+# short German guide; plain ASCII with CRLF so it opens anywhere on Windows
+VERSION_TEXT="$(tr -d ' \t\r\n' < "$ROOT/VERSION")"
+[ "$DSRUNNER_RELEASE" = "1" ] || VERSION_TEXT="$VERSION_TEXT (Entwicklungsstand)"
 cat > "$OUT/LIESMICH.txt" <<'EOF'
-DsRunner fuer M3 DS Real
-========================
+DsRunner @VERSION@ fuer M3 DS Real
+==================================
+
+Installation
+------------
 1. SD-Karte sichern (vor allem alle .sav Dateien, den Ordner SYSTEM und SRESET.DAT).
+   Damit kommst du jederzeit zu YSMenu zurueck.
 2. Den INHALT dieses Ordners ins Hauptverzeichnis der SD-Karte kopieren
    und vorhandene Dateien ersetzen.
-3. DS einschalten: DsRunner startet automatisch.
+3. Spiele in Ordner pro Konsole legen, zum Beispiel:
+     Games\NDS   fuer .nds Spiele
+     Games\GBA   fuer .gba Spiele (dazu GBARunner2_arm7dldi_ds.nds ins
+                 Hauptverzeichnis und das GBA-BIOS als _gba\bios.bin)
+4. DS einschalten: DsRunner startet automatisch.
 
-Zurueck zu YSMenu: die gesicherten Dateien SYSTEM\g6dsload.1, SYSTEM\g6dsload.eng
-und SRESET.DAT zurueckkopieren, boot.*, loader.eng und _system_ loeschen.
+Update auf eine neue Version
+----------------------------
+Nur die Datei _nds\TWiLightMenu\main.srldr aus dem neuen Paket auf die Karte
+kopieren und die alte ersetzen (optional auch BOOT.NDS). Spiele, Spielstaende und
+Einstellungen bleiben erhalten. Welche Version laeuft, steht unten rechts im
+Menue "Anzeige" (Zahnrad oben rechts).
+
+Bilder fuer den oberen Bildschirm und die Kacheln
+-------------------------------------------------
+Das PC-Programm DsRunnerArt.exe (beim selben Release) laedt sie auf die Karte:
+SD-Karte einstecken, Programm starten, "Artworks aktualisieren" klicken.
+
+Zurueck zu YSMenu
+-----------------
+Die gesicherten Dateien SYSTEM\g6dsload.1, SYSTEM\g6dsload.eng und SRESET.DAT
+zurueckkopieren, dann boot.*, loader.eng und den Ordner _system_ loeschen.
+
+Mehr
+----
+Anleitung, Bedienung und Aenderungen (README.md, CHANGELOG.md):
+https://github.com/HolziDape/DsRunner
 
 DsRunner basiert auf Pico Launcher und Pico Loader (LNH team, Zlib-Lizenz).
 Die Autostart-Dateien stammen aus TWiLight Menu++ (DS-Homebrew).
 EOF
-sed -i 's/$/\r/' "$OUT/LIESMICH.txt"
+sed -i "s/@VERSION@/$VERSION_TEXT/; s/\$/\r/" "$OUT/LIESMICH.txt"
 
 find "$OUT" -type f | sort

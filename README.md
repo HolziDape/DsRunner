@@ -30,6 +30,8 @@ Dort gibt es diese Dateien:
 | `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
 | `DsRunnerArt.exe` | PC-Programm für Windows, lädt die [Artworks](#artworks) auf die Karte |
 
+Was sich in welcher Version geändert hat, steht im **[CHANGELOG](CHANGELOG.md)**. Welche Version auf deiner Karte läuft, siehst du unten rechts im Menü „Anzeige“ (Zahnrad oben rechts).
+
 ## Installation (M3 DS Real)
 
 1. **SD-Karte sichern.** Mindestens alle Spielstände (`.sav`), den Ordner `SYSTEM` und die Datei `SRESET.DAT`. Damit kommst du jederzeit zu YSMenu zurück.
@@ -109,7 +111,7 @@ DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 
 
 ## Stand
 
-DsRunner ist in Entwicklung. Was fertig ist und was als Nächstes kommt, steht in **[docs/PLAN.md](docs/PLAN.md)**. Fehler und Wünsche gerne als [Issue](https://github.com/HolziDape/DsRunner/issues).
+DsRunner ist in Entwicklung. Was fertig ist und was als Nächstes kommt, steht in **[docs/PLAN.md](docs/PLAN.md)**, die Änderungen pro Version im **[CHANGELOG](CHANGELOG.md)**. Fehler und Wünsche gerne als [Issue](https://github.com/HolziDape/DsRunner/issues).
 
 ## Selbst bauen
 

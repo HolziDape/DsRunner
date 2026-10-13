@@ -1,17 +1,81 @@
 name: Build DsRunner release
 
+# Runs when a release is published on GitHub (tag vX.Y.Z, see docs/RELEASE.md).
+# The tag must match the VERSION file, otherwise nothing is built.
+
 on:
   release:
     types: [published]
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    name: Check version
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Tag, VERSION, DsRunner Art and CHANGELOG.md must match
+        id: check
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          sh tools/version.sh check "$TAG"
+          echo "version=$(sh tools/version.sh)" >> "$GITHUB_OUTPUT"
+
+  release_notes:
+    runs-on: ubuntu-latest
+    name: Release notes from CHANGELOG.md
+    # after the builds: their upload step writes the release description back as it was
+    # when it started, so this job comes last (and also runs when a build failed)
+    needs: [version, pico_launcher, dsrunner_art]
+    if: always() && needs.version.result == 'success'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Put the changelog section on top of the release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          marker='<!-- dsrunner-changelog -->'
+          existing="$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.body // ""')"
+          # re-runs replace the part written before
+          case "$existing" in
+            *"$marker"*) existing="${existing#*"$marker"}" ;;
+          esac
+          # without leading blank lines
+          existing="${existing#"${existing%%[![:space:]]*}"}"
+          {
+            sh tools/version.sh notes "$VERSION"
+            echo
+            echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). **Update:** nur `_nds/TWiLightMenu/main.srldr` ersetzen. Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
+            echo
+            echo "$marker"
+            if [ -n "$existing" ]; then
+              echo
+              echo "$existing"
+            fi
+          } > notes.md
+          cat notes.md
+          gh release edit "$TAG" --repo "$REPO" --notes-file notes.md
+
   pico_launcher:
     runs-on: ubuntu-latest
+    needs: version
     # the job attaches the zips to the release, the default token can only read
     permissions:
       contents: write
     container: skylyrac/blocksds:slim-v1.16.0
     name: Build DsRunner
+    env:
+      # version from VERSION without "-dev" in the launcher, banner and LIESMICH.txt
+      DSRUNNER_RELEASE: "1"
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -48,6 +112,7 @@ jobs:
 
   dsrunner_art:
     runs-on: windows-latest
+    needs: version
     name: Build DsRunner Art (Windows)
     permissions:
       contents: write

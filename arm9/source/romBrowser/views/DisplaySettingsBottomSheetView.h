@@ -41,6 +41,8 @@ private:
     // DsRunner: clock of the status bar on/off
     SharedPtr<Label2DView> _clockLabel;
     SharedPtr<IconButton2DView> _clockButton;
+    // DsRunner: version, bottom right (see VERSION)
+    SharedPtr<Label2DView> _versionLabel;
 
     // DsRunner: 3x2 tiles, 4x3 tiles, cover flow
     std::array<SharedPtr<IconButton2DView>, 3> _layoutOptions;

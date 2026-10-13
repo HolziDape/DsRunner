@@ -12,7 +12,24 @@ export LIBTWL           ?= $(shell pwd)/libs/libtwl
 
 NAME		:= 	DsRunner
 
-GAME_TITLE	:= DsRunner
+# Version
+# -------
+# The file VERSION holds the version number (X.Y.Z, without "v"), see docs/RELEASE.md.
+# Release builds (make DSRUNNER_RELEASE=1, done by the release workflow) use it as it is,
+# every other build is marked as development build with the commit if git knows it,
+# e.g. 0.2.0-dev+36184e8. The launcher shows it in the "Anzeige" menu, the banner in its
+# title line.
+
+DSRUNNER_BASE_VERSION	:= $(strip $(shell cat VERSION))
+ifeq ($(DSRUNNER_RELEASE),1)
+    DSRUNNER_VERSION	?= $(DSRUNNER_BASE_VERSION)
+else
+    DSRUNNER_COMMIT	:= $(strip $(shell git rev-parse --short HEAD 2>/dev/null))
+    DSRUNNER_VERSION	?= $(DSRUNNER_BASE_VERSION)-dev$(if $(DSRUNNER_COMMIT),+$(DSRUNNER_COMMIT))
+endif
+export DSRUNNER_VERSION
+
+GAME_TITLE	:= DsRunner $(DSRUNNER_VERSION)
 GAME_SUBTITLE	:= based on Pico Launcher
 GAME_AUTHOR	:= HolziDape
 GAME_ICON	:= icon.png

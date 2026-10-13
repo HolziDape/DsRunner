@@ -18,10 +18,11 @@ Das SD-Paket (`tools/make-sd-package.sh`) enthält:
 | `BOOT.NDS` | DsRunner, zum manuellen Starten aus anderen Menüs |
 | `_pico/` | Themes aus diesem Repo + Pico Loader `M3DS` (Release-Version im Skript festgelegt) |
 | `SYSTEM/g6dsload.*`, `boot.*`, `loader.eng`, `_system_/_sys_data/r4i.sys`, `SRESET.dat` | Autostart-Dateien der M3 DS Real aus dem TWiLight-Menu++-Release (Version und SHA-256 im Skript festgelegt) |
+| `LIESMICH.txt` | kurze Anleitung (Installation, Update, Zurück zu YSMenu) mit der Version |
 
 Autostart-Kette der M3 DS Real: Firmware → `SYSTEM/g6dsload.eng` → `_system_/_sys_data/r4i.sys` (Startprogramm von TWiLight mit M3-DLDI-Treiber) → `/_nds/TWiLightMenu/main.srldr`. Der Pfad ist im TWiLight-Startprogramm fest eingebaut. Später können wir ein eigenes Startprogramm bauen, das direkt `/DsRunner.nds` lädt.
 
-Bei jedem GitHub-Release baut die CI das Paket automatisch als `DsRunner_M3DSReal.zip`.
+Bei jedem GitHub-Release baut die CI das Paket automatisch als `DsRunner_M3DSReal.zip`. Versionsnummer (`VERSION`), Changelog und die Schritte für ein Release: [RELEASE.md](RELEASE.md).
 
 ## Testen
 
