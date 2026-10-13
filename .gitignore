@@ -250,3 +250,6 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+# Fork: never commit games or saves
+*.gba
+*.sav
