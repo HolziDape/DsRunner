@@ -133,3 +133,10 @@ void ListRecycler::SetSelectedIdx(int idx)
 	_selectedElement = idx;
 	EnsureElementVisible(idx);
 }
+
+void ListRecycler::RebindItem(int position)
+{
+	for (int i = 0; i < _holderCount; i++)
+		if (_holders[i]->GetIsBound() && _holders[i]->GetItemPosition() == position)
+			_adapter->BindElementHolder(_holders[i], position);
+}

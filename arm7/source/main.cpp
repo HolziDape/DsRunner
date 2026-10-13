@@ -32,6 +32,37 @@ extern "C" void irq_vblank()
 
 extern "C" void my_irq_handler();
 
+//transfers one register access to the power management chip over spi
+static u8 pm_transfer(u8 reg, u8 data)
+{
+	int oldIme = enterCriticalSection();
+	while (REG_SPICNT & SPI_BUSY);
+	REG_SPICNT = SPI_ENABLE | SPI_BAUD_1MHz | SPI_BYTE_MODE | SPI_CONTINUOUS | SPI_DEVICE_POWER;
+	REG_SPIDATA = reg;
+	while (REG_SPICNT & SPI_BUSY);
+	REG_SPICNT = SPI_ENABLE | SPI_BAUD_1MHz | SPI_BYTE_MODE | SPI_DEVICE_POWER;
+	REG_SPIDATA = data;
+	while (REG_SPICNT & SPI_BUSY);
+	u8 result = REG_SPIDATA & 0xFF;
+	leaveCriticalSection(oldIme);
+	return result;
+}
+
+//sets the DS Lite backlight level (0-3), or only queries it when level is FIFO_BACKLIGHT_QUERY
+static u32 backlight_update(u32 level)
+{
+	u8 pm = pm_transfer(PM_BACKLIGHT_LEVEL | PM_READ_REGISTER, 0);
+	//bit 6 is only set on the DS Lite, the original DS has no backlight levels
+	if (!(pm & (1 << 6)))
+		return FIFO_BACKLIGHT_UNSUPPORTED;
+	if (level <= 3)
+	{
+		pm = (pm & ~3) | level;
+		pm_transfer(PM_BACKLIGHT_LEVEL, pm);
+	}
+	return pm & 3;
+}
+
 int main()
 {
 	//dmaFillWords(0, (void*)0x04000400, 0x100);
@@ -236,6 +267,11 @@ int main()
 					REG_SEND_FIFO = *(u32*)&dateTime[4];
 					break;
 				}
+			case FIFO_CMD_BACKLIGHT:
+				while (REG_FIFO_CNT & FIFO_CNT_EMPTY);
+				val = REG_RECV_FIFO;
+				REG_SEND_FIFO = backlight_update(val);
+				break;
 			case 0x040000A0:
 				while (REG_FIFO_CNT & FIFO_CNT_EMPTY);
 				val = REG_RECV_FIFO;

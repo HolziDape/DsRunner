@@ -13,22 +13,60 @@
 #include "IconPlay_nbfc.h"
 #include "IconRestart_nbfc.h"
 #include "IconPower_nbfc.h"
+#include "IconBrightness_nbfc.h"
 #include "../cp15.h"
 #include "InGameMenu.h"
 
-struct igm_action_t
+enum IgmAction
 {
-	const char* name;
+    IGM_ACTION_RESUME,
+    IGM_ACTION_RESET,
+    IGM_ACTION_BRIGHTNESS,
+    IGM_ACTION_QUIT,
+
+    IGM_ACTION_COUNT
 };
 
-static const igm_action_t sActions[] =
+static const char* const sActionNames[IGM_ACTION_COUNT] =
 {
-    { "Resume" },
-    { "Reset" },
-    { "Quit to rom browser" }
+    "Resume",
+    "Reset",
+    NULL, //depends on the current level, see sBrightnessNames
+    "Quit to rom browser"
 };
 
-static u16 sIconObjAddrs[sizeof(sActions) / sizeof(igm_action_t)];
+static const char* const sBrightnessNames[4] =
+{
+    "Brightness: 1/4",
+    "Brightness: 2/4",
+    "Brightness: 3/4",
+    "Brightness: 4/4"
+};
+
+static u16 sIconObjAddrs[IGM_ACTION_COUNT];
+
+//actions shown in the list; brightness is left out on consoles without backlight levels
+static u8 sVisibleActions[IGM_ACTION_COUNT];
+static int sVisibleActionCount;
+
+static u32 sBacklightLevel;
+
+//sets the DS Lite backlight level (0-3) or queries it (FIFO_BACKLIGHT_QUERY)
+//returns the current level or FIFO_BACKLIGHT_UNSUPPORTED
+static u32 setBacklight(u32 level)
+{
+    REG_SEND_FIFO = FIFO_CMD_BACKLIGHT;
+    REG_SEND_FIFO = level;
+    while (REG_FIFO_CNT & FIFO_CNT_EMPTY);
+    return REG_RECV_FIFO;
+}
+
+static const char* getActionName(int action)
+{
+    if (action == IGM_ACTION_BRIGHTNESS)
+        return sBrightnessNames[sBacklightLevel & 3];
+    return sActionNames[action];
+}
 
 class IgmActionListAdapter : public ListAdapter
 {
@@ -37,8 +75,9 @@ protected:
 	void OnBindElementHolder(ElementHolder* elementHolder, int position)
     {
         SingleLineIconListEntry* element = (SingleLineIconListEntry*)elementHolder->GetItemElement();
-        element->SetName(sActions[position].name);
-        element->SetIcon(sIconObjAddrs[position]);
+        int action = sVisibleActions[position];
+        element->SetName(getActionName(action));
+        element->SetIcon(sIconObjAddrs[action]);
     }
 
 public:
@@ -60,7 +99,7 @@ public:
         delete elementHolder;
     }
 
-	int GetItemCount() { return sizeof(sActions) / sizeof(igm_action_t); }
+	int GetItemCount() { return sVisibleActionCount; }
 
 	int GetElementHeight() { return 32;	}
 };
@@ -246,17 +285,30 @@ int InGameMenu::Run()
 	_uiContext->GetUIManager().VBlank();
     SingleLineIconListEntry::LoadCommonData(_uiContext->GetUIManager());
 
-    sIconObjAddrs[0] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconPlay_nbfc_size);
+    sIconObjAddrs[IGM_ACTION_RESUME] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconPlay_nbfc_size);
 	for (int i = 0; i < IconPlay_nbfc_size / 2; i++)
-		SPRITE_GFX_SUB[(sIconObjAddrs[0] >> 1) + i] = ((u16*)IconPlay_nbfc)[i];
+		SPRITE_GFX_SUB[(sIconObjAddrs[IGM_ACTION_RESUME] >> 1) + i] = ((u16*)IconPlay_nbfc)[i];
 
-    sIconObjAddrs[1] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconRestart_nbfc_size);
+    sIconObjAddrs[IGM_ACTION_RESET] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconRestart_nbfc_size);
 	for (int i = 0; i < IconRestart_nbfc_size / 2; i++)
-		SPRITE_GFX_SUB[(sIconObjAddrs[1] >> 1) + i] = ((u16*)IconRestart_nbfc)[i];
-        
-    sIconObjAddrs[2] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconPower_nbfc_size);
+		SPRITE_GFX_SUB[(sIconObjAddrs[IGM_ACTION_RESET] >> 1) + i] = ((u16*)IconRestart_nbfc)[i];
+
+    sIconObjAddrs[IGM_ACTION_BRIGHTNESS] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconBrightness_nbfc_size);
+	for (int i = 0; i < IconBrightness_nbfc_size / 2; i++)
+		SPRITE_GFX_SUB[(sIconObjAddrs[IGM_ACTION_BRIGHTNESS] >> 1) + i] = ((u16*)IconBrightness_nbfc)[i];
+
+    sIconObjAddrs[IGM_ACTION_QUIT] = _uiContext->GetUIManager().GetSubObjManager().Alloc(IconPower_nbfc_size);
 	for (int i = 0; i < IconPower_nbfc_size / 2; i++)
-		SPRITE_GFX_SUB[(sIconObjAddrs[2] >> 1) + i] = ((u16*)IconPower_nbfc)[i];
+		SPRITE_GFX_SUB[(sIconObjAddrs[IGM_ACTION_QUIT] >> 1) + i] = ((u16*)IconPower_nbfc)[i];
+
+    sBacklightLevel = setBacklight(FIFO_BACKLIGHT_QUERY);
+    sVisibleActionCount = 0;
+    for (int i = 0; i < IGM_ACTION_COUNT; i++)
+    {
+        if (i == IGM_ACTION_BRIGHTNESS && sBacklightLevel == FIFO_BACKLIGHT_UNSUPPORTED)
+            continue;
+        sVisibleActions[sVisibleActionCount++] = i;
+    }
 
     _vramState = _uiContext->GetUIManager().GetSubObjManager().GetState();
 
@@ -285,15 +337,25 @@ int InGameMenu::Run()
 		}
 		else if (_inputRepeater.GetTriggeredKeys() & KEY_A)
 		{
-            if(_selectedEntry == 0)
-                next = 2;
-            else if(_selectedEntry == 1)
-                next = 3;
-            else if(_selectedEntry == 2)
-                next = 0;
+            int action = sVisibleActions[_selectedEntry];
+            if (action == IGM_ACTION_BRIGHTNESS)
+            {
+                //cycle through the levels and stay in the menu
+                sBacklightLevel = setBacklight((sBacklightLevel + 1) & 3);
+                _listRecycler->RebindItem(_selectedEntry);
+            }
+            else
+            {
+                if (action == IGM_ACTION_RESUME)
+                    next = 2;
+                else if (action == IGM_ACTION_RESET)
+                    next = 3;
+                else if (action == IGM_ACTION_QUIT)
+                    next = 0;
 
-            while(!(*((vu16*)0x04000130) & 1));
-			break;
+                while(!(*((vu16*)0x04000130) & 1));
+                break;
+            }
 		}
 		else if (_inputRepeater.GetTriggeredKeys() & KEY_B)
 		{
