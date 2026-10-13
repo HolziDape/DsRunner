@@ -13,7 +13,9 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 - **Große Kacheln** im Raster 3×2 oder 4×3, Konsolen in ihrer eigenen Farbe
 - **Artwork oben** für jede Konsole und jedes Spiel, mit weichem Überblenden
 - **Spielanzahl** pro Konsole und Sortierung nach **zuletzt gespielt**
-- Uhr und Akkuanzeige
+- **Favoriten** mit X, gesammelt in der Kachel „★ Favoriten“
+- **Weiterspielen** mit START: das zuletzt gespielte Spiel direkt von der Konsolen-Ebene starten
+- Uhr (abschaltbar) und Akkuanzeige, Oberfläche auf Deutsch
 - **GBA-Spiele** über GBARunner2, **Cheats** über `usrcheat.dat`
 
 ## Download
@@ -45,7 +47,7 @@ SD-Karte
 │   ├── NDS      ← .nds-Spiele
 │   ├── GBA      ← .gba-Spiele (brauchen GBARunner2, siehe unten)
 │   └── Apps     ← Homebrew
-├── _dsrunner    ← Artworks und Spielverlauf (legt DsRunner selbst an)
+├── _dsrunner    ← Artworks, Spielverlauf und Favoriten (legt DsRunner selbst an)
 ├── _nds
 ├── _pico
 └── ...
@@ -71,8 +73,10 @@ Die gesicherten Dateien `SYSTEM/g6dsload.1`, `SYSTEM/g6dsload.eng` und `SRESET.D
 | A | Konsole öffnen / Spiel starten |
 | B | zurück zu den Konsolen |
 | L / R | eine Seite weiterblättern |
+| X | Spiel zu den Favoriten hinzufügen / entfernen |
 | Y | Cheats für das ausgewählte Spiel |
-| Zahnrad (oben rechts) | Ansicht und Sortierung wählen |
+| START | auf der Konsolen-Ebene: zuletzt gespieltes Spiel weiterspielen |
+| Zahnrad (oben rechts) | Ansicht, Sortierung und Uhr ein/aus wählen |
 
 Der Touchscreen funktioniert ebenfalls.
 
