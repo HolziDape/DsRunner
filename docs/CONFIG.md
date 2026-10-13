@@ -21,7 +21,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 |---|---|
 | `theme` | Ordnername in `/_pico/themes`. `dsrunner` ist das dunkle DsRunner-Theme. Mit `material` oder `raspberry` kommen Picos Themes zurück. |
 | `libraryPath` | Ordner, dessen Unterordner die Konsolen sind. DsRunner startet immer hier. Standard `/Games`. Leer lassen (`""`) für das Verhalten von Pico Launcher (letzter Ordner). Existiert der Ordner nicht, startet DsRunner im SD-Root. |
-| `romBrowserLayout` | `TileGrid3x2` (Standard: große Kacheln, 3 nebeneinander, 2 untereinander), `TileGrid4x3` (4 × 3 kleinere Kacheln), dazu Picos Ansichten `HorizontalIconGrid`, `VerticalIconGrid`, `BannerList`, `CoverFlow`. Umschalten im Menü (Zahnrad → Layout), die Wahl wird hier gespeichert. Eine bestehende `settings.json` behält ihre Ansicht, bis man im Menü umschaltet. |
+| `romBrowserLayout` | `TileGrid3x2` (Standard: große Kacheln, 3 nebeneinander, 2 untereinander), `TileGrid4x3` (4 × 3 kleine Kacheln mit Icons) oder `CoverFlow` (Picos große Cover-Ansicht), siehe [Ansichten](#ansichten). Umschalten im Menü (Zahnrad → Ansicht), die Wahl wird hier gespeichert. Picos frühere Ansichten `HorizontalIconGrid`, `VerticalIconGrid`, `BannerList` und `FileList` gibt es nicht mehr: steht eine davon noch in der Datei, zeigt DsRunner das 3×2-Raster. |
 | `romBrowserSortMode` | `NameAscending` (A–Z), `NameDescending` (Z–A), `LastPlayed` (zuletzt gespielt zuerst, siehe [Spielverlauf](#spielverlauf)). Ordner stehen immer vorne und sind nach Namen sortiert. `LastModified` von Pico ist nicht umgesetzt und sortiert wie A–Z. |
 | `lastUsedFilePath` | Zuletzt gestartetes Spiel, wird automatisch gesetzt. |
 | `showClock` | `true` (Standard): Uhrzeit oben rechts in der Statusleiste. `false`: nur die Akkuanzeige. Umschalten im Menü (Zahnrad → Uhr). Gilt nur im DsRunner-Theme. |
@@ -65,11 +65,22 @@ Konsolen mit eigener Farbe und eigenem Kürzel: `NDS`, `GBA`, `GBC`, `GB`, `NES`
 
 Das GBA-BIOS (`bios.bin`) gehört neben GBARunner2 bzw. nach `/_gba/bios.bin`, wie in der Anleitung von GBARunner2.
 
-## Kachelraster
+## Ansichten
+
+Im Menü „Anzeige“ (Zahnrad) gibt es drei Ansichten. Jede zeigt ein Bild in dem Stil, der zu ihrer Größe passt:
+
+| Ansicht | Kachel | Bild eines Spiels | erzeugt von DsRunner Art |
+|---|---|---|---|
+| **Raster 3 × 2** (Standard) | 76 × 70 | [Kachel-Bild](#kachel-bilder) 64 × 64, 1:1, vereinfacht (wenige Farben). Ohne Kachel-Bild das Icon doppelt groß. | `/_dsrunner/tiles` |
+| **Raster 4 × 3** | 55 × 44 | nur das **Icon** 32 × 32, 1:1 (klare Pixelgrafik): DS-Spiele ihr Banner-Icon, andere Spiele ein [Icon](#icons-4--3-raster) aus `/_pico/icons/user` | `/_pico/icons/user` |
+| **CoverFlow** | großes Cover, blättert seitwärts | das echte [Cover](#cover-coverflow) 106 × 96, realistisch | `/_pico/covers/user` |
+
+Für alle drei Ansichten zeigt der obere Bildschirm das [Artwork](#artworks) des Spiels.
+
+### Kachelraster
 
 - Die Kacheln füllen sich **zeilenweise** (Lesereihenfolge) und das Raster blättert nach unten. Steuerkreuz bewegt die Auswahl, **L/R** blättern eine Seite (2 bzw. 3 Reihen).
-- Konsolen-Ordner bekommen die Farbe der Konsole, Spiele zeigen ihr Icon (im 3×2-Raster doppelt so groß).
-- In diesen Ansichten zeigt der obere Bildschirm statt Picos kleinem Cover das [Artwork](#artworks).
+- Konsolen-Ordner bekommen die Farbe der Konsole, Spiele zeigen ihr Kachel-Bild (3×2) bzw. ihr Icon (4×3).
 - Auf der Konsolen-Ebene steht unter dem Namen der Konsole die **Spielanzahl** („34 Spiele“). DsRunner zählt dafür nach dem Start einmal im Hintergrund die Dateien jedes Konsolen-Ordners, die es auch anzeigen würde (bekannte Dateitypen, keine Unterordner, keine versteckten Dateien). Solange gezählt wird, bleibt die Zeile leer.
 
 ## Spielverlauf
@@ -146,7 +157,7 @@ Regel: Pfad ab SD-Root, bei Dateien die Endung durch `.bmp` ersetzen, bei Ordner
 
 ## Kachel-Bilder
 
-Im Kachelraster zeigt ein Spiel statt seines Icons (32 × 32, bei GBA-Spielen gar keins) ein **Kachel-Bild**, wenn es eins gibt. Sonst bleibt es beim Icon.
+Im 3×2-Raster zeigt ein Spiel statt seines Icons (32 × 32, bei GBA-Spielen ohne eigenes Icon gar keins) ein **Kachel-Bild**, wenn es eins gibt. Sonst bleibt es beim Icon (doppelt groß). Das 4×3-Raster lädt keine Kachel-Bilder, dort ist es immer das Icon.
 
 **Ablage:** gleiche Regel wie bei den [Artworks](#artworks), nur mit `/_dsrunner/tiles` statt `/_dsrunner/art`, und **nur für Spiele** (Dateien), nicht für Ordner:
 
@@ -163,7 +174,28 @@ Regel: Pfad ab SD-Root, Endung durch `.bmp` ersetzen (nur die letzte, `Platin.v1
 - Höchstens 255 Farben, **Palettenfarbe 0 bleibt unbenutzt** (der DS behandelt sie als durchsichtig). Farben werden auf 15 bit gekürzt.
 - Sonst gelten dieselben Prüfregeln wie bei den Artworks, nur die Größe ist anders. Andere Dateien werden ignoriert (dann das Icon).
 
-**Inhalt** (erzeugt von [DsRunner Art](ART-TOOL.md#kachel-bilder)): das Cover des Spiels, auf 64 × 64 gefüllt und mittig beschnitten (beim DS- und GBA-Cover ohne den Streifen „NINTENDO DS“ bzw. „GAME BOY ADVANCE“). Ersatz der Reihe nach: Titelbild (oberer Bildschirm), Screenshot, zuletzt das Icon des Spiels doppelt groß (ohne Glätten) auf dunklem Grund.
+**Inhalt** (erzeugt von [DsRunner Art](ART-TOOL.md#kachel-bilder)): das Cover des Spiels, auf 64 × 64 gefüllt und mittig beschnitten (beim DS- und GBA-Cover ohne den Streifen „NINTENDO DS“ bzw. „GAME BOY ADVANCE“), in einem **vereinfachten Stil**: leicht geglättet, etwas mehr Kontrast, höchstens 24 Farben ohne Dithering, damit es bei 64 Pixeln ruhig und klar wirkt. Ersatz der Reihe nach: Titelbild (oberer Bildschirm), Screenshot, zuletzt das Icon des Spiels doppelt groß (ohne Glätten) auf dunklem Grund.
 
 **DsRunner Art** führt die Liste der eigenen Kachel-Bilder in `/_dsrunner/tiles/.dsrunner-art.json` und liest eigene Kachel-Bilder aus `/_dsrunner/tile-override/` (gleicher Pfad wie das Spiel oder nur der Name, beliebiges Bildformat). DsRunner selbst nutzt beides nicht.
 
+## Cover (CoverFlow)
+
+Die CoverFlow-Ansicht ist Picos große Ansicht: ein Cover pro Spiel, mit dem Steuerkreuz seitwärts geblättert. Ohne Cover zeigt sie ein „?“. Die Cover liest Pico (siehe [Customization.md](Customization.md#covers)):
+
+1. `/_pico/covers/user/<Dateiname mit Endung>.bmp`, z. B. `/_pico/covers/user/Golden Sun.gba.bmp`
+2. `/_pico/covers/nds/<Game-Code>.bmp` bzw. `/_pico/covers/gba/<Game-Code>.bmp`
+
+**Format:** BMP, **128 × 96 Pixel**, **8 bit** (256 Farben), unkomprimiert, BMP-Kopf mit 40 Bytes, 0 oder 256 Palettenfarben. Sichtbar sind nur die linken **106 × 96** Pixel, rechts sind 22 Pixel Rand.
+
+**Inhalt** (erzeugt von [DsRunner Art](ART-TOOL.md#cover-und-icons) unter `/_pico/covers/user`): realistisch, das echte Cover (Ersatz: Titelbild, dann Screenshot) im Ganzen in die 106 × 96 Pixel eingepasst. Bilder mit fast demselben Seitenverhältnis (DS-Cover) füllen die Fläche, die anderen bekommen dunkle Ränder (#12141C). Bis zu 255 Farben mit Dithering. Liste der vom Tool angelegten Cover: `/_pico/covers/user/.dsrunner-art.json`.
+
+## Icons (4 × 3-Raster)
+
+DS-Spiele haben ein Icon im ROM (Banner), GBA-Spiele und andere nicht. Für sie liest Pico ein Icon aus (siehe [Customization.md](Customization.md#icons)):
+
+1. `/_pico/icons/user/<Dateiname mit Endung>.bmp`, z. B. `/_pico/icons/user/Golden Sun.gba.bmp` (hat auch Vorrang vor dem Banner-Icon eines DS-Spiels)
+2. `/_pico/icons/nds/<Game-Code>.bmp` bzw. `/_pico/icons/gba/<Game-Code>.bmp`
+
+**Format:** BMP, **32 × 32 Pixel**, **4 bit** (16 Farben), unkomprimiert, BMP-Kopf mit 40 Bytes, 0 oder 16 Palettenfarben. **Palettenfarbe 0 ist durchsichtig.**
+
+**Inhalt** (erzeugt von [DsRunner Art](ART-TOOL.md#cover-und-icons) unter `/_pico/icons/user`, nur für Spiele ohne eigenes Icon): minimalistisch, ein quadratischer Ausschnitt um Logo und Hauptfigur des Covers (Ersatz: Titelbild, Screenshot), verkleinert, höchstens 15 flache Farben ohne Dithering, einzelne Pixel geglättet, abgerundete durchsichtige Ecken. Das Icon erscheint im 4×3-Raster 1:1 und im 3×2-Raster doppelt groß, wenn es kein Kachel-Bild gibt. Liste der vom Tool angelegten Icons: `/_pico/icons/user/.dsrunner-art.json`.

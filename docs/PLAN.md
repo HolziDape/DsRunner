@@ -9,7 +9,7 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
 | 1 Design-System | ✅ erledigt, auf dem DS getestet |
 | 2 Konsolen-Ebene | ✅ erledigt, auf dem DS getestet (Spielanzahl kam mit Phase 3, Favoriten mit Phase 6) |
-| 3 Kachel-Raster | ✅ auf dem DS getestet (13.10.2026). Danach: Kachel-Bilder (Cover) statt Icons, Hänger behoben (siehe unten), **erneuter Test auf dem DS steht aus** |
+| 3 Kachel-Raster | ✅ auf dem DS getestet (13.10.2026). Danach: Kachel-Bilder (Cover) statt Icons, Hänger behoben, nur noch drei Ansichten mit eigenem Bildstil (siehe unten), **erneuter Test auf dem DS steht aus** |
 | 4 Großes Artwork oben | ✅ erledigt, auf dem DS getestet (Testbilder werden angezeigt und überblendet) |
 | 5 PC-Tool „DsRunner Art“ | ✅ im Code (Tests, echte Downloads von libretro-thumbnails, erzeugte Bilder in DeSmuME angezeigt), **Test unter Windows mit der Karte steht aus** |
 | 6 Komfort | ✅ im Code, gebaut und in DeSmuME geprüft (deutsche Oberfläche, Favoriten, Weiterspielen, Uhr im Menü), **Test auf dem DS steht aus** |
@@ -96,7 +96,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 3. Nachladen im Hintergrund und Cache, damit Scrollen ruckelfrei bleibt. **VRAM-Budget beachten.**
 4. Sortierung: A–Z, Z–A, **zuletzt gespielt**
 
-**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#kachelraster)):
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#ansichten)):
 - Ansichten `TileGrid3x2` (76 × 70 px, Icons 2× vergrößert) und `TileGrid4x3` (55 × 44 px), im Menü als erste beiden Layouts, gespeichert in `settings.json`. `TileGrid3x2` ist der neue Standard.
 - Die Kacheln zeichnet die 3D-Engine (runde Ecken, Farbverlauf, Akzent-Rahmen und Leuchten bei Auswahl), das Icon liegt als Sprite darauf. Dadurch kosten die Kacheln kein OBJ-VRAM und keine OBJ-Palettenzeilen. Zum Vergrößern werden die Sprites der Icons nachträglich auf affine Doppelgröße umgestellt, die Palettenzeilen werden für die doppelte Höhe reserviert.
 - Reihenfolge zeilenweise (A B C / D E F) statt Picos spaltenweiser Reihenfolge, Blättern nach unten. Kacheln, die unter die App-Leiste scrollen, werden dort abgeschnitten (das Icon verschwindet, sobald es hineinragen würde).
@@ -109,6 +109,12 @@ Ein eigener Launcher als Ersatz für YSMenu:
 **Nach dem Test auf dem DS (13.10.2026):**
 - **Hänger behoben:** Nach GBA → zurück → NDS hing DsRunner (Streifen oben, falsche Icon-Farben). Ursache: Der IO-Thread hatte nur 2 KB Stack. Er braucht schon ohne Artworks gut 1,6 KB (FatFs mit langen Dateinamen); ein Überlauf schreibt in die Thread-Verwaltung direkt darunter, danach hängt der VBlank-Interrupt. Jetzt 8 KB Stack für IO- und Hintergrund-Thread. Außerdem: die Aufgaben-Warteschlangen haben 64 statt 32 Plätze und warten bei Überfüllung, statt Speicher zu überschreiben; Artworks laden höchstens einzeln und erst, wenn die Auswahl 20 Bilder lang stehen bleibt.
 - **Kachel-Bilder:** Die 32×32-Icons wirkten in den großen Kacheln zu grob, GBA-Spiele haben keine. DsRunner zeigt jetzt ein 64×64-Bild (256 Farben, 4 KB Textur pro Kachel) aus `/_dsrunner/tiles`, das DsRunner Art aus dem Cover erzeugt ([CONFIG.md](CONFIG.md#kachel-bilder)). Im 3×2-Raster 1:1, im 4×3-Raster verkleinert auf 38 px. Ohne Bild bleibt das Icon.
+
+**Drei Ansichten, drei Bildstile (13.10.2026):** Die Kachel-Bilder wirkten für ihre kleine Pixelgröße zu detailreich. Jetzt gibt es im Menü nur noch drei Ansichten, jede mit dem passenden Bild ([CONFIG.md](CONFIG.md#ansichten)):
+- **Raster 3 × 2:** Kachel-Bild 64 × 64, 1:1, von DsRunner Art jetzt vereinfacht erzeugt (leicht geglättet, höchstens 24 Farben ohne Dithering). Alte Kachel-Bilder erneuert das Tool einmal automatisch.
+- **Raster 4 × 3:** nur noch das Icon 32 × 32 in Originalgröße (klare Pixelgrafik), keine Kachel-Bilder und kein Textur-VRAM mehr. DS-Spiele zeigen ihr Banner-Icon, andere Spiele ein Icon, das DsRunner Art in `/_pico/icons/user` anlegt (15 Farben, Ausschnitt um Logo und Hauptfigur).
+- **CoverFlow (Pico):** die echten Cover, von DsRunner Art in `/_pico/covers/user` angelegt (128 × 96, Bild in 106 × 96, 255 Farben mit Dithering). Bisher zeigte die Ansicht nur „?“.
+- Picos Icon-Raster (waagrecht/senkrecht) und die Bannerliste sind aus dem Menü entfernt. Eine `settings.json` mit einer dieser Ansichten (oder `FileList`) öffnet das 3×2-Raster.
 - **Abdunkeln oben:** langer, weicher Verlauf ab Zeile 64 statt eines kurzen harten Übergangs.
 
 ### Phase 4: Großes Artwork oben
@@ -144,6 +150,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 - GameTDB-Adressen (`art.gametdb.com/ds/coverHQ|coverM|cover|coverS/<Region>/<Code>`) konnten in der Entwicklungsumgebung nicht geprüft werden (Host gesperrt). Das Tool überspringt die Quelle, wenn sie nicht antwortet.
 - Die Dateiliste der Thumbnail-Repos kommt über die GitHub-API (ohne Anmeldung 60 Anfragen pro Stunde, eine pro Konsole und Woche). Ohne sie werden Bilder direkt per Name versucht.
 - ~~Kleine Cover für die Kacheln~~: erledigt, siehe Kachel-Bilder in Phase 3.
+- ~~Bilder für alle Ansichten~~: erledigt, das Tool legt auch Cover (`/_pico/covers/user`) und kleine Icons (`/_pico/icons/user`) an, siehe „Drei Ansichten“ in Phase 3.
 
 ### Phase 6: Komfort
 1. Deutsche Oberfläche (prüfen, ob die Pico-Fonts Umlaute haben)
@@ -189,4 +196,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 5 + 6 auf dem DS und unter Windows testen: Artworks mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden, Favoriten (X), Weiterspielen (START), Uhr im Menü, Start von Spielen aus der Favoritenliste (NDS und GBA) und Spielstände.
+Phase 5 + 6 auf dem DS und unter Windows testen: Bilder mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden, die drei Ansichten (3×2 mit Kachel-Bildern, 4×3 mit Icons, CoverFlow mit Covern) ansehen, Favoriten (X), Weiterspielen (START), Uhr im Menü, Start von Spielen aus der Favoritenliste (NDS und GBA) und Spielstände.
