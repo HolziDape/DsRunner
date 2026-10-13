@@ -8,14 +8,15 @@
 
 SharedPtr<View> DsRunnerTileGridFileRecyclerAdapter::CreateView() const
 {
-    return DsRunnerTileItemView::CreateShared(
-        std::make_unique<RomBrowserItemViewModel>(_romBrowserController), _tileWidth, _tileHeight, _iconScale, _clipTop);
+    return DsRunnerTileItemView::CreateShared(std::make_unique<RomBrowserItemViewModel>(_romBrowserController),
+        _romBrowserController, _tileWidth, _tileHeight, _iconScale, _clipTop);
 }
 
 void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int index) const
 {
     auto tileView = static_cast<DsRunnerTileItemView*>(view.GetPointer());
     const auto& fileInfo = _fileInfoManager->GetItem(index);
+    tileView->SetItem(&fileInfo);
     const DsRunnerConsoles::Info* console = nullptr;
     if (fileInfo.GetFileType()->GetClassification() == FileTypeClassification::Folder)
     {
@@ -26,4 +27,10 @@ void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int ind
     else
         tileView->ClearTint();
     IconGridFileRecyclerAdapter::BindView(view, index);
+}
+
+void DsRunnerTileGridFileRecyclerAdapter::ReleaseView(SharedPtr<View> view, int index) const
+{
+    static_cast<DsRunnerTileItemView*>(view.GetPointer())->SetItem(nullptr);
+    IconGridFileRecyclerAdapter::ReleaseView(view, index);
 }

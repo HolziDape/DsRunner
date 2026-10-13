@@ -42,6 +42,8 @@ RomBrowserViewModel::RomBrowserViewModel(IRomBrowserController* romBrowserContro
     const auto& sdFolder = romBrowserController->GetSdFolder();
     u32 filteredCount;
     auto sortedFilteredFiles = sdFolder.FilterAndSort(filterSortParams, filteredCount);
+    // DsRunner: the favorites tile comes first on the console level
+    DsRunnerFavoritesFolder::MoveEntryToFront(sortedFilteredFiles.get(), filteredCount);
     u64 endTick = gTickCounter.GetValue();
     LOG_DEBUG("Filter + sort took: %d us\n", (u32)TickCounter::TicksToMicroSeconds(endTick - startTick));
     _fileInfoManager = std::make_unique<FileInfoManager>(std::move(sortedFilteredFiles),

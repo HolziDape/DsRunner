@@ -67,13 +67,24 @@ RomBrowserController::RomBrowserController(
     TaskQueueBase* bgTaskQueue)
     : _appSettingsService(appSettingsService)
     , _ioTaskQueue(ioTaskQueue), _bgTaskQueue(bgTaskQueue)
-    , _fileTypeProvider(appSettingsService->GetAppSettings()) { }
+    , _fileTypeProvider(appSettingsService->GetAppSettings())
+{
+    gDsRunnerLibrary.appSettings = &appSettingsService->GetAppSettings();
+}
 
 void RomBrowserController::NavigateUp()
 {
     if (_currentFolderIsLibraryRoot)
     {
         // the library root is the top level of the launcher
+        return;
+    }
+    if (_currentFolderIsFavorites)
+    {
+        // DsRunner: the favorites folder is virtual, it belongs to the library root
+        NavigateToPath(_appSettingsService->GetAppSettings().libraryPath.GetString());
+        StringUtil::Copy(_navigateSelect, DsRunnerFavoritesFolder::EntryName,
+            sizeof(_navigateSelect) / sizeof(_navigateSelect[0]));
         return;
     }
     // select the folder we come from in its parent
@@ -87,13 +98,60 @@ void RomBrowserController::NavigateToPath(const TCHAR* name)
 {
     StringUtil::Copy(_navigatePath, name, sizeof(_navigatePath) / sizeof(_navigatePath[0]));
     _navigateSelect[0] = 0;
+    // DsRunner: the favorites tile of the console level opens the virtual favorites folder
+    _navigateToFavorites = _currentFolderIsLibraryRoot && DsRunnerFavoritesFolder::IsEntry(name);
+    _launchAfterNavigate = false;
     _stateMachine.Fire(RomBrowserStateTrigger::Navigate);
 }
 
 void RomBrowserController::LaunchFile(const FileInfo& fileInfo)
 {
     _triggerFileInfo = FileInfo(fileInfo);
+    // DsRunner: files in the favorites folder are not in the current directory
+    StringUtil::Copy(_launchFolderPath, GetItemFolderPath(fileInfo),
+        sizeof(_launchFolderPath) / sizeof(_launchFolderPath[0]));
     _stateMachine.Fire(RomBrowserStateTrigger::Launch);
+}
+
+const TCHAR* RomBrowserController::GetItemFolderPath(const FileInfo& fileInfo) const
+{
+    if (_currentFolderIsFavorites && _favoritesFolder)
+    {
+        const char* folderPath = _favoritesFolder->GetFolderPath(&fileInfo);
+        if (folderPath)
+            return folderPath;
+    }
+    return _currentFolderPath;
+}
+
+void RomBrowserController::ToggleFavorite(const FileInfo& fileInfo)
+{
+    if (fileInfo.GetFileType()->GetClassification() == FileTypeClassification::Folder)
+        return;
+    gDsRunnerLibrary.favorites.Toggle(GetItemFolderPath(fileInfo), fileInfo.GetFileName(), _ioTaskQueue);
+}
+
+bool RomBrowserController::ContinueLastGame()
+{
+    if (!_currentFolderIsLibraryRoot || gDsRunnerLibrary.continuePath[0] == 0 ||
+        _stateMachine.GetCurrentState() != RomBrowserState::Browser)
+    {
+        return false;
+    }
+    // open the folder of the game with the game selected, then launch it the normal way
+    NavigateToPath(gDsRunnerLibrary.continuePath);
+    _launchAfterNavigate = true;
+    return true;
+}
+
+void RomBrowserController::SetShowClock(bool showClock)
+{
+    auto& appSettings = _appSettingsService->GetAppSettings();
+    if (appSettings.showClock != showClock)
+    {
+        appSettings.showClock = showClock;
+        _saveSettingsPending = true;
+    }
 }
 
 void RomBrowserController::ShowGameInfo(const FileInfo& fileInfo)
@@ -250,8 +308,29 @@ void RomBrowserController::HandleNavigateTrigger()
         }
         // DsRunner: the play history is needed for sorting by last played
         gDsRunnerLibrary.playHistory.Load();
+        gDsRunnerLibrary.favorites.Load();
+        _newContinuePath[0] = 0;
 
         u64 startTick = gTickCounter.GetValue();
+        _newFavoritesFolder.reset();
+        _newFolderIsFavorites = false;
+        if (_navigateToFavorites)
+        {
+            // DsRunner: the virtual favorites folder. The current directory stays the library root.
+            _newFavoritesFolder = DsRunnerFavoritesFolder::Create(
+                gDsRunnerLibrary.favorites, _fileTypeProvider, _newSdFolder);
+            _newFolderIsFavorites = true;
+            _newFolderIsLibraryRoot = false;
+            StringUtil::Copy(_newFolderName, DsRunnerFavoritesFolder::EntryName,
+                sizeof(_newFolderName) / sizeof(_newFolderName[0]));
+            if (!DsRunnerPaths::Combine(_appSettingsService->GetAppSettings().libraryPath.GetString(),
+                    DsRunnerFavoritesFolder::EntryName, _newFolderPath, sizeof(_newFolderPath)))
+            {
+                _newFolderPath[0] = 0;
+            }
+            _navigateFileName = _navigateSelect[0] != 0 ? _navigateSelect : nullptr;
+            return TaskResult<void>::Completed();
+        }
         _navigateFileName = nullptr;
         if (strcmp(_navigatePath, "/") != 0) // can't f_stat on root dir
         {
@@ -292,6 +371,12 @@ void RomBrowserController::HandleNavigateTrigger()
 
         SdFolderFactory sdFolderFactory { &_fileTypeProvider };
         _newSdFolder = sdFolderFactory.CreateFromPath(".");
+        if (_newFolderIsLibraryRoot && _newSdFolder)
+        {
+            // DsRunner: the console level gets the favorites tile and knows the game START continues
+            DsRunnerFavoritesFolder::AddEntry(*_newSdFolder, gDsRunnerLibrary.favorites);
+            FindContinueGame();
+        }
         u64 endTick = gTickCounter.GetValue();
         LOG_DEBUG("Loading files in folder took: %d us\n", (u32)TickCounter::TicksToMicroSeconds(endTick - startTick));
         return TaskResult<void>::Completed();
@@ -306,8 +391,49 @@ void RomBrowserController::HandleFolderLoadDoneTrigger()
     StringUtil::Copy(_currentFolderName, _newFolderName, sizeof(_currentFolderName) / sizeof(_currentFolderName[0]));
     StringUtil::Copy(_currentFolderPath, _newFolderPath, sizeof(_currentFolderPath) / sizeof(_currentFolderPath[0]));
     _currentFolderIsLibraryRoot = _newFolderIsLibraryRoot;
+    _currentFolderIsFavorites = _newFolderIsFavorites;
+    _favoritesFolder = std::move(_newFavoritesFolder);
+    if (_currentFolderIsLibraryRoot)
+    {
+        StringUtil::Copy(gDsRunnerLibrary.continuePath, _newContinuePath,
+            sizeof(gDsRunnerLibrary.continuePath) / sizeof(gDsRunnerLibrary.continuePath[0]));
+    }
     _romBrowserViewModel = SharedPtr<RomBrowserViewModel>::MakeShared(this, _navigateFileName);
     StartGameCount();
+
+    if (_launchAfterNavigate)
+    {
+        // DsRunner "Weiterspielen": the game is selected in its folder, launch it like with A
+        _launchAfterNavigate = false;
+        int index = _romBrowserViewModel->GetSelectedItem();
+        if (index >= 0)
+        {
+            const auto& item = _romBrowserViewModel->GetFileInfoManager().GetItem(index);
+            if (item.GetFileType()->GetClassification() != FileTypeClassification::Folder)
+                LaunchFile(item);
+        }
+    }
+}
+
+void RomBrowserController::FindContinueGame()
+{
+    // the newest entry of the play history that still exists, or the last used file
+    _newContinuePath[0] = 0;
+    const char* candidates[4];
+    u32 candidateCount = 0;
+    for (u32 i = 0; i < 3 && i < gDsRunnerLibrary.playHistory.GetCount(); i++)
+        candidates[candidateCount++] = gDsRunnerLibrary.playHistory.Get(i);
+    candidates[candidateCount++] = _appSettingsService->GetAppSettings().lastUsedFilePath.GetString();
+    for (u32 i = 0; i < candidateCount; i++)
+    {
+        FILINFO fileInfo;
+        if (candidates[i][0] != 0 && f_stat(candidates[i], &fileInfo) == FR_OK && !(fileInfo.fattrib & AM_DIR))
+        {
+            StringUtil::Copy(_newContinuePath, candidates[i],
+                sizeof(_newContinuePath) / sizeof(_newContinuePath[0]));
+            return;
+        }
+    }
 }
 
 void RomBrowserController::StartGameCount()
@@ -357,12 +483,23 @@ void RomBrowserController::HandleGotoSettingsScreenTrigger()
 void RomBrowserController::UpdateLastUsedFilepath()
 {
     f_getcwd(_navigatePath, sizeof(_navigatePath) / sizeof(_navigatePath[0]));
-    int idx = strlcat(_navigatePath, "/", sizeof(_navigatePath));
-    if (_navigatePath[idx - 2] == '/')
+    if (_currentFolderIsFavorites)
     {
-        _navigatePath[idx - 1] = 0;
+        // DsRunner: files of the favorites folder are not in the current directory. Keep its drive ("fat:").
+        char* colon = strchr(_navigatePath, ':');
+        u32 driveLength = colon ? colon + 1 - _navigatePath : 0;
+        DsRunnerPaths::Combine(_launchFolderPath, _triggerFileInfo.GetFileName(),
+            _navigatePath + driveLength, sizeof(_navigatePath) - driveLength);
     }
-    strlcat(_navigatePath, _triggerFileInfo.GetFileName(), sizeof(_navigatePath));
+    else
+    {
+        int idx = strlcat(_navigatePath, "/", sizeof(_navigatePath));
+        if (_navigatePath[idx - 2] == '/')
+        {
+            _navigatePath[idx - 1] = 0;
+        }
+        strlcat(_navigatePath, _triggerFileInfo.GetFileName(), sizeof(_navigatePath));
+    }
     _appSettingsService->GetAppSettings().lastUsedFilePath = _navigatePath;
     _appSettingsService->Save();
     gDsRunnerLibrary.playHistory.Add(_navigatePath);

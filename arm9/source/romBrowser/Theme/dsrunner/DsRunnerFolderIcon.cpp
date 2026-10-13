@@ -6,6 +6,7 @@
 #include "gui/OamManager.h"
 #include "gui/OamBuilder.h"
 #include "gui/font/nitroFont2.h"
+#include "core/StringUtil.h"
 #include "gui/palette/GradientPalette.h"
 #include "themes/IFontRepository.h"
 #include "themes/dsrunner/DsRunnerConsoles.h"
@@ -74,12 +75,8 @@ DsRunnerFolderIcon::DsRunnerFolderIcon(const char* label, const Rgb<8, 8, 8>& co
 
 void DsRunnerFolderIcon::SetLabel(const char* label)
 {
-    int i;
-    for (i = 0; i < 4 && label[i] != 0; i++)
-    {
-        _label[i] = (u8)label[i];
-    }
-    _label[i] = 0;
+    // UTF-8 (the favorites badge is a star), at most 4 characters
+    StringUtil::Copy(_label, label, 5);
 }
 
 void DsRunnerFolderIcon::UploadGraphics()

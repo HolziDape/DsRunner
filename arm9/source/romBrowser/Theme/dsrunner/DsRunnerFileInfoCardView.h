@@ -102,8 +102,13 @@ private:
     // console folder whose game count is still being counted, shown when it is known
     TCHAR _pendingCountFolder[64] = { 0 };
     TaskQueueBase* _textTaskQueue = nullptr;
+    // the selected item for the bottom line (favorite star, "Weiterspielen" hint)
+    TCHAR _fileName[256] = { 0 };
+    TaskQueueBase* _fileNameTaskQueue = nullptr;
+    u32 _favoriteVersion = 0;
 
     void RequestArt(const TCHAR* fileName);
+    void UpdateFileNameLine();
     bool ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName);
 
     DsRunnerFileInfoCardView(const MaterialColorScheme* colorScheme, const IFontRepository* fontRepository,

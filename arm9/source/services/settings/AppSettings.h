@@ -13,6 +13,8 @@ public:
     /// Folder whose subfolders are the consoles. DsRunner always starts here.
     /// Empty: behave like Pico Launcher and start in the folder of the last used file.
     String<char, 256> libraryPath = "/Games";
+    /// DsRunner: show the clock in the status bar of the DsRunner theme.
+    bool showClock = true;
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;

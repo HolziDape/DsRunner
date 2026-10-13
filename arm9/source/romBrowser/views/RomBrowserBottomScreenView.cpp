@@ -112,6 +112,16 @@ bool RomBrowserBottomScreenView::HandleInput(const InputProvider& inputProvider,
         _viewModel->NavigateUp();
         return true;
     }
+    // DsRunner: X toggles the favorite of the selected game, START continues the last game
+    if (inputProvider.Triggered(InputKey::X))
+    {
+        _viewModel->ToggleFavorite();
+        return true;
+    }
+    if (inputProvider.Triggered(InputKey::Start))
+    {
+        return _viewModel->ContinueLastGame();
+    }
     return View::HandleInput(inputProvider, focusManager);
 }
 

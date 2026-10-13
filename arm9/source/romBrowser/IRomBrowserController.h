@@ -57,6 +57,21 @@ public:
 
     /// @brief Gets the full path of the folder that is currently shown (may start with a drive like "fat:").
     virtual const TCHAR* GetCurrentFolderPath() const = 0;
+
+    /// @brief DsRunner: gets the folder that contains a shown item. This is the current folder,
+    ///        except in the favorites list, which shows files of several folders.
+    virtual const TCHAR* GetItemFolderPath(const FileInfo& fileInfo) const = 0;
+
+    /// @brief DsRunner: adds a file to the favorites or removes it (folders are ignored).
+    virtual void ToggleFavorite(const FileInfo& fileInfo) = 0;
+
+    /// @brief DsRunner: starts the last played game ("Weiterspielen"). Only works on the console level.
+    /// @return True when a game is started.
+    virtual bool ContinueLastGame() = 0;
+
+    /// @brief DsRunner: shows or hides the clock of the status bar (saved when the display settings close).
+    virtual void SetShowClock(bool showClock) = 0;
+    virtual bool GetShowClock() const = 0;
 };
 
 inline IRomBrowserController::~IRomBrowserController() { }
