@@ -1,6 +1,6 @@
 # Emulator-Workspace
 
-Liegt außerhalb des Repos (Standard: `H:\dev\DsRunner-emu`) und wird mit `tools\setup-emu.ps1` angelegt.
+Liegt außerhalb des Repos (Standard: `H:\dev\ds\DsRunner-emu`) und wird mit `tools\setup-emu.ps1` angelegt.
 
 ```
 DsRunner-emu\
@@ -16,7 +16,7 @@ DsRunner-emu\
 ## Benutzung
 
 ```powershell
-.\tools\setup-emu.ps1 -Bios H:\dev\ds-lite\bios.bin   # einmalig
+.\tools\setup-emu.ps1 -Bios H:\dev\ds\ds-lite-backup\bios.bin   # einmalig
 .\tools\emu-run.ps1 -Build                            # bauen, kopieren, melonDS starten
 ```
 

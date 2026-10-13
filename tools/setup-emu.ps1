@@ -2,11 +2,11 @@
 .SYNOPSIS
     Creates the DsRunner emulator workspace: melonDS (DS + DLDI SD card) and mGBA (reference).
 .EXAMPLE
-    .\tools\setup-emu.ps1                              # -> H:\dev\DsRunner-emu
+    .\tools\setup-emu.ps1                              # -> H:\dev\ds\DsRunner-emu
     .\tools\setup-emu.ps1 -Workspace D:\DsRunner-emu -Bios D:\bios.bin
 #>
 param(
-    [string] $Workspace = "H:\dev\DsRunner-emu",
+    [string] $Workspace = "H:\dev\ds\DsRunner-emu",
     [string] $Bios = "",
     [string] $MelonVersion = "1.1",
     [string] $MgbaVersion = "0.10.5"

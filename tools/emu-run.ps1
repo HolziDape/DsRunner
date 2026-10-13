@@ -10,7 +10,7 @@
     .\tools\emu-run.ps1 -Build      # rebuild first (docker in WSL)
 #>
 param(
-    [string] $Workspace = "H:\dev\DsRunner-emu",
+    [string] $Workspace = "H:\dev\ds\DsRunner-emu",
     # melonDS only patches the DLDI driver of the arm9 binary, so arm7dldi builds can't access the sd card
     [string] $Variant = "arm9dldi_ds",
     [switch] $Build
