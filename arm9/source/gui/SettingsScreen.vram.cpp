@@ -16,6 +16,7 @@
 #include "UIContext.h"
 #include "settings.h"
 #include "SettingsScreen.h"
+#include "../fork.h"
 
 #define STRINGIFY2(x)	#x
 #define STRINGIFY(x)	STRINGIFY2(x)
@@ -72,12 +73,6 @@ static PUT_IN_VRAM settings_item_t sInputItems[] =
 #ifndef GIT_BRANCH
 #define GIT_BRANCH unavailable
 #endif
-#ifndef FORK_NAME
-#define FORK_NAME "GBARunner2"
-#endif
-#ifndef FORK_AUTHOR
-#define FORK_AUTHOR "unknown"
-#endif
 
 static PUT_IN_VRAM settings_item_t sInfoItems[] =
 {
@@ -111,7 +106,7 @@ static const settings_category_t sCategories[] =
     { "\"Emulation\" Settings", SettingsCategoryListAdapter::SETTINGS_CATEGORY_ICON_PLAYCIRCLE, sizeof(sEmulationItems) / sizeof(settings_item_t), sEmulationItems, NULL },
 	{ "Display Settings", SettingsCategoryListAdapter::SETTINGS_CATEGORY_ICON_EYE, sizeof(sDisplayItems) / sizeof(settings_item_t), sDisplayItems, NULL },
     { "Input Settings", SettingsCategoryListAdapter::SETTINGS_CATEGORY_ICON_GAMEPAD, sizeof(sInputItems) / sizeof(settings_item_t), sInputItems, SettingsScreen::ButtonMapCallback },
-    { "About GBARunner2", SettingsCategoryListAdapter::SETTINGS_CATEGORY_ICON_INFO, sizeof(sInfoItems) / sizeof(settings_item_t), sInfoItems, NULL }
+    { "About " FORK_NAME, SettingsCategoryListAdapter::SETTINGS_CATEGORY_ICON_INFO, sizeof(sInfoItems) / sizeof(settings_item_t), sInfoItems, NULL }
 };
 
 void SettingsScreen::GotoCategory(const settings_category_t* category)

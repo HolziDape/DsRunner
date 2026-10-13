@@ -20,6 +20,7 @@
 #include "settings.h"
 #include "gbaBoot.h"
 #include "FileBrowser.h"
+#include "../fork.h"
 
 static int compDirEntries(const FILINFO*& dir1, const FILINFO*& dir2)
 {
@@ -200,7 +201,7 @@ void FileBrowser::InvalidateCover()
 int FileBrowser::Run()
 {
 	int next = 2;
-	_uiContext->GetToolbar().SetTitle("GBARunner2");
+	_uiContext->GetToolbar().SetTitle(FORK_NAME);
 	_uiContext->GetToolbar().SetShowBackButton(false);
 	_uiContext->GetToolbar().SetShowSettingsButton(true);
 	_uiContext->GetUIManager().Update();

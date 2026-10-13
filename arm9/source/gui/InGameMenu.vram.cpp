@@ -16,6 +16,7 @@
 #include "IconBrightness_nbfc.h"
 #include "../cp15.h"
 #include "InGameMenu.h"
+#include "../fork.h"
 
 enum IgmAction
 {
@@ -276,7 +277,7 @@ int InGameMenu::Run()
 {
     int next = 2;
 
-    _uiContext->GetToolbar().SetTitle("GBARunner2");
+    _uiContext->GetToolbar().SetTitle(FORK_NAME);
 	_uiContext->GetToolbar().SetShowBackButton(true);
 	_uiContext->GetToolbar().SetShowSettingsButton(true);
     _uiContext->GetUIManager().Update();
