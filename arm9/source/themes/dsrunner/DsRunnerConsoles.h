@@ -4,6 +4,8 @@
 
 /// @brief Known game consoles with the colors and labels the DsRunner theme uses for them.
 ///        Folders are recognized by name (case insensitive), files by extension.
+///        The built-in list below can be extended and overridden with /_dsrunner/systems.json
+///        (see DsRunnerSystems), the Find functions look there first.
 namespace DsRunnerConsoles
 {
     using Color = Rgb<8, 8, 8>;
@@ -22,6 +24,7 @@ namespace DsRunnerConsoles
         Color hero;
     };
 
+    // Keep in sync with tools/dsrunner-art/dsrunnerart/consoles.py (CONSOLES).
     inline constexpr Info kConsoles[] =
     {
         { "NDS",       "NDS",  "Nintendo DS",  Color( 58,  92, 190), Color( 44,  74, 168) },
@@ -30,7 +33,9 @@ namespace DsRunnerConsoles
         { "GBC",       "GBC",  "Game Boy Color",  Color(198,  92,  72), Color(168,  70,  54) },
         { "GB",        "GB",   "Game Boy",  Color( 96, 144,  64), Color( 74, 116,  48) },
         { "NES",       "NES",  "Nintendo Entertainment System",  Color(190,  48,  48), Color(160,  36,  36) },
+        { "FC",        "NES",  "Nintendo Entertainment System",  Color(190,  48,  48), Color(160,  36,  36) },
         { "SNES",      "SNES", "Super Nintendo", Color(112,  92, 172), Color( 92,  74, 148) },
+        { "SFC",       "SNES", "Super Nintendo", Color(112,  92, 172), Color( 92,  74, 148) },
         { "SMS",       "SMS",  "Sega Master System",  Color( 44, 112, 192), Color( 32,  92, 166) },
         { "GG",        "GG",   "Sega Game Gear",  Color( 92,  92, 108), Color( 72,  72,  88) },
         { "GEN",       "MD",   "Sega Mega Drive",  Color( 76,  76,  90), Color( 58,  58,  72) },
@@ -43,13 +48,37 @@ namespace DsRunnerConsoles
         { "\xE2\x98\x85 Favoriten", "\xE2\x98\x85", "Favoriten", Color(196, 146, 40), Color(150, 108, 24) },
     };
 
+    struct ExtensionInfo
+    {
+        /// File extension without the dot, lower case.
+        const char* extension;
+        /// Folder name of the console in kConsoles.
+        const char* folderName;
+    };
+
+    /// File extensions of the built-in consoles. Files of these types are shown when Pico can start them
+    /// (nds) or an emulator for them is known (file association, systems.json or found on the sd card,
+    /// see DsRunnerSystems). Keep in sync with SYSTEMS in tools/dsrunner-art/dsrunnerart/consoles.py.
+    inline constexpr ExtensionInfo kExtensions[] =
+    {
+        { "nds", "NDS" }, { "srl", "NDS" }, { "dsi", "NDS" },
+        { "gba", "GBA" }, { "agb", "GBA" },
+        { "gbc", "GBC" },
+        { "gb",  "GB" }, { "sgb", "GB" },
+        { "nes", "NES" }, { "fds", "NES" },
+        { "sfc", "SNES" }, { "smc", "SNES" },
+        { "sms", "SMS" },
+        { "gg",  "GG" },
+        { "gen", "MD" }, { "md", "MD" }, { "smd", "MD" },
+        { "pce", "PCE" }, { "sgx", "PCE" },
+    };
+
     /// Tile / hero color of folders and files that are not a known console.
     inline constexpr Color kUnknownTile = Color(64, 74, 100);
     inline constexpr Color kUnknownHero = Color(40, 48, 70);
 
-    /// @brief Finds the console that belongs to a folder name.
-    /// @return The console info, or nullptr when the name is not a known console.
-    inline const Info* FindByFolderName(const char* name)
+    /// @brief Finds a console of the built-in list by folder name (ignores systems.json).
+    inline const Info* FindBuiltInByFolderName(const char* name)
     {
         if (!name)
             return nullptr;
@@ -61,30 +90,27 @@ namespace DsRunnerConsoles
         return nullptr;
     }
 
-    /// @brief Finds the console that belongs to the extension of a file name.
-    /// @return The console info, or nullptr when the extension is unknown.
-    inline const Info* FindByFileName(const char* fileName)
+    /// @brief Gets the built-in console folder of a file extension (without dot), or nullptr.
+    inline const char* FindBuiltInFolderByExtension(const char* extension)
     {
-        if (!fileName)
-            return nullptr;
-        const char* extension = strrchr(fileName, '.');
         if (!extension)
             return nullptr;
-        extension++;
-        if (!strcasecmp(extension, "nds") || !strcasecmp(extension, "srl") || !strcasecmp(extension, "dsi"))
-            return FindByFolderName("NDS");
-        if (!strcasecmp(extension, "gba") || !strcasecmp(extension, "agb"))
-            return FindByFolderName("GBA");
-        if (!strcasecmp(extension, "gbc"))
-            return FindByFolderName("GBC");
-        if (!strcasecmp(extension, "gb"))
-            return FindByFolderName("GB");
-        if (!strcasecmp(extension, "nes"))
-            return FindByFolderName("NES");
-        if (!strcasecmp(extension, "sfc") || !strcasecmp(extension, "smc"))
-            return FindByFolderName("SNES");
+        for (const auto& entry : kExtensions)
+        {
+            if (!strcasecmp(entry.extension, extension))
+                return entry.folderName;
+        }
         return nullptr;
     }
+
+    /// @brief Finds the console that belongs to a folder name: systems.json first, then the built-in list.
+    /// @return The console info, or nullptr when the name is not a known console.
+    const Info* FindByFolderName(const char* name);
+
+    /// @brief Finds the console that belongs to the extension of a file name: systems.json first,
+    ///        then the built-in list.
+    /// @return The console info, or nullptr when the extension is unknown.
+    const Info* FindByFileName(const char* fileName);
 
     /// @brief Gets the hero (top screen gradient) color for an item name that may be a folder or a file.
     inline Color GetHeroColor(const char* name)
