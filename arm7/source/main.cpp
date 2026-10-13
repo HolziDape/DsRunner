@@ -237,6 +237,7 @@ int main()
             SHARED_TOUCH_Y = touchPos.py;
         }
         SHARED_KEY_XY = keys;
+        SHARED_BATTERY = (pmic_isBatteryLow() ? 1 : 0) | (pmic_isExternalPowerConnected() ? 2 : 0);
         updateArm7();
     }
 

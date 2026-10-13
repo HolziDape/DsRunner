@@ -30,6 +30,8 @@ static bool tryParseThemeType(const char* themeTypeString, ThemeType& themeType)
         themeType = ThemeType::Material;
     else if (!strcasecmp(themeTypeString, "Custom"))
         themeType = ThemeType::Custom;
+    else if (!strcasecmp(themeTypeString, "DsRunner"))
+        themeType = ThemeType::DsRunner;
     else
         return false;
 
