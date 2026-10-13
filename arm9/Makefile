@@ -62,6 +62,9 @@ GIT_BRANCH := $(shell git describe --all --exact-match | sed 's/heads\///' | sed
 
 CFLAGS +=  -DGIT_COMMIT_HASH=$(GIT_HASH) -DGIT_COMMIT_DATE=$(GIT_DATE) -DGIT_BRANCH=$(GIT_BRANCH)
 
+include $(TOPDIR)/fork.mk
+CFLAGS +=  -D'FORK_NAME="$(FORK_NAME)"' -D'FORK_AUTHOR="$(FORK_AUTHOR)"'
+
 
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions -fnon-call-exceptions
 

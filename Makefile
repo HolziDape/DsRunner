@@ -7,6 +7,8 @@ endif
 
 include $(DEVKITARM)/ds_rules
 
+include fork.mk
+
 export TARGET		:=	$(shell basename $(CURDIR))
 export TOPDIR		:=	$(CURDIR)
 
@@ -20,7 +22,7 @@ all: $(TARGET).nds
 
 #---------------------------------------------------------------------------------
 $(TARGET).nds	:	arm7/$(TARGET).elf arm9/$(TARGET).elf
-	ndstool	-c $(TARGET).nds -b icon.bmp "GBARunner2;Gericom" -7 arm7/$(TARGET).elf -9 arm9/$(TARGET).elf
+	ndstool	-c $(TARGET).nds -b icon.bmp "$(FORK_NAME);$(FORK_AUTHOR);based on GBARunner2 by Gericom" -7 arm7/$(TARGET).elf -9 arm9/$(TARGET).elf
 
 #---------------------------------------------------------------------------------
 arm7/$(TARGET).elf:

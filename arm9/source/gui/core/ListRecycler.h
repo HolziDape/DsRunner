@@ -43,4 +43,7 @@ public:
 	ListAdapter* GetAdapter() const { return _adapter; }
 
 	void SetSelectedIdx(int idx);
+
+	//binds the item again if it is visible, to show changed adapter data
+	void RebindItem(int position);
 };
