@@ -139,16 +139,24 @@ void StatusBarView::RedrawBitmap(int hours, int minutes, u16 batteryState)
         PutPixel(51, y, 3);
     }
 
-    // Fill inside battery: (38, 5) to (47, 8)
-    u8 fillColor = 4; // Green (good)
+    // Fill inside battery: (38, 5) to (47, 8).
+    // The DS (Lite) can only report "battery low" or "ok", so this is no level indicator:
+    // the bar is full while the battery is fine and nearly empty and red once it is low.
+    u8 fillColor = 4; // Green (ok)
+    int fillEnd = 47;
     if (batteryState & 1)
+    {
         fillColor = 5; // Red (low)
+        fillEnd = 39;
+    }
     else if (batteryState & 2)
-        fillColor = 6; // Yellow (charging / external power)
+    {
+        fillColor = 6; // Yellow (external power connected)
+    }
 
     for (int y = 5; y <= 8; y++)
     {
-        for (int x = 38; x <= 47; x++)
+        for (int x = 38; x <= fillEnd; x++)
         {
             PutPixel(x, y, fillColor);
         }
