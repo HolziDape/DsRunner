@@ -148,12 +148,20 @@ OBJS_SOURCES	:= $(addsuffix .o,$(addprefix $(BUILDDIR)/,$(SOURCES_S))) \
 
 OBJS		:= $(OBJS_ASSETS) $(OBJS_SOURCES)
 
+# DsRunner: version string (gDsRunnerVersion), see VERSION and the top level Makefile.
+# It is written to a generated C file that only changes when the version changes, so a
+# new version recompiles nothing else.
+DSRUNNER_VERSION	?= $(strip $(shell cat VERSION))-dev
+VERSION_SRC	:= $(BUILDDIR)/dsrunner_version.c
+VERSION_OBJ	:= $(BUILDDIR)/dsrunner_version.o
+OBJS		+= $(VERSION_OBJ)
+
 DEPS		:= $(OBJS:.o=.d)
 
 # Targets
 # -------
 
-.PHONY: all clean dump
+.PHONY: all clean dump FORCE
 
 all: $(ELF)
 
@@ -173,6 +181,15 @@ clean:
 
 # Rules
 # -----
+
+$(VERSION_SRC): FORCE
+	@$(MKDIR) -p $(@D)
+	$(V)printf 'const char gDsRunnerVersion[] = "%s";\n' "$(DSRUNNER_VERSION)" > $@.tmp
+	$(V)if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv -f $@.tmp $@; echo "  VERSION $(DSRUNNER_VERSION)"; fi
+
+$(VERSION_OBJ): $(VERSION_SRC)
+	@echo "  CC.9    $<"
+	$(V)$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILDDIR)/%.s.o : %.s
 	@echo "  AS.9    $<"
