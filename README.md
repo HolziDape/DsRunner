@@ -1,5 +1,5 @@
-GBARunner2 Fork
-===============
+DsRunner
+========
 
 > Ein Fork von [Gericom/GBARunner2](https://github.com/Gericom/GBARunner2) mit Fokus auf den **DS Lite mit Flashcard**.
 > *A fork of Gericom's GBARunner2, focused on the DS Lite with a flashcart.*
@@ -8,7 +8,7 @@ GBARunner2 ist ein Hypervisor, der GBA-Spiele auf DS/DSi/3DS im DS-Modus ausfüh
 
 ## Unterschiede zum Original
 
-- **rom3M-Build** (`GBARunner2_arm7dldi_ds_rom3M.nds`): Es passen 3 MB statt 2 MB ROM in den RAM, z.B. für Pokémon Smaragd. Der SD-Cache ist dafür kleiner (400 KB statt 1424 KB).
+- **rom3M-Build** (`DsRunner_arm7dldi_ds_rom3M.nds`): Es passen 3 MB statt 2 MB ROM in den RAM, z.B. für Pokémon Smaragd. Der SD-Cache ist dafür kleiner (400 KB statt 1424 KB).
 - Reproduzierbarer Build mit einer festen devkitARM-Version (Docker) und GitHub Actions
 - Fork-Name und Basis werden im About-Screen angezeigt
 
@@ -18,10 +18,10 @@ Geplante Arbeiten stehen in den [Issues](../../issues).
 
 | Datei | Für |
 |---|---|
-| `GBARunner2_arm9dldi_ds.nds` | DS/DS Lite mit Flashcard (zuerst versuchen) |
-| `GBARunner2_arm7dldi_ds.nds` | DS/DS Lite mit Flashcard, falls arm9dldi nicht startet |
-| `GBARunner2_arm7dldi_ds_rom3M.nds` | wie oben, für ROMs bis 3 MB im RAM (weniger SD-Cache) |
-| `GBARunner2_arm7dldi_dsi.nds` / `_3ds.nds` | DSi / 3DS im DSi-Modus von SD (nicht aktiv getestet) |
+| `DsRunner_arm9dldi_ds.nds` | DS/DS Lite mit Flashcard (zuerst versuchen) |
+| `DsRunner_arm7dldi_ds.nds` | DS/DS Lite mit Flashcard, falls arm9dldi nicht startet |
+| `DsRunner_arm7dldi_ds_rom3M.nds` | wie oben, für ROMs bis 3 MB im RAM (weniger SD-Cache) |
+| `DsRunner_arm7dldi_dsi.nds` / `_3ds.nds` | DSi / 3DS im DSi-Modus von SD (nicht aktiv getestet) |
 
 ## Benutzung
 
@@ -56,8 +56,9 @@ Den Namen des Forks ändert man in `fork.mk`.
 
 ## Branches
 
-- `master`: unverändertes Original von Gericom
-- `develop`: Hauptzweig dieses Forks
+- `main`: aktueller Stand von DsRunner
+- `develop`: Integrationszweig, wird nach Tests nach `main` übernommen
+- `upstream-master`: unverändertes Original von Gericom
 - `feature/*`, `fix/*`: Arbeitszweige, die per Pull Request nach `develop` gehen
 
 ## Kompatibilität

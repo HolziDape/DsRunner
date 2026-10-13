@@ -3,19 +3,19 @@
     Copies a fresh GBARunner2 build to the flashcard SD card, backing up all saves first.
 .EXAMPLE
     .\tools\deploy.ps1 -Drive E:
-    .\tools\deploy.ps1 -Drive E: -Variant arm7dldi_ds_rom3M -Name GBARunner2_dev.nds
+    .\tools\deploy.ps1 -Drive E: -Variant arm7dldi_ds_rom3M -Name DsRunner_dev.nds
 #>
 param(
     [Parameter(Mandatory)] [string] $Drive,
     [string] $Variant = "arm7dldi_ds",
     # name on the sd card; keep it different from the official build so both stay available
-    [string] $Name = "GBARunner2_dev.nds",
+    [string] $Name = "DsRunner_dev.nds",
     [string] $BackupRoot = (Join-Path $PSScriptRoot "..\..\ds-lite-backups")
 )
 $ErrorActionPreference = "Stop"
 
 $sdRoot = $Drive.TrimEnd('\') + '\'
-$build = Join-Path $PSScriptRoot "..\build\GBARunner2_$Variant.nds"
+$build = Join-Path $PSScriptRoot "..\build\DsRunner_$Variant.nds"
 if (-not (Test-Path $sdRoot)) { throw "SD card $sdRoot not found" }
 if (-not (Test-Path $build)) { throw "Build $build not found, run ./build.sh $Variant first" }
 
@@ -32,4 +32,4 @@ foreach ($f in $saves) {
 Write-Host "Backed up $($saves.Count) file(s) to $backup"
 
 Copy-Item $build (Join-Path $sdRoot $Name) -Force
-Write-Host "Copied GBARunner2_$Variant.nds to $sdRoot$Name"
+Write-Host "Copied DsRunner_$Variant.nds to $sdRoot$Name"

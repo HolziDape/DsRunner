@@ -33,7 +33,7 @@ for v in $VARIANTS; do
 	make all $FLAGS
 	echo "--- ARM9 memory usage ($v)"
 	sh tools/memreport.sh "arm9/$TARGET.elf"
-	mv "$TARGET.nds" "build/GBARunner2_$v.nds"
+	mv "$TARGET.nds" "build/DsRunner_$v.nds"
 done
 make clean >/dev/null
 ls -l build
