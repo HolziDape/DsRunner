@@ -61,6 +61,8 @@ Beim nächsten Mal lädt das Tool nur noch, was fehlt: neue Spiele, neue eigene 
 2. **Andere Konsolen** (GB, GBC, NES, SNES, …): über die Prüfsumme der Datei (CRC32).
 3. **Sonst über den Namen:** Dateiname bzw. Titel aus dem DS-Banner. Klammern wie `(Europe)`, `[!]`, Nummern wie `0042 - ` und Groß-/Kleinschreibung werden ignoriert. Bei leicht abweichenden Namen sucht das Tool den ähnlichsten (Zahlen müssen aber übereinstimmen, „FIFA 08“ ist nicht „FIFA 09“). Fehlen Wörter oder ein Untertitel („Pokemon Rot“ → „Pokemon - Rote Edition“, „Donkey Kong Country 2“ → „… - Diddy's Kong Quest“), klappt es ebenfalls, solange nur ein Spiel passt.
 
+**Welche Dateien:** alle Endungen, die DsRunner kennt (`.nds`, `.gba`, `.gb`, `.gbc`, `.sgb`, `.nes`, `.fds`, `.sfc`, `.smc`, `.sms`, `.gg`, `.md`, `.gen`, `.smd`, `.pce`, `.sgx`), dazu die Endungen der Konsolen aus [`/_dsrunner/systems.json`](CONFIG.md#eigene-konsolen-systemsjson). Für eine eigene Konsole sucht das Tool im libretro-System aus ihrem Eintrag `libretro`. Ohne diesen Eintrag entscheidet die Endung (`.ws`, `.wsc`, `.ngp`, `.ngc`, `.a26`, `.a78`, `.col` und `.sg` kennt das Tool), sonst bekommt der Ordner nur sein Konsolen-Bild in der Farbe aus `systems.json`.
+
 Die Bilder landen **nur auf deiner Karte**. Sie gehören den jeweiligen Rechteinhabern und werden weder im Repository noch in Releases verteilt.
 
 ## Titelbild oder Cover
