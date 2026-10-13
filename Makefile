@@ -10,10 +10,11 @@ export LIBTWL           ?= $(shell pwd)/libs/libtwl
 # User config
 # ===========
 
-NAME		:= 	LAUNCHER
+NAME		:= 	DsRunner
 
-GAME_TITLE	:= Pico Launcher
-GAME_AUTHOR	:= LNH team
+GAME_TITLE	:= DsRunner
+GAME_SUBTITLE	:= based on Pico Launcher
+GAME_AUTHOR	:= HolziDape
 GAME_ICON	:= icon.bmp
 
 # DLDI and internal SD slot of DSi

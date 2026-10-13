@@ -1,4 +1,4 @@
-name: Build Pico Launcher release
+name: Build DsRunner release
 
 on:
   release:
@@ -8,7 +8,7 @@ jobs:
   pico_launcher:
     runs-on: ubuntu-latest
     container: skylyrac/blocksds:slim-v1.16.0
-    name: Build Pico Launcher
+    name: Build DsRunner
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -16,7 +16,7 @@ jobs:
           submodules: true
       - name: Install zip
         run:
-          apt-get update && apt-get -y install zip
+          apt-get update && apt-get -y install zip unzip curl
       - name: Run build script
         run: |
           make
@@ -25,15 +25,20 @@ jobs:
         with:
           path: |
             _pico/
-            LAUNCHER.nds
-          name: Pico_Launcher
+            DsRunner.nds
+          name: DsRunner
       - name: Package for release
         run: |
-          mkdir Pico_Launcher
-          cp -r _pico/ LAUNCHER.nds Pico_Launcher
-          cd Pico_Launcher && zip -r $PWD.zip *
+          mkdir DsRunner
+          cp -r _pico/ DsRunner.nds DsRunner
+          cd DsRunner && zip -r $PWD.zip *
+      - name: Package for M3 DS Real (autoboot)
+        run: |
+          sh tools/make-sd-package.sh DsRunner_M3DSReal
+          cd DsRunner_M3DSReal && zip -r $PWD.zip *
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Pico_Launcher.zip
+            DsRunner.zip
+            DsRunner_M3DSReal.zip
