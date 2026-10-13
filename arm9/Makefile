@@ -48,6 +48,10 @@ ifdef USE_DSI_16MB
 	CFLAGS	+=  -DUSE_DSI_16MB
 endif
 
+ifdef ROM3M
+	CFLAGS	+=  -DROM3M
+endif
+
 ifdef USE_3DS_32MB
 	CFLAGS	+=  -DUSE_3DS_32MB
 endif
@@ -77,6 +81,10 @@ endif
 
 ifdef USE_DSI_16MB
 	ASFLAGS	+=  -DUSE_DSI_16MB
+endif
+
+ifdef ROM3M
+	ASFLAGS	+=  -DROM3M
 endif
 
 ifdef USE_3DS_32MB

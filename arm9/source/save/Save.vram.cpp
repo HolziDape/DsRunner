@@ -40,25 +40,27 @@ static const save_type_t sSaveTypes[SAVE_TYPE_COUNT] =
 	{"SRAM_V113", 10, SAVE_TYPE_SRAM_V113, 32 * 1024, sram_patchV111},
 };
 
+static_assert(2 * SAVE_TAG_SEARCH_CHUNK <= SD_CACHE_SIZE, "save tag search buffers do not fit in the sd cache");
+
 const save_type_t* save_findTag()
 {
 	//scan the rom for the save type tag
 	f_rewind(&vram_cd->fil);
 	UINT read;
 	u32  curAddr = 0;
-	if (f_read(&vram_cd->fil, vram_cd->cluster_cache, 512 * 1024, &read) != FR_OK)
+	if (f_read(&vram_cd->fil, vram_cd->cluster_cache, SAVE_TAG_SEARCH_CHUNK, &read) != FR_OK)
 		return NULL;
 	int searchBufPtr = 0;
 	while (curAddr < vram_cd->sd_info.gba_rom_size)
 	{
 		if (searchBufPtr == 0)
 		{
-			if (f_read(&vram_cd->fil, vram_cd->cluster_cache + 512 * 1024, 512 * 1024, &read) != FR_OK)
+			if (f_read(&vram_cd->fil, vram_cd->cluster_cache + SAVE_TAG_SEARCH_CHUNK, SAVE_TAG_SEARCH_CHUNK, &read) != FR_OK)
 				return NULL;
 		}
-		else if (searchBufPtr == 512 * 1024)
+		else if (searchBufPtr == SAVE_TAG_SEARCH_CHUNK)
 		{
-			if (f_read(&vram_cd->fil, vram_cd->cluster_cache, 512 * 1024, &read) != FR_OK)
+			if (f_read(&vram_cd->fil, vram_cd->cluster_cache, SAVE_TAG_SEARCH_CHUNK, &read) != FR_OK)
 				return NULL;
 		}
 
@@ -89,7 +91,7 @@ const save_type_t* save_findTag()
 				bool found = true;
 				for (int j = 4; j < ((sSaveTypes[i].tagLength + 3) & ~3); j += 4)
 				{
-					if (*(u32*)&sSaveTypes[i].tag[j] != *(u32*)&vram_cd->cluster_cache[(searchBufPtr + j) & 0xFFFFF])
+					if (*(u32*)&sSaveTypes[i].tag[j] != *(u32*)&vram_cd->cluster_cache[(searchBufPtr + j) & (2 * SAVE_TAG_SEARCH_CHUNK - 1)])
 					{
 						found = false;
 						break;
@@ -102,7 +104,7 @@ const save_type_t* save_findTag()
 				}
 			}
 		}
-		searchBufPtr = (searchBufPtr + 4) & 0xFFFFF;
+		searchBufPtr = (searchBufPtr + 4) & (2 * SAVE_TAG_SEARCH_CHUNK - 1);
 		curAddr += 4;
 	}
 	return NULL;

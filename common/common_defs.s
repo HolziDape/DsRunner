@@ -20,7 +20,23 @@
 #define MAIN_MEMORY_END     0x02400000
 #endif
 
+//ROM3M (DS only): shrink the sd cache by 1 MB such that 3 MB of rom data fits in main memory
+#if defined(ROM3M) && (defined(USE_DSI_16MB) || defined(USE_3DS_32MB))
+#error "ROM3M is only meant for the DS build"
+#endif
+
+#ifdef ROM3M
+#define SD_CACHE_SIZE	                    (400 * 1024)
+#else
 #define SD_CACHE_SIZE	                    (1424 * 1024)
+#endif
+
+//save_findTag double buffers the rom in the sd cache using two chunks of this size
+#ifdef ROM3M
+#define SAVE_TAG_SEARCH_CHUNK               (128 * 1024)
+#else
+#define SAVE_TAG_SEARCH_CHUNK               (512 * 1024)
+#endif
 #define GBARUNNER_DATA_SIZE                 0x1C0000
 
 #ifdef USE_3DS_32MB
@@ -33,6 +49,8 @@
 #define MAIN_MEMORY_ADDRESS_GBARUNNER_DATA	(MAIN_MEMORY_BASE + 0x00E40000)
 #elif defined(USE_3DS_32MB)
 #define MAIN_MEMORY_ADDRESS_GBARUNNER_DATA	(MAIN_MEMORY_BASE + 0x00040000)
+#elif defined(ROM3M)
+#define MAIN_MEMORY_ADDRESS_GBARUNNER_DATA	(MAIN_MEMORY_BASE + 0x00340000)
 #else
 #define MAIN_MEMORY_ADDRESS_GBARUNNER_DATA	(MAIN_MEMORY_BASE + 0x00240000)
 #endif
