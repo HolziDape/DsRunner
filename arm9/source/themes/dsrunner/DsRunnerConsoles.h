@@ -39,6 +39,8 @@ namespace DsRunnerConsoles
         { "PCE",       "PCE",  "PC Engine",  Color(150, 150, 166), Color(116, 116, 134) },
         { "APPS",      "APP",  "Apps und Homebrew",  Color( 32, 160, 150), Color( 24, 128, 120) },
         { "HOMEBREW",  "APP",  "Apps und Homebrew",  Color( 32, 160, 150), Color( 24, 128, 120) },
+        // the virtual favorites folder (DsRunnerFavoritesFolder::EntryName, "★ Favoriten"), label "★"
+        { "\xE2\x98\x85 Favoriten", "\xE2\x98\x85", "Favoriten", Color(196, 146, 40), Color(150, 108, 24) },
     };
 
     /// Tile / hero color of folders and files that are not a known console.

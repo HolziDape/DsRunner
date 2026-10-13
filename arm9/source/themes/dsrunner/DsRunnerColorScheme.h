@@ -16,6 +16,7 @@ namespace DsRunnerColors
     inline constexpr Rgb888 White = Rgb888(255, 255, 255);
     inline constexpr Rgb888 BatteryGood = Rgb888(120, 230, 140);
     inline constexpr Rgb888 BatteryLow = Rgb888(255, 80, 80);
+    inline constexpr Rgb888 Favorite = Rgb888(255, 196, 64);  // star of favorite games
 
     inline void ApplyDarkScheme(MaterialColorScheme& scheme)
     {

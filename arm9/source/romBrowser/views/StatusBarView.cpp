@@ -11,6 +11,8 @@
 #include "core/math/ColorConverter.h"
 #include "sharedMemory.h"
 #include "themes/dsrunner/DsRunnerColorScheme.h"
+#include "services/settings/AppSettings.h"
+#include "romBrowser/Theme/dsrunner/DsRunnerLibrary.h"
 #include "StatusBarView.h"
 
 // 3x5 compact bitmap font for digits 0-9 and colon
@@ -94,7 +96,9 @@ void StatusBarView::RedrawBitmap(int hours, int minutes, u16 batteryState)
 {
     memset(_tileBuffer, 0, sizeof(_tileBuffer));
 
-    // Pill background: width 60, height 14 (radius 6)
+    // Pill background: width 60, height 14 (radius 6). Without the clock only the right part
+    // around the battery is left.
+    int pillStart = _showClock ? 0 : 30;
     for (int y = 0; y < 14; y++)
     {
         int inset = 0;
@@ -102,23 +106,26 @@ void StatusBarView::RedrawBitmap(int hours, int minutes, u16 batteryState)
         else if (y == 1 || y == 12) inset = 2;
         else if (y == 2 || y == 11) inset = 1;
 
-        for (int x = inset; x < 60 - inset; x++)
+        for (int x = pillStart + inset; x < 60 - inset; x++)
         {
             PutPixel(x, y, 1); // color 1 = Pill background
         }
     }
 
-    // Time text at x=6, y=4: "HH:MM"
-    int h1 = hours / 10;
-    int h2 = hours % 10;
-    int m1 = minutes / 10;
-    int m2 = minutes % 10;
+    if (_showClock)
+    {
+        // Time text at x=6, y=4: "HH:MM"
+        int h1 = hours / 10;
+        int h2 = hours % 10;
+        int m1 = minutes / 10;
+        int m2 = minutes % 10;
 
-    DrawChar(6,  4, '0' + h1, 3);
-    DrawChar(11, 4, '0' + h2, 3);
-    DrawChar(16, 4, ':',      3);
-    DrawChar(20, 4, '0' + m1, 3);
-    DrawChar(25, 4, '0' + m2, 3);
+        DrawChar(6,  4, '0' + h1, 3);
+        DrawChar(11, 4, '0' + h2, 3);
+        DrawChar(16, 4, ':',      3);
+        DrawChar(20, 4, '0' + m1, 3);
+        DrawChar(25, 4, '0' + m2, 3);
+    }
 
     // Battery icon at x=36..52, y=3..10
     // Outline: (36, 3) to (49, 10)
@@ -169,23 +176,34 @@ void StatusBarView::Update()
 {
     View::Update();
 
+    // the clock can be switched off in the display settings (settings.json "showClock")
+    const auto* appSettings = gDsRunnerLibrary.appSettings;
+    bool showClock = !appSettings || appSettings->showClock;
+    bool showClockChanged = showClock != _showClock;
+    _showClock = showClock;
+
     // The rtc is read through an ipc request to the arm7 that blocks the caller, so only
     // ask for it about once a second. The minute display can't change faster than that.
-    if (_lastHour >= 0 && ++_framesSinceRtcRead < 60)
+    if (!showClockChanged && _lastHour >= 0 && ++_framesSinceRtcRead < 60)
     {
         return;
     }
     _framesSinceRtcRead = 0;
 
-    rtc_datetime_t dt;
-    rtc_readDateTime(&dt);
+    int hour = 0;
+    int minute = 0;
+    if (showClock)
+    {
+        rtc_datetime_t dt;
+        rtc_readDateTime(&dt);
 
-    // BCD to decimal conversion
-    int hour = (dt.time.hour >> 4) * 10 + (dt.time.hour & 0x0F);
-    int minute = (dt.time.minute >> 4) * 10 + (dt.time.minute & 0x0F);
+        // BCD to decimal conversion
+        hour = (dt.time.hour >> 4) * 10 + (dt.time.hour & 0x0F);
+        minute = (dt.time.minute >> 4) * 10 + (dt.time.minute & 0x0F);
+    }
     u16 battery = SHARED_BATTERY;
 
-    if (hour != _lastHour || minute != _lastMinute || battery != _lastBattery)
+    if (showClockChanged || hour != _lastHour || minute != _lastMinute || battery != _lastBattery)
     {
         _lastHour = hour;
         _lastMinute = minute;

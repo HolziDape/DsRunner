@@ -11,7 +11,8 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 2 Konsolen-Ebene | ✅ im Code und in melonDS geprüft, **Test auf dem DS steht aus** (ohne Spielanzahl und Favoriten, siehe unten) |
 | 3 Kachel-Raster | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** (ohne Cover in den Kacheln, siehe unten) |
 | 4 Großes Artwork oben | ✅ im Code, in DeSmuME geprüft, **Test auf dem DS steht aus** |
-| 5–9 | offen |
+| 6 Komfort | ✅ im Code (deutsche Oberfläche, Favoriten, Weiterspielen, Uhr im Menü), **Prüfung in DeSmuME und Test auf dem DS stehen aus** (siehe unten) |
+| 5, 7–9 | offen |
 
 **Test auf dem DS (13.10.2026, Phase 0):** Autostart ok, Spiele werden mit Icon und Titel angezeigt. Aufgefallen waren das helle Pico-Theme, die Bannerliste, der Start im zuletzt geöffneten Ordner und der leere GBA-Ordner. Phase 1 und 2 beheben das.
 
@@ -83,7 +84,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 
 **Zurückgestellt:**
 - **Spielanzahl** („34 Spiele“): Ein Zählen im Hintergrund braucht eine eigene Aufgabe in der IO-Warteschlange und einen Cache. Kommt mit Phase 3, wenn Cover ohnehin im Hintergrund geladen werden.
-- **Favoriten-Kachel:** braucht Speicherung der Favoriten, siehe Phase 6.
+- **Favoriten-Kachel:** braucht Speicherung der Favoriten, siehe Phase 6 (dort umgesetzt).
 - **`systems.json`** (frei konfigurierbare Konsolen mit eigenem Start-Programm): erst nötig, wenn weitere Emulatoren dazukommen (Phase 7). Bis dahin reichen Ordnername und Dateizuordnungen in `settings.json`.
 
 ### Phase 3: Spiele-Raster mit Covern
@@ -128,6 +129,21 @@ Ein eigener Launcher als Ersatz für YSMenu:
 3. Einstellungen im Menü: Rastergröße, Sortierung, Theme, Uhr ein/aus
 4. Optional Hintergrundmusik (Pico unterstützt `.bcstm` pro Theme)
 
+**Ergebnis:** ✅ Umgesetzt (siehe [CONFIG.md](CONFIG.md#favoriten)):
+- **Deutsch:** Die NotoSansJP-Schriften (alle vier Größen bis Medium 11) enthalten ä ö ü Ä Ö Ü ß, ein Ersatz (ae/oe/ue) ist nicht nötig. Übersetzt: Menü „Anzeige“ (Ansicht, Sortieren, Uhr), Cheats („Keine Cheats gefunden.“), Theme-Auswahl („Keine Vorschau“), Beschreibung des DsRunner-Themes. Picos `language` wird wie bisher nicht ausgewertet, die Oberfläche ist immer deutsch. Nicht enthalten: `–` (Gedankenstrich), deshalb nicht in Texten verwenden.
+- **Favoriten:** X schaltet das ausgewählte Spiel um (in allen Ansichten), gespeichert in `/_dsrunner/favorites.txt` (Format wie `recent.txt`, Schreiben auf der IO-Warteschlange mit eigener Kopie des Inhalts). In den Kachelrastern zeigt ein goldener Stern auf der rechten oberen Ecke den Favoriten an. Der Stern ist ein 3D-Polygon wie die Kachel selbst, kostet also keine OBJ-Palettenzeile. Oben steht ein ★ vor dem Dateinamen.
+- **Kachel „★ Favoriten“:** Ein virtueller Ordner auf der Konsolen-Ebene (immer vorne, gold, Stern als Kürzel), sobald es Favoriten gibt. Er wird beim Laden der Bibliothek an die Dateiliste angehängt. Öffnen baut die Liste aus den Favoriten (jeder Ordner wird einmal gelesen, Dateien mit `FastFileRef` wie in einem echten Ordner). Der Controller merkt sich zu jeder Datei ihren Ordner (`GetItemFolderPath`) für Start, Artwork und Stern. Das aktuelle Verzeichnis bleibt dabei die Bibliothek.
+- **Weiterspielen:** START auf der Konsolen-Ebene. DsRunner öffnet den Ordner des zuletzt gespielten Spiels mit dem Spiel ausgewählt und startet es über `LaunchFile`, also genau wie mit A. Der Hinweis „START: Weiterspielen (Name)“ steht oben in der untersten Zeile (statt des Ordnernamens). Das Spiel wird beim Laden der Konsolen-Ebene gesucht (neuester vorhandener Eintrag aus `recent.txt`, sonst `lastUsedFilePath`).
+- **Menü:** dritte Zeile „Uhr“ im Menü „Anzeige“ (Taste mit Uhr-Symbol, `tools/make_menu_icons.py`), gespeichert als `showClock` in `settings.json`. Ohne Uhr zeigt die Statusleiste nur den Akku und liest die RTC nicht mehr. Rastergröße, Sortierung und Theme waren schon im Menü.
+- **Hintergrundmusik:** nur dokumentiert ([CONFIG.md](CONFIG.md#hintergrundmusik)), Picos `bgm`-Ordner pro Theme funktioniert unverändert.
+
+**Offen:**
+- **Build und Test:** In der Sitzung, in der Phase 6 entstand, war Docker nicht erreichbar. Der Code ist nur mit dem Host-Compiler auf Syntax geprüft. Vor dem Merge: `./build.sh`, DeSmuME-Screenshots (Konsolen-Ebene mit Favoriten-Kachel, Stern auf Kacheln, Menü mit Uhr) und Test auf dem DS (Spielstart aus den Favoriten und mit START, auch GBA).
+- Favoriten-Stern nur in den Kachelrastern, nicht in Picos Ansichten (dort nur der ★ oben).
+- Die Favoriten-Liste sortiert nach Namen. „Zuletzt gespielt“ bräuchte den Spielverlauf pro Datei statt pro Ordner.
+- Ein Favorit, der in der Favoriten-Liste mit X entfernt wird, bleibt bis zum nächsten Öffnen sichtbar.
+- Englische Oberfläche über `language`: bei Bedarf eine kleine Texttabelle statt der festen deutschen Texte.
+
 ### Phase 7: Weitere Konsolen (optional)
 Emulator-Homebrew einbinden (GBARunner2, nesDS, GameYob, S8DS, jEnesisDS …) über `systems.json`, mit passenden Kacheln und Artworks.
 
@@ -151,4 +167,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Phase 3 + 4 auf dem DS testen (Kacheln, Blättern, Spielanzahl, Sortierung nach Spielstart, Artworks mit Test-Bildern). Danach Phase 5: das PC-Tool erzeugt die Artworks im Format aus [CONFIG.md](CONFIG.md#artworks).
+Phase 3 + 4 auf dem DS testen (Kacheln, Blättern, Spielanzahl, Sortierung nach Spielstart, Artworks mit Test-Bildern). Phase 6 bauen, in DeSmuME prüfen und auf dem DS testen (Favoriten, Weiterspielen, Uhr). Danach Phase 5: das PC-Tool erzeugt die Artworks im Format aus [CONFIG.md](CONFIG.md#artworks).

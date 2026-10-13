@@ -21,6 +21,7 @@ public:
 
     SharedPtr<View> CreateView() const override;
     void BindView(SharedPtr<View> view, int index) const override;
+    void ReleaseView(SharedPtr<View> view, int index) const override;
 
     // the tiles are drawn with the 3D engine and need no shared OBJ graphics
     void InitVram(const VramContext& vramContext) override { }

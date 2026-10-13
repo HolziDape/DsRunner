@@ -3,7 +3,10 @@
 #include "common.h"
 
 class SdFolder;
+class FileInfo;
 class IFileTypeProvider;
+class TaskQueueBase;
+class AppSettings;
 
 namespace DsRunnerPaths
 {
@@ -13,6 +16,10 @@ namespace DsRunnerPaths
     /// @brief Returns true when \p a and \p b are the same folder, ignoring case,
     ///        drive prefix and a trailing slash.
     bool IsSameFolder(const char* a, const char* b);
+
+    /// @brief Builds "<folderPath>/<fileName>" without the drive prefix of \p folderPath.
+    /// @return False when the path doesn't fit in \p result.
+    bool Combine(const char* folderPath, const char* fileName, char* result, u32 resultSize);
 }
 
 /// @brief Play history: the most recently started files, newest first.
@@ -36,12 +43,93 @@ public:
 
     u32 GetCount() const { return _count; }
 
+    /// @brief Gets an entry (full path without drive prefix), 0 is the last played file.
+    const char* Get(u32 index) const { return index < _count ? _entries[index].get() : nullptr; }
+
 private:
     bool _loaded = false;
     u32 _count = 0;
     std::unique_ptr<char[]> _entries[MaxEntries];
 
     void Save() const;
+};
+
+/// @brief Favorite games, toggled with X. Stored as one path per line in /_dsrunner/favorites.txt
+///        in the order they were added.
+class DsRunnerFavorites
+{
+public:
+    static constexpr u32 MaxEntries = 200;
+
+    /// @brief Reads the favorites file once. Call from the io thread before the first folder is shown.
+    void Load();
+
+    /// @brief Adds or removes a file. Call from the main thread, the file is written on \p ioTaskQueue.
+    /// @return True when the file is a favorite now.
+    bool Toggle(const char* folderPath, const char* fileName, TaskQueueBase* ioTaskQueue);
+
+    /// @brief Returns true when the file \p fileName in \p folderPath is a favorite.
+    bool Contains(const char* folderPath, const char* fileName) const
+    {
+        return Find(folderPath, fileName) >= 0;
+    }
+
+    u32 GetCount() const { return _count; }
+
+    /// @brief Gets a favorite (full path without drive prefix).
+    const char* Get(u32 index) const { return index < _count ? _entries[index].get() : nullptr; }
+
+    /// @brief Changes whenever a favorite is added or removed, for views that cache the favorite state.
+    u32 GetVersion() const { return _version; }
+
+private:
+    bool _loaded = false;
+    u32 _count = 0;
+    u32 _version = 0;
+    std::unique_ptr<char[]> _entries[MaxEntries];
+
+    int Find(const char* folderPath, const char* fileName) const;
+};
+
+/// @brief The virtual folder "★ Favoriten" on the console level. Its entry is added to the
+///        library root when there are favorites, opening it lists the favorite files of all folders.
+class DsRunnerFavoritesFolder
+{
+public:
+    /// Name of the entry on the console level (UTF-8, "★ Favoriten"). Thanks to the star
+    /// no real folder is called like this.
+    static constexpr const char* EntryName = "\xE2\x98\x85 Favoriten";
+
+    /// @brief Returns true when \p name is the name of the favorites entry.
+    static bool IsEntry(const char* name);
+
+    /// @brief Adds the favorites entry to the files of the library root when there are favorites. Io thread.
+    static void AddEntry(SdFolder& libraryRoot, const DsRunnerFavorites& favorites);
+
+    /// @brief Moves the favorites entry to the front of a sorted file list.
+    static void MoveEntryToFront(const FileInfo** files, u32 count);
+
+    /// @brief Creates the content of the favorites folder: the favorite files that still exist. Io thread.
+    /// @param favorites The favorites.
+    /// @param fileTypeProvider Gives the file types, like for a normal folder.
+    /// @param folder Receives the files.
+    /// @return The folder of each file, for GetFolderPath().
+    static std::unique_ptr<DsRunnerFavoritesFolder> Create(const DsRunnerFavorites& favorites,
+        const IFileTypeProvider& fileTypeProvider, std::unique_ptr<SdFolder>& folder);
+
+    /// @brief Gets the folder that contains \p file (one of the files made by Create()), or nullptr.
+    const char* GetFolderPath(const FileInfo* file) const;
+
+private:
+    struct Item
+    {
+        const FileInfo* file;
+        u32 folderIndex;
+    };
+
+    std::unique_ptr<std::unique_ptr<char[]>[]> _folders;
+    std::unique_ptr<Item[]> _items;
+    u32 _itemCount = 0;
 };
 
 /// @brief Number of games in each console folder of the library, counted in the background
@@ -84,6 +172,12 @@ struct DsRunnerLibrary
 {
     DsRunnerPlayHistory playHistory;
     DsRunnerGameCounts gameCounts;
+    DsRunnerFavorites favorites;
+    /// The game START continues on the console level ("Weiterspielen"), empty when there is none.
+    /// Written by the rom browser controller on the main thread.
+    char continuePath[256] = { 0 };
+    /// The app settings, for views that show DsRunner options (set by the rom browser controller).
+    const AppSettings* appSettings = nullptr;
 };
 
 extern DsRunnerLibrary gDsRunnerLibrary;

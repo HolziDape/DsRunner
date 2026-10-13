@@ -18,23 +18,29 @@
 #include "themeIcon.h"
 #include "tileGrid3x2Icon.h"
 #include "tileGrid4x3Icon.h"
+#include "clockIcon.h"
 #include "../IRomBrowserController.h"
 #include "gui/input/InputProvider.h"
 #include "themes/material/MaterialColorScheme.h"
 #include "themes/IFontRepository.h"
 #include "DisplaySettingsBottomSheetView.h"
 
-#define TITLE_LABEL_X       20
+// DsRunner: labels 4 px further left, so the German "Sortieren" fits in front of the buttons
+#define TITLE_LABEL_X       16
 #define TITLE_LABEL_Y       16
 
 #define THEME_BUTTON_X      212
 #define THEME_BUTTON_Y      (TITLE_LABEL_Y - 7)
 
-#define LAYOUT_LABEL_X      20
+#define LAYOUT_LABEL_X      16
 #define LAYOUT_LABEL_Y      46
 
-#define SORTING_LABEL_X     20
+#define SORTING_LABEL_X     16
 #define SORTING_LABEL_Y     78
+
+// DsRunner: third row with the clock option
+#define CLOCK_LABEL_X       16
+#define CLOCK_LABEL_Y       110
 
 #define FILTERS_LABEL_X     20
 #define FILTERS_LABEL_Y     112
@@ -74,9 +80,16 @@ DisplaySettingsBottomSheetView::DisplaySettingsBottomSheetView(
         materialColorScheme))
     , _layoutLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Regular10)))
     , _sortingLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Regular10)))
+    , _clockLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Regular10)))
+    , _clockButton(IconButton2DView::CreateShared(
+        IconButtonView::Type::Tonal,
+        IconButtonView::State::ToggleUnselected,
+        md::sys::color::surfaceContainerLow,
+        materialColorScheme))
     , _materialColorScheme(materialColorScheme)
 {
-    _titleLabel->SetText(u"Display Settings");
+    // DsRunner: German texts
+    _titleLabel->SetText(u"Anzeige");
     AddChildTail(_titleLabel.GetPointer());
 
     _themeButton->SetAction([] (IconButtonView*, void* arg)
@@ -85,10 +98,19 @@ DisplaySettingsBottomSheetView::DisplaySettingsBottomSheetView(
     }, this);
     AddChildTail(_themeButton.GetPointer());
 
-    _layoutLabel->SetText(u"Layout");
+    _layoutLabel->SetText(u"Ansicht");
     AddChildTail(_layoutLabel.GetPointer());
-    _sortingLabel->SetText(u"Sorting");
+    _sortingLabel->SetText(u"Sortieren");
     AddChildTail(_sortingLabel.GetPointer());
+    _clockLabel->SetText(u"Uhr");
+    AddChildTail(_clockLabel.GetPointer());
+
+    _clockButton->SetAction([] (IconButtonView*, void* arg)
+    {
+        auto viewModel = ((DisplaySettingsBottomSheetView*)arg)->_viewModel;
+        viewModel->SetShowClock(!viewModel->GetShowClock());
+    }, this);
+    AddChildTail(_clockButton.GetPointer());
 
     for (auto& layoutOption : _layoutOptions)
     {
@@ -170,6 +192,8 @@ void DisplaySettingsBottomSheetView::InitVram(const VramContext& vramContext)
         _sortOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, sortNameAscendingIconTiles, sortNameAscendingIconTilesLen));
         _sortOptions[1]->SetIconVramOffset(LoadIcon(*objVramManager, sortNameDescendingIconTiles, sortNameDescendingIconTilesLen));
         _sortOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, recentIconTiles, recentIconTilesLen));
+
+        _clockButton->SetIconVramOffset(LoadIcon(*objVramManager, clockIconTiles, clockIconTilesLen));
     }
 }
 
@@ -178,6 +202,7 @@ void DisplaySettingsBottomSheetView::UpdateLabels()
     _titleLabel->SetPosition(TITLE_LABEL_X, _position.y + TITLE_LABEL_Y);
     _layoutLabel->SetPosition(LAYOUT_LABEL_X, _position.y + LAYOUT_LABEL_Y);
     _sortingLabel->SetPosition(SORTING_LABEL_X, _position.y + SORTING_LABEL_Y);
+    _clockLabel->SetPosition(CLOCK_LABEL_X, _position.y + CLOCK_LABEL_Y);
 }
 
 void DisplaySettingsBottomSheetView::Update()
@@ -209,6 +234,10 @@ void DisplaySettingsBottomSheetView::Update()
         x += OPTIONS_STEP;
         idx++;
     }
+    _clockButton->SetPosition(OPTIONS_X, _position.y + 102);
+    _clockButton->SetState(_viewModel->GetShowClock()
+        ? IconButtonView::State::ToggleSelected
+        : IconButtonView::State::ToggleUnselected);
 }
 
 void DisplaySettingsBottomSheetView::Draw(GraphicsContext& graphicsContext)
@@ -222,6 +251,8 @@ void DisplaySettingsBottomSheetView::Draw(GraphicsContext& graphicsContext)
         _layoutLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
         _sortingLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
         _sortingLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
+        _clockLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
+        _clockLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
         BottomSheetView::Draw(graphicsContext);
     }
     graphicsContext.SetPriority(oldPrio);
@@ -307,8 +338,16 @@ SharedPtr<View> DisplaySettingsBottomSheetView::MoveFocus(const SharedPtr<View>&
                     idx = _layoutOptions.size() - 1;
                 return _layoutOptions[idx];
             }
+            else if (direction == FocusMoveDirection::Down)
+            {
+                return _clockButton;
+            }
         }
         idx++;
+    }
+    if (currentFocus.GetPointer() == _clockButton.GetPointer() && direction == FocusMoveDirection::Up)
+    {
+        return _sortOptions[0];
     }
     return nullptr;
 }
@@ -325,6 +364,7 @@ void DisplaySettingsBottomSheetView::SetGraphics(
     {
         sortOption->SetGraphics(iconButtonVramToken);
     }
+    _clockButton->SetGraphics(iconButtonVramToken);
 }
 
 void DisplaySettingsBottomSheetView::Close()

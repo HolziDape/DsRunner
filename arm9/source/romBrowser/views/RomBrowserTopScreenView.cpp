@@ -86,7 +86,7 @@ void RomBrowserTopScreenView::Update()
                 _iconGraphicsUploaded = false;
             }
             _fileInfoView->SetIcon(std::move(_selectedFileIcon));
-            _fileInfoView->SetItemContext(_viewModel->GetRomBrowserController()->GetCurrentFolderPath(),
+            _fileInfoView->SetItemContext(_viewModel->GetRomBrowserController()->GetItemFolderPath(item),
                 item.GetFileType()->GetClassification() == FileTypeClassification::Folder,
                 _viewModel->GetIoTaskQueue());
             _fileInfoView->SetFileNameAsync(_viewModel->GetBgTaskQueue(), item.GetFileName(), fileNameAsTitle);
