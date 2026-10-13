@@ -5,6 +5,7 @@
 
 class MaterialColorScheme;
 class IFontRepository;
+class DsRunnerHeroState;
 
 class DsRunnerFileInfoCardView : public BannerView
 {
@@ -74,14 +75,7 @@ public:
             _thirdLine->SetText(thirdLine, length);
     }
 
-    void SetFileNameAsync(TaskQueueBase* taskQueue, const TCHAR* fileName, bool useAsTitle) override
-    {
-        BannerView::SetFileNameAsync(taskQueue, fileName, useAsTitle);
-        if (taskQueue)
-            _filenameLabelView->SetTextAsync(taskQueue, fileName);
-        else
-            _filenameLabelView->SetText(fileName);
-    }
+    void SetFileNameAsync(TaskQueueBase* taskQueue, const TCHAR* fileName, bool useAsTitle) override;
 
     Rectangle GetBounds() const override
     {
@@ -94,6 +88,8 @@ private:
     SharedPtr<Label2DView> _thirdLine;
     SharedPtr<Label2DView> _filenameLabelView;
     const MaterialColorScheme* _colorScheme;
+    DsRunnerHeroState* _heroState;
 
-    DsRunnerFileInfoCardView(const MaterialColorScheme* colorScheme, const IFontRepository* fontRepository);
+    DsRunnerFileInfoCardView(const MaterialColorScheme* colorScheme, const IFontRepository* fontRepository,
+        DsRunnerHeroState* heroState);
 };

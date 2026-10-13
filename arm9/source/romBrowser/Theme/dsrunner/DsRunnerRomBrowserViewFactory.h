@@ -7,15 +7,17 @@
 #include "DsRunnerBannerListItemView.h"
 #include "DsRunnerAppBarView.h"
 #include "DsRunnerFileInfoCardView.h"
+#include "romBrowser/views/StatusBarView.h"
 
 class MaterialColorScheme;
 class IFontRepository;
+class DsRunnerHeroState;
 
 class DsRunnerRomBrowserViewFactory : public IRomBrowserViewFactory
 {
 public:
     DsRunnerRomBrowserViewFactory(const MaterialColorScheme* colorScheme,
-        const IFontRepository* fontRepository);
+        const IFontRepository* fontRepository, DsRunnerHeroState* heroState);
 
     SharedPtr<IconGridItemView> CreateIconGridItemView(std::unique_ptr<IRomBrowserItemViewModel> viewModel) const override
     {
@@ -46,7 +48,7 @@ public:
 
     SharedPtr<BannerView> CreateFileInfoView() const override
     {
-        return DsRunnerFileInfoCardView::CreateShared(_colorScheme, _fontRepository);
+        return DsRunnerFileInfoCardView::CreateShared(_colorScheme, _fontRepository, _heroState);
     }
 
     SharedPtr<RecyclerViewBase> CreateCoverFlowRecyclerView() const override
@@ -70,7 +72,13 @@ public:
         return Point(75, 18);
     }
 
+    SharedPtr<View> CreateStatusBarView() const override
+    {
+        return StatusBarView::CreateShared();
+    }
+
 private:
     const MaterialColorScheme* _colorScheme;
     const IFontRepository* _fontRepository;
+    DsRunnerHeroState* _heroState;
 };

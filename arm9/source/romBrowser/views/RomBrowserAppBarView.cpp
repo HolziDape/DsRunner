@@ -99,6 +99,12 @@ void RomBrowserAppBarView::InitVram(const VramContext& vramContext)
     }
 }
 
+void RomBrowserAppBarView::Update()
+{
+    _appBarView->SetTitle(_viewModel->GetTitle());
+    ViewContainer::Update();
+}
+
 SharedPtr<View> RomBrowserAppBarView::MoveFocus(const SharedPtr<View>& currentFocus, FocusMoveDirection direction, View* source)
 {
     if (!currentFocus)

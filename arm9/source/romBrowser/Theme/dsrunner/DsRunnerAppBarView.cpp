@@ -1,4 +1,5 @@
 #include "common.h"
+#include <string.h>
 #include "gui/VramContext.h"
 #include "romBrowser/views/IconButton2DView.h"
 #include "themes/IFontRepository.h"
@@ -25,9 +26,16 @@ DsRunnerAppBarView::DsRunnerAppBarView(int x, int y, Orientation orientation,
 
     if (_titleLabel)
     {
-        _titleLabel->SetText("Konsolen");
         AddChildTail(_titleLabel.GetPointer());
     }
+}
+
+void DsRunnerAppBarView::SetTitle(const char* title)
+{
+    if (!_titleLabel || strncmp(_title, title, sizeof(_title)) == 0)
+        return;
+    strlcpy(_title, title, sizeof(_title));
+    _titleLabel->SetText(_title);
 }
 
 void DsRunnerAppBarView::InitVram(const VramContext& vramContext)
@@ -51,8 +59,16 @@ void DsRunnerAppBarView::Update()
 
     if (_titleLabel)
     {
-        int titleX = (_startButtonCount > 0) ? 34 : 10;
-        _titleLabel->SetPosition(titleX, _position.y + 7);
+        if (_orientation == Orientation::Vertical)
+        {
+            // the vertical app bar is a column of buttons at the left, there is no room for a title
+            _titleLabel->SetPosition(0, -32);
+        }
+        else
+        {
+            int titleX = (_startButtonCount > 0) ? 34 : 10;
+            _titleLabel->SetPosition(titleX, _position.y + 7);
+        }
     }
 }
 

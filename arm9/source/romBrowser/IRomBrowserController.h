@@ -47,6 +47,13 @@ public:
         const RomBrowserDisplaySettings& romBrowserDisplaySettings) = 0;
 
     virtual const FileInfo& GetTriggerFileInfo() const = 0;
+
+    /// @brief Gets the name of the folder that is currently shown, or an empty string for the sd root.
+    virtual const TCHAR* GetCurrentFolderName() const = 0;
+
+    /// @brief Returns true when the folder that is currently shown is the library root,
+    ///        the folder whose subfolders are the consoles.
+    virtual bool IsCurrentFolderLibraryRoot() const = 0;
 };
 
 inline IRomBrowserController::~IRomBrowserController() { }

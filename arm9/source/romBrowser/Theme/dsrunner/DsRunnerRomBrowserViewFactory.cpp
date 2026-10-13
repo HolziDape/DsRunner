@@ -3,6 +3,8 @@
 
 DsRunnerRomBrowserViewFactory::DsRunnerRomBrowserViewFactory(
     const MaterialColorScheme* colorScheme,
-    const IFontRepository* fontRepository)
+    const IFontRepository* fontRepository,
+    DsRunnerHeroState* heroState)
     : _colorScheme(colorScheme)
-    , _fontRepository(fontRepository) { }
+    , _fontRepository(fontRepository)
+    , _heroState(heroState) { }

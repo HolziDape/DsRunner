@@ -60,3 +60,10 @@ Die Version des Pico Loaders steht in `tools/make-sd-package.sh` (`PICO_LOADER_V
 - `main`: aktueller Stand von DsRunner (Default)
 - `develop`: Spiegel von Pico `develop` zum Vergleich
 - `feature/*`, `fix/*`, `docs/*`: Arbeitszweige → PR nach `main`
+
+## Stolpersteine
+
+- **Data Cache und DMA:** melonDS emuliert den ARM9-Datencache nicht, die Hardware schon. Puffer, die die CPU beschrieben hat, müssen vor einem DMA-Transfer mit `DC_FlushRange` aus dem Cache geschrieben werden, sonst liest der DMA alte Daten (zu sehen als fehlende Grafik nur auf dem DS). Alternativ mit `memcpy` direkt nach VRAM schreiben.
+- **VRAM:** OBJ-/BG-VRAM nimmt keine Byte-Schreibzugriffe an, nur 16/32 Bit.
+- **Palettenzeilen:** Es gibt 16 OBJ-Paletten pro Bildschirmzeile. Zeilen mit gleichen Farben werden zusammengelegt, ist keine frei, bleibt der Launcher mit einer Log-Meldung stehen. Neue Elemente mit eigener Palette immer mit möglichst kleinem Y-Bereich anmelden.
+- **Statusleiste, RTC:** `rtc_readDateTime` blockiert bis der ARM7 antwortet. Nicht jedes Bild aufrufen.

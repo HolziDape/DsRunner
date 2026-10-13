@@ -12,6 +12,55 @@
 #include "cheats/PicoLoaderCheatDataFactory.h"
 #include "RomBrowserController.h"
 
+// Skips a drive prefix like "fat:" and the leading slashes of a path.
+static const char* skipDriveAndSlashes(const char* path)
+{
+    const char* colon = strchr(path, ':');
+    if (colon)
+        path = colon + 1;
+    while (*path == '/')
+        path++;
+    return path;
+}
+
+// Compares two paths ignoring case, drive prefix and leading/trailing slashes.
+static bool isSamePath(const char* a, const char* b)
+{
+    a = skipDriveAndSlashes(a);
+    b = skipDriveAndSlashes(b);
+    size_t lengthA = strlen(a);
+    size_t lengthB = strlen(b);
+    while (lengthA > 0 && a[lengthA - 1] == '/')
+        lengthA--;
+    while (lengthB > 0 && b[lengthB - 1] == '/')
+        lengthB--;
+    return lengthA == lengthB && strncasecmp(a, b, lengthA) == 0;
+}
+
+// Copies the first path component of \p path below \p basePath to \p result,
+// or an empty string when \p path is not below \p basePath.
+static void getFirstComponentBelow(const char* basePath, const char* path, char* result, size_t resultSize)
+{
+    result[0] = 0;
+    basePath = skipDriveAndSlashes(basePath);
+    path = skipDriveAndSlashes(path);
+    size_t baseLength = strlen(basePath);
+    while (baseLength > 0 && basePath[baseLength - 1] == '/')
+        baseLength--;
+    if (strncasecmp(path, basePath, baseLength) != 0 || (path[baseLength] != '/' && baseLength != 0))
+        return;
+    const char* rest = path + baseLength;
+    while (*rest == '/')
+        rest++;
+    size_t length = 0;
+    while (rest[length] != 0 && rest[length] != '/')
+        length++;
+    if (length == 0 || length >= resultSize)
+        return;
+    memcpy(result, rest, length);
+    result[length] = 0;
+}
+
 RomBrowserController::RomBrowserController(
     IAppSettingsService* appSettingsService, TaskQueueBase* ioTaskQueue,
     TaskQueueBase* bgTaskQueue)
@@ -19,9 +68,24 @@ RomBrowserController::RomBrowserController(
     , _ioTaskQueue(ioTaskQueue), _bgTaskQueue(bgTaskQueue)
     , _fileTypeProvider(appSettingsService->GetAppSettings()) { }
 
+void RomBrowserController::NavigateUp()
+{
+    if (_currentFolderIsLibraryRoot)
+    {
+        // the library root is the top level of the launcher
+        return;
+    }
+    // select the folder we come from in its parent
+    TCHAR leavingFolder[256];
+    StringUtil::Copy(leavingFolder, _currentFolderName, sizeof(leavingFolder) / sizeof(leavingFolder[0]));
+    NavigateToPath("..");
+    StringUtil::Copy(_navigateSelect, leavingFolder, sizeof(_navigateSelect) / sizeof(_navigateSelect[0]));
+}
+
 void RomBrowserController::NavigateToPath(const TCHAR* name)
 {
     StringUtil::Copy(_navigatePath, name, sizeof(_navigatePath) / sizeof(_navigatePath[0]));
+    _navigateSelect[0] = 0;
     _stateMachine.Fire(RomBrowserStateTrigger::Navigate);
 }
 
@@ -86,10 +150,21 @@ void RomBrowserController::Update()
         case RomBrowserState::Start:
         {
             LOG_DEBUG("RomBrowserState::Start\n");
-            const auto& lastUsed = _appSettingsService->GetAppSettings().lastUsedFilePath;
-            if (strlen(lastUsed.GetString()) != 0)
+            const auto& appSettings = _appSettingsService->GetAppSettings();
+            const char* libraryPath = appSettings.libraryPath.GetString();
+            const char* lastUsed = appSettings.lastUsedFilePath.GetString();
+            if (strlen(libraryPath) != 0)
             {
-                NavigateToPath(lastUsed.GetString());
+                // always start on the library root (the console level). The console of the
+                // game that was played last is selected. When the library folder doesn't
+                // exist the navigation falls back to the sd root.
+                NavigateToPath(libraryPath);
+                getFirstComponentBelow(libraryPath, lastUsed, _navigateSelect,
+                    sizeof(_navigateSelect) / sizeof(_navigateSelect[0]));
+            }
+            else if (strlen(lastUsed) != 0)
+            {
+                NavigateToPath(lastUsed);
             }
             else
             {
@@ -189,6 +264,28 @@ void RomBrowserController::HandleNavigateTrigger()
             }
         }
         f_chdir(_navigatePath);
+        if (_navigateFileName == nullptr && _navigateSelect[0] != 0)
+        {
+            _navigateFileName = _navigateSelect;
+        }
+
+        // remember where we are for the app bar title and the console level detection
+        TCHAR currentPath[256];
+        if (f_getcwd(currentPath, sizeof(currentPath) / sizeof(currentPath[0])) != FR_OK)
+        {
+            currentPath[0] = 0;
+        }
+        const char* name = strrchr(currentPath, '/');
+        name = name ? name + 1 : currentPath;
+        if (strchr(name, ':'))
+        {
+            // the root of a drive ("fat:"), not a real folder name
+            name = "";
+        }
+        StringUtil::Copy(_newFolderName, name, sizeof(_newFolderName) / sizeof(_newFolderName[0]));
+        const char* libraryPath = _appSettingsService->GetAppSettings().libraryPath.GetString();
+        _newFolderIsLibraryRoot = libraryPath[0] != 0 && isSamePath(currentPath, libraryPath);
+
         SdFolderFactory sdFolderFactory { &_fileTypeProvider };
         _newSdFolder = sdFolderFactory.CreateFromPath(".");
         u64 endTick = gTickCounter.GetValue();
@@ -202,6 +299,8 @@ void RomBrowserController::HandleFolderLoadDoneTrigger()
     LOG_DEBUG("RomBrowserStateTrigger::FolderLoadDone\n");
     _romBrowserViewModel.Reset();
     _sdFolder = std::move(_newSdFolder);
+    StringUtil::Copy(_currentFolderName, _newFolderName, sizeof(_currentFolderName) / sizeof(_currentFolderName[0]));
+    _currentFolderIsLibraryRoot = _newFolderIsLibraryRoot;
     _romBrowserViewModel = SharedPtr<RomBrowserViewModel>::MakeShared(this, _navigateFileName);
 }
 

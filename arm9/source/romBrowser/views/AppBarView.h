@@ -31,6 +31,9 @@ public:
 
     constexpr Orientation GetOrientation() const { return _orientation; }
 
+    /// @brief Sets the title shown in the app bar. Themes that don't show a title ignore this.
+    virtual void SetTitle(const char* title) { }
+
 protected:
     Orientation _orientation;
     std::unique_ptr<SharedPtr<IconButtonView>[]> _buttons;

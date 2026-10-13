@@ -14,15 +14,13 @@ public:
     void Update() override;
     void Draw(GraphicsContext& graphicsContext) override;
 
-    void SetTitle(const char* title)
-    {
-        if (_titleLabel)
-            _titleLabel->SetText(title);
-    }
+    void SetTitle(const char* title) override;
 
 private:
     SharedPtr<Label2DView> _titleLabel;
     const MaterialColorScheme* _colorScheme;
+    // title that is currently set on the label, so it is only rendered again when it changes
+    char _title[64] = { 0 };
 
     DsRunnerAppBarView(int x, int y, Orientation orientation,
         int startButtonCount, int endButtonCount,

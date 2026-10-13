@@ -1,6 +1,7 @@
 #include "common.h"
 #include <string.h>
 #include <libtwl/dma/dmaNitro.h>
+#include <nds/arm9/cache.h>
 #include "gui/OamManager.h"
 #include "gui/OamBuilder.h"
 #include "gui/IVramManager.h"
@@ -138,16 +139,24 @@ void StatusBarView::RedrawBitmap(int hours, int minutes, u16 batteryState)
         PutPixel(51, y, 3);
     }
 
-    // Fill inside battery: (38, 5) to (47, 8)
-    u8 fillColor = 4; // Green (good)
+    // Fill inside battery: (38, 5) to (47, 8).
+    // The DS (Lite) can only report "battery low" or "ok", so this is no level indicator:
+    // the bar is full while the battery is fine and nearly empty and red once it is low.
+    u8 fillColor = 4; // Green (ok)
+    int fillEnd = 47;
     if (batteryState & 1)
+    {
         fillColor = 5; // Red (low)
+        fillEnd = 39;
+    }
     else if (batteryState & 2)
-        fillColor = 6; // Yellow (charging / external power)
+    {
+        fillColor = 6; // Yellow (external power connected)
+    }
 
     for (int y = 5; y <= 8; y++)
     {
-        for (int x = 38; x <= 47; x++)
+        for (int x = 38; x <= fillEnd; x++)
         {
             PutPixel(x, y, fillColor);
         }
@@ -159,6 +168,14 @@ void StatusBarView::RedrawBitmap(int hours, int minutes, u16 batteryState)
 void StatusBarView::Update()
 {
     View::Update();
+
+    // The rtc is read through an ipc request to the arm7 that blocks the caller, so only
+    // ask for it about once a second. The minute display can't change faster than that.
+    if (_lastHour >= 0 && ++_framesSinceRtcRead < 60)
+    {
+        return;
+    }
+    _framesSinceRtcRead = 0;
 
     rtc_datetime_t dt;
     rtc_readDateTime(&dt);
@@ -213,6 +230,8 @@ void StatusBarView::VBlank()
 
     if (_needsUpload && _vramAddress)
     {
+        // _tileBuffer is written by the cpu, so it has to leave the data cache before dma reads it
+        DC_FlushRange(_tileBuffer, sizeof(_tileBuffer));
         dma_ntrCopy32(3, _tileBuffer, (void*)_vramAddress, sizeof(_tileBuffer));
         _needsUpload = false;
     }
