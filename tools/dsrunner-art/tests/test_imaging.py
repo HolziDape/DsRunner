@@ -137,6 +137,102 @@ class FitTests(unittest.TestCase):
         self.assertEqual(hero.getpixel((10, 10)), imaging.BACKGROUND)
 
 
+class TileFormatTests(unittest.TestCase):
+    """Tile images: 64x64, 8 bpp, uncompressed, palette index 0 unused (docs/CONFIG.md, "Kachel-Bilder")."""
+
+    def check_tile(self, data: bytes):
+        fields = header_fields(data)
+        self.assertEqual(fields["magic"], b"BM")
+        self.assertEqual((fields["width"], abs(fields["height"])), (64, 64))
+        self.assertEqual(fields["bpp"], 8)
+        self.assertEqual(fields["compression"], 0)
+        self.assertEqual(len(data), fields["pixel_offset"] + 64 * 64)
+        pixels = data[fields["pixel_offset"]:]
+        self.assertNotIn(0, pixels)
+        self.assertLessEqual(len(set(pixels)), 255)
+        validation = imaging.validate_bmp(data, (64, 64))
+        self.assertEqual((validation.errors, validation.warnings), ([], []))
+        # an artwork validator rejects it and the other way round
+        self.assertFalse(imaging.validate_bmp(data).ok)
+
+    def test_boxart_tile(self):
+        box = Image.open(io.BytesIO(png_bytes((512, 460))))
+        tile = imaging.to_tile(box, "boxart", "nds")
+        self.assertEqual(tile.size, (64, 64))
+        self.check_tile(imaging.to_ds_bmp(tile))
+
+    def test_many_colors(self):
+        gradient = Image.new("RGB", (64, 64))
+        gradient.putdata([(x * 4, y * 4, (x * y) % 256) for y in range(64) for x in range(64)])
+        self.check_tile(imaging.to_ds_bmp(gradient))
+        self.assertFalse(imaging.validate_bmp(imaging.to_ds_bmp(Image.new("RGB", (256, 192))), (64, 64)).ok)
+
+    def test_all_sizes_and_types(self):
+        for size in [(512, 460), (512, 512), (300, 600), (256, 384), (384, 256), (240, 160), (32, 32)]:
+            for art_type in ("title", "snap", "boxart", "custom"):
+                with self.subTest(size=size, art_type=art_type):
+                    tile = imaging.to_tile(Image.new("RGB", size, (9, 9, 9)), art_type, "nds")
+                    self.assertEqual(tile.size, (64, 64))
+
+    def test_icon_tile_is_a_clean_2x_upscale(self):
+        icon = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+        icon.putpixel((0, 0), (255, 0, 0, 255))
+        icon.putpixel((31, 31), (0, 255, 0, 255))
+        tile = imaging.icon_tile(icon)
+        self.assertEqual(tile.size, (64, 64))
+        for x, y in ((0, 0), (1, 0), (0, 1), (1, 1)):
+            self.assertEqual(tile.getpixel((x, y)), (255, 0, 0))
+        self.assertEqual(tile.getpixel((63, 63)), (0, 255, 0))
+        # transparent icon pixels show the dark background
+        self.assertEqual(tile.getpixel((2, 0)), imaging.BACKGROUND)
+        self.check_tile(imaging.to_ds_bmp(tile))
+
+    def test_signature(self):
+        data = imaging.to_ds_bmp(Image.new("RGB", (64, 64), (1, 2, 3)))
+        self.assertTrue(imaging.is_tool_bmp(data))
+        buffer = io.BytesIO()
+        Image.new("RGB", (64, 64)).quantize(16).save(buffer, "BMP")
+        self.assertFalse(imaging.is_tool_bmp(buffer.getvalue()))
+
+
+class ScreenChoiceTests(unittest.TestCase):
+    def test_empty_top_screen_uses_bottom(self):
+        image = Image.new("RGB", (256, 384), (0, 0, 0))
+        detail = Image.open(io.BytesIO(png_bytes((256, 192), (200, 40, 40))))
+        image.paste(detail, (0, 192))
+        screen, portrait = imaging.pick_screen(image, "nds")
+        self.assertFalse(portrait)
+        self.assertEqual(screen.tobytes(), detail.convert("RGB").tobytes())
+
+    def test_top_screen_wins_otherwise(self):
+        image = Image.new("RGB", (256, 384), (0, 0, 0))
+        image.paste(Image.open(io.BytesIO(png_bytes((256, 192), (0, 0, 200)))), (0, 0))
+        image.paste(Image.open(io.BytesIO(png_bytes((256, 192), (200, 0, 0)))), (0, 192))
+        screen, _ = imaging.pick_screen(image)
+        self.assertEqual(screen.getpixel((2, 2)), image.getpixel((2, 2)))
+
+    def test_side_by_side_takes_left_screen(self):
+        image = Image.new("RGB", (384, 256), (0, 0, 255))
+        image.paste((255, 0, 0), (0, 0, 192, 256))
+        screen, portrait = imaging.pick_screen(image, "nds")
+        self.assertTrue(portrait)
+        self.assertEqual(screen.size, (192, 256))
+        self.assertEqual(imaging.to_hero(image, "title", "nds").getpixel((128, 96)), (255, 0, 0))
+        # a GBA screen has the same aspect and stays whole
+        self.assertEqual(imaging.pick_screen(Image.new("RGB", (240, 160)), "gba")[0].size, (240, 160))
+
+    def test_spine_is_cut(self):
+        box = Image.new("RGB", (512, 460), (255, 0, 0))
+        box.paste((255, 255, 255), (0, 0, 69, 460))
+        self.assertEqual(imaging.trim_spine(box, "nds").getpixel((0, 200)), (255, 0, 0))
+        self.assertEqual(imaging.to_tile(box, "boxart", "nds").getpixel((1, 32)), (255, 0, 0))
+        self.assertEqual(imaging.trim_spine(box, "snes").size, (512, 460))
+
+    def test_16_bit_grayscale(self):
+        image = Image.new("I;16", (256, 192), 65535)
+        self.assertEqual(imaging.to_hero(image, "snap").getpixel((5, 5)), (255, 255, 255))
+
+
 class GeneratedArtTests(unittest.TestCase):
     def test_console_art(self):
         for label in ("NDS", "GBA", "Rennspiele", "Ein sehr langer Ordnername mit vielen Wörtern"):
