@@ -1,10 +1,11 @@
 """Runs an update: scan the card, pick a source per entry, convert and write the BMPs.
 
-Two kinds of files are written per game: the artwork for the top screen (`/_dsrunner/art`, 256x192)
-and the tile image for the launcher grid (`/_dsrunner/tiles`, 64x64). Console folders only get an
-artwork.
+Four kinds of files are written per game: the artwork for the top screen (`/_dsrunner/art`, 256x192),
+the tile image for the 3x2 grid (`/_dsrunner/tiles`, 64x64), the cover for the cover flow
+(`/_pico/covers/user`, 128x96) and, for games without an icon of their own (not NDS), a small icon for
+the 4x3 grid (`/_pico/icons/user`, 32x32). Console folders only get an artwork.
 
-Bookkeeping: `.dsrunner-art.json` in both folders remembers which files this tool wrote (with their
+Bookkeeping: `.dsrunner-art.json` in each folder remembers which files this tool wrote (with their
 SHA-1), so files the user put there by hand are not overwritten (unless `replace_manual` is set) and
 later runs only do what is missing. The written BMPs also carry a signature in their header, so they
 are recognized as the tool's own even when the manifest got lost.
@@ -27,18 +28,22 @@ from . import __version__
 from .catalog import Catalog
 from .consoles import find_by_folder_name, hero_color_for, tile_color_for
 from .identify import CrcCache, GameInfo, identify
-from .imaging import (TILE_SIZE, console_art, icon_art, icon_tile, is_tool_bmp, open_image, to_ds_bmp, to_hero,
-                      to_tile, validate_bmp)
+from .imaging import (COVER_HEIGHT, COVER_WIDTH, ICON_SIZE, TILE_SIZE, console_art, icon_art, icon_tile,
+                      is_tool_bmp, open_image, to_cover, to_cover_bmp, to_ds_bmp, to_hero, to_icon, to_icon_bmp,
+                      to_tile, to_tile_bmp, validate_bmp, validate_cover_bmp, validate_icon_bmp)
 from .names import REGION_PREFERENCES
 from .romheader import read_header
 from .net import HttpClient, NetworkError, default_cache_dir
-from .sdcard import (ART_FOLDER, MANIFEST_NAME, OVERRIDE_FOLDER, TILE_FOLDER, TILE_OVERRIDE_FOLDER, Entry,
-                     ScanResult, scan, to_fs_path)
-from .sources import ART_TYPE_LABELS, ART_TYPES, SOURCE_IDS, TILE_ORDER, ArtSource, build_sources, type_order
+from .sdcard import (ART_FOLDER, COVER_FOLDER, ICON_FOLDER, MANIFEST_NAME, OVERRIDE_FOLDER, TILE_FOLDER,
+                     TILE_OVERRIDE_FOLDER, Entry, ScanResult, scan, to_fs_path)
+from .sources import (ART_TYPE_LABELS, ART_TYPES, COVER_ORDER, ICON_ORDER, SOURCE_IDS, TILE_ORDER, ArtSource,
+                      build_sources, type_order)
 
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp")
 # bump to regenerate the generated console artworks after a design change
 GENERATED_VERSION = 1
+# bump to rewrite the files of a kind after a change of its look (2: simplified tile images)
+STYLES = {"tile": 2}
 # files with these sources are replaced as soon as a real image is found
 _RETRY_SOURCES = ("icon:",)
 # the manifests are saved after this many written files (and at the end), so an interrupted run
@@ -54,7 +59,8 @@ class Kind:
     """One kind of file the tool writes per entry."""
     key: str
     folder: str
-    override_folder: str
+    # None: no folder with the user's own images
+    override_folder: Optional[str]
     size: tuple[int, int]
     # for the log and the summary
     label: str
@@ -66,7 +72,43 @@ class Kind:
 ART = Kind("art", ART_FOLDER, OVERRIDE_FOLDER, (256, 192), "Artwork", "Artworks", "artworks")
 TILE = Kind("tile", TILE_FOLDER, TILE_OVERRIDE_FOLDER, (TILE_SIZE, TILE_SIZE), "Kachel-Bild", "Kachel-Bilder",
             "tiles")
-KINDS = (ART, TILE)
+# Pico's own lookup by file name: one file per name, games only
+COVER = Kind("cover", COVER_FOLDER, None, (COVER_WIDTH, COVER_HEIGHT), "Cover", "Cover", "covers")
+ICON = Kind("icon", ICON_FOLDER, None, (ICON_SIZE, ICON_SIZE), "Icon", "Icons", "icons")
+KINDS = (ART, TILE, COVER, ICON)
+# kinds stored by file name (not by path) in Pico's user folders
+_BY_NAME = (COVER, ICON)
+
+
+def kind_path(entry: Entry, kind: Kind) -> Optional[str]:
+    """SD path of the file of this kind for an entry (None: none, or the path is too long)."""
+    if kind is ART:
+        return entry.art_sd_path
+    if kind is TILE:
+        return entry.tile_sd_path
+    if kind is COVER:
+        return entry.cover_sd_path
+    return entry.icon_sd_path
+
+
+def encode(kind: Kind, image: Image.Image) -> bytes:
+    """Converted RGB(A) image -> BMP bytes in the format of the kind."""
+    if kind is TILE:
+        return to_tile_bmp(image)
+    if kind is COVER:
+        return to_cover_bmp(image)
+    if kind is ICON:
+        return to_icon_bmp(image)
+    return to_ds_bmp(image)
+
+
+def validate(kind: Kind, data: bytes):
+    """Checks a file the way the launcher reads files of this kind."""
+    if kind is COVER:
+        return validate_cover_bmp(data)
+    if kind is ICON:
+        return validate_icon_bmp(data)
+    return validate_bmp(data, kind.size)
 
 
 @dataclass
@@ -94,6 +136,10 @@ class Options:
     tile_override_dir: Optional[Path] = None
     # also replace BMPs this tool did not write (hand-placed images)
     replace_manual: bool = False
+    # 128x96 covers for the cover flow (/_pico/covers/user)
+    covers: bool = True
+    # 32x32 icons for the 4x3 grid (/_pico/icons/user), for games without an icon of their own
+    icons: bool = True
 
     def __post_init__(self):
         if self.art_type not in ART_TYPES:
@@ -118,16 +164,20 @@ class Stats:
     replaced_manual: int = 0
     missing_names: list[str] = field(default_factory=list)
     foreign_names: list[str] = field(default_factory=list)
-    # the same counters for the tile images (None when they are switched off)
+    # the same counters for the tile images, covers and small icons (None when they are switched off)
     tiles: Optional["Stats"] = None
+    covers: Optional["Stats"] = None
+    small_icons: Optional["Stats"] = None
 
-    def _parts(self, tiles: bool) -> list[str]:
+    def _parts(self, sub: bool, icon_fallback: bool = True) -> list[str]:
         parts = [f"{self.downloaded} geladen"]
-        if self.overrides or not tiles:
+        if self.overrides or not sub:
             parts.append(f"{self.overrides} eigene Bilder")
-        if not tiles:
+        if not sub:
             parts.append(f"{self.generated} Konsolen/Ordner erzeugt")
-        parts += [f"{self.icons} aus dem Spiel-Icon", f"{self.unchanged} unverändert"]
+        if icon_fallback:
+            parts.append(f"{self.icons} aus dem Spiel-Icon")
+        parts.append(f"{self.unchanged} unverändert")
         if self.replaced_manual:
             parts.append(f"{self.replaced_manual} von Hand abgelegte ersetzt")
         if self.foreign:
@@ -139,15 +189,25 @@ class Stats:
             parts.append(f"{self.errors} Fehler")
         return parts
 
+    @property
+    def all(self) -> list["Stats"]:
+        """These counters and the ones of the other kinds that are switched on."""
+        return [self] + [item for item in (self.tiles, self.covers, self.small_icons) if item is not None]
+
     def summary(self) -> str:
         text = ", ".join(self._parts(False))
-        if self.tiles is not None:
-            text = f"Artworks: {text}. Kachel-Bilder: {', '.join(self.tiles._parts(True))}"
+        subs = [("Kachel-Bilder", self.tiles, True), ("Cover", self.covers, False),
+                ("Icons", self.small_icons, False)]
+        if any(item is not None for _, item, _ in subs):
+            text = f"Artworks: {text}"
+            for label, item, icon_fallback in subs:
+                if item is not None:
+                    text += f". {label}: {', '.join(item._parts(True, icon_fallback))}"
         return text
 
     def short_summary(self) -> str:
-        """One line for the status bar of the window (artworks and tile images together)."""
-        items = [self] + ([self.tiles] if self.tiles else [])
+        """One line for the status bar of the window (all kinds together)."""
+        items = self.all
         new = sum(item.downloaded + item.generated + item.icons + item.overrides for item in items)
         text = f"{new} Bilder neu, {sum(item.missing for item in items)} ohne Bild"
         if self.total_errors:
@@ -156,7 +216,7 @@ class Stats:
 
     @property
     def total_errors(self) -> int:
-        return self.errors + (self.tiles.errors if self.tiles else 0)
+        return sum(item.errors for item in self.all)
 
 
 @dataclass
@@ -249,8 +309,13 @@ class Slot:
     # written back to the manifest
     adopted: bool = False
 
+    def current_style(self) -> bool:
+        """False when the file was made with an older look of its kind."""
+        return (self.record or {}).get("style", 1) >= STYLES.get(self.kind.key, 1)
+
     def unchanged(self, source: str, force: bool) -> bool:
-        return self.existing and self.ours and (self.record or {}).get("source") == source and not force
+        return (self.existing and self.ours and (self.record or {}).get("source") == source and not force
+                and self.current_style())
 
 
 class Updater:
@@ -270,7 +335,8 @@ class Updater:
         self.sources = sources if sources is not None else build_sources(
             self.client, self.catalog, options.sources, german=options.region == "de")
         self.crc_cache = CrcCache(cache_dir / "crc.json")
-        self.kinds = (ART, TILE) if options.tiles else (ART,)
+        self.kinds = tuple(kind for kind, enabled in ((ART, True), (TILE, options.tiles), (COVER, options.covers),
+                                                      (ICON, options.icons)) if enabled)
         self.manifests = {kind.key: Manifest(to_fs_path(self.sd_root, kind.folder) / MANIFEST_NAME, kind.section)
                           for kind in KINDS}
         override_dirs = {
@@ -278,9 +344,18 @@ class Updater:
             TILE.key: options.tile_override_dir or to_fs_path(self.sd_root, TILE_OVERRIDE_FOLDER),
         }
         self.overrides = {key: OverrideIndex(Path(folder)) for key, folder in override_dirs.items()}
+        # covers and icons have no override folder
+        for kind in _BY_NAME:
+            self.overrides[kind.key] = OverrideIndex(None)
         self.stats = Stats()
         if options.tiles:
             self.stats.tiles = Stats()
+        if options.covers:
+            self.stats.covers = Stats()
+        if options.icons:
+            self.stats.small_icons = Stats()
+        # covers and icons go by file name: the first game with a name gets them (lower case name -> SD path)
+        self._name_owners: dict[str, str] = {}
         self._warned_sources: set[str] = set()
         self._lock = threading.Lock()
         self._unsaved = 0
@@ -292,7 +367,8 @@ class Updater:
         return self.manifests[ART.key]
 
     def _stats(self, kind: Kind) -> Stats:
-        return self.stats.tiles if kind is TILE and self.stats.tiles is not None else self.stats
+        stats = {TILE.key: self.stats.tiles, COVER.key: self.stats.covers, ICON.key: self.stats.small_icons}.get(kind.key)
+        return stats if stats is not None else self.stats
 
     # --- main loop ---------------------------------------------------------------------------
 
@@ -316,6 +392,8 @@ class Updater:
             self.log("Probelauf: es wird nichts auf die Karte geschrieben.", "info")
 
         entries = result.entries
+        for entry in result.games:
+            self._name_owners.setdefault(entry.name.lower(), entry.sd_path)
         total = len(entries)
         done = 0
         self.progress(0, total, "")
@@ -348,7 +426,7 @@ class Updater:
         return self.stats
 
     def _log_hints(self) -> None:
-        stats = [self.stats] + ([self.stats.tiles] if self.stats.tiles else [])
+        stats = self.stats.all
         foreign = sum(item.foreign for item in stats)
         if foreign:
             names = [name for item in stats for name in item.foreign_names]
@@ -383,29 +461,29 @@ class Updater:
                 self._save_manifests()
         if outcome.replaced_manual:
             stats.replaced_manual += 1
-        tile = kind is TILE
-        # tile lines that report success only show with "Details anzeigen", problems always
+        # lines of the other kinds that report success only show with "Details anzeigen", problems always
+        sub = kind is not ART
         if status == "downloaded":
             stats.downloaded += 1
-            if tile:
-                self.log(f"✓ {name}: Kachel-Bild aus {outcome.message}", "detail")
+            if sub:
+                self.log(f"✓ {name}: {kind.label} aus {outcome.message}", "detail")
             else:
                 self.log(f"✓ {name}: {outcome.message}", "info")
         elif status == "override":
             stats.overrides += 1
-            self.log(f"✓ {name}: eigenes {'Kachel-Bild' if tile else 'Bild'} {outcome.message}", "info")
+            self.log(f"✓ {name}: eigenes {kind.label if sub else 'Bild'} {outcome.message}", "info")
         elif status == "generated":
             stats.generated += 1
             self.log(f"✓ {name}: erzeugt", "detail")
         elif status == "icon":
             stats.icons += 1
-            if tile:
-                self.log(f"~ {name}: Kachel-Bild aus dem Icon des Spiels{outcome.message}", "detail")
+            if sub:
+                self.log(f"~ {name}: {kind.label} aus dem Icon des Spiels{outcome.message}", "detail")
             else:
                 self.log(f"~ {name}: kein Bild gefunden, Icon des Spiels verwendet{outcome.message}", "info")
         elif status == "unchanged":
             stats.unchanged += 1
-            self.log(f"· {name}: {'Kachel-Bild ' if tile else ''}vorhanden", "detail")
+            self.log(f"· {name}: {kind.label + ' ' if sub else ''}vorhanden", "detail")
         elif status == "foreign":
             stats.foreign += 1
             stats.foreign_names.append(outcome.message or name)
@@ -419,11 +497,13 @@ class Updater:
         elif status == "missing":
             stats.missing += 1
             stats.missing_names.append(name)
-            what = "kein Kachel-Bild" if tile else "kein Bild gefunden"
-            self.log(f"✗ {name}: {what}{outcome.message}", "warn")
+            what = f"kein {kind.label}" if sub else "kein Bild gefunden"
+            # a missing artwork is already reported, covers and icons only add details
+            level = "detail" if kind in _BY_NAME else "warn"
+            self.log(f"✗ {name}: {what}{outcome.message}", level)
         elif status == "error":
             stats.errors += 1
-            self.log(f"✗ {name}: {kind.label + ': ' if tile else ''}{outcome.message}", "error")
+            self.log(f"✗ {name}: {kind.label + ': ' if sub else ''}{outcome.message}", "error")
 
     # --- one entry ---------------------------------------------------------------------------
 
@@ -437,6 +517,9 @@ class Updater:
 
     def _process(self, entry: Entry) -> list[Result]:
         kinds = [kind for kind in self.kinds if kind is ART or not entry.is_folder]
+        # several games with the same file name share one cover and icon: only the first gets them
+        kinds = [kind for kind in kinds
+                 if kind not in _BY_NAME or self._name_owners.get(entry.name.lower(), entry.sd_path) == entry.sd_path]
         results: list[Result] = []
         pending: list[Slot] = []
         for kind in kinds:
@@ -471,7 +554,7 @@ class Updater:
         return results
 
     def _slot(self, entry: Entry, kind: Kind):
-        sd_path = entry.art_sd_path if kind is ART else entry.tile_sd_path
+        sd_path = kind_path(entry, kind)
         if not sd_path:
             return Result(entry, "error", "Pfad zu lang für den Launcher (max. 255 Zeichen)", kind=kind)
         target = to_fs_path(self.sd_root, sd_path)
@@ -491,6 +574,9 @@ class Updater:
                 slot.ours = True
                 slot.adopted = True
                 slot.record = {"path": sd_path, "source": "recovered", "sha1": _sha1(data), "time": int(time.time())}
+                # the look it was made with is unknown: taken as the current one
+                if kind.key in STYLES:
+                    slot.record["style"] = STYLES[kind.key]
             if not slot.ours:
                 slot.foreign_data = data
         return slot
@@ -504,6 +590,10 @@ class Updater:
             # an adopted file goes back into the manifest
             return Result(entry, "unchanged", art_key=slot.key if slot.adopted else None,
                           record=slot.record if slot.adopted else None, kind=kind)
+
+        # DS games show the icon of their banner: a small icon only for those without one
+        if kind is ICON and entry.system and entry.system.key == "nds" and self._has_banner_icon(entry):
+            return Result(entry, "skipped", kind=kind)
 
         # 1. the user's own image always wins
         override = self.overrides[kind.key].find(entry)
@@ -524,7 +614,7 @@ class Updater:
         # 2. files someone put there by hand stay, unless the user wants them replaced
         if slot.existing and not slot.ours and not options.replace_manual:
             relative = slot.sd_path[len(kind.folder) + 1:]
-            validation = validate_bmp(slot.foreign_data or b"", kind.size)
+            validation = validate(kind, slot.foreign_data or b"")
             if validation.ok:
                 return Result(entry, "foreign", relative, kind=kind)
             return Result(entry, "foreign", relative, kind=kind, usable=False, detail="; ".join(validation.errors))
@@ -543,10 +633,17 @@ class Updater:
             return self._write(entry, slot, image, source, "generated")
 
         # 3. games: keep what is there unless forced (icon fallbacks are retried)
-        if slot.existing and slot.ours and not options.force and \
+        if slot.existing and slot.ours and not options.force and slot.current_style() and \
                 not str((slot.record or {}).get("source", "")).startswith(_RETRY_SOURCES):
             return unchanged()
         return None
+
+    def _has_banner_icon(self, entry: Entry) -> bool:
+        try:
+            header = read_header(entry.fs_path, "nds")
+        except Exception:  # noqa: BLE001 - unreadable ROM: try to give it an icon
+            return False
+        return header is not None and header.icon is not None
 
     def _header_only(self, entry: Entry) -> GameInfo:
         system = entry.system
@@ -569,6 +666,12 @@ class Updater:
             if kind is TILE:
                 order = list(TILE_ORDER)
                 convert = lambda image, art_type: to_tile(image, art_type, system_key)  # noqa: E731
+            elif kind is COVER:
+                order = list(COVER_ORDER)
+                convert = lambda image, art_type: to_cover(image, art_type, system_key)  # noqa: E731
+            elif kind is ICON:
+                order = list(ICON_ORDER)
+                convert = lambda image, art_type: to_icon(image, art_type, system_key)  # noqa: E731
             else:
                 order = type_order(options.art_type)
                 convert = lambda image, art_type: to_hero(image, art_type, system_key)  # noqa: E731
@@ -588,6 +691,9 @@ class Updater:
             reasons.append(note)
         if failures:
             reasons.append(f"{len(failures)} Bild(er) unbrauchbar: {failures[0]}")
+        if kind in _BY_NAME:
+            # no picture made from the banner icon: the cover flow and the grid show the icon anyway
+            return Result(entry, "missing", f" ({'; '.join(reasons)})", kind=kind)
         icon = game.header.icon if game.header else None
         if options.icon_fallback and icon is not None:
             source = "icon:1"
@@ -656,11 +762,13 @@ class Updater:
     def _write(self, entry: Entry, slot: Slot, image: Image.Image, source: str, status: str,
                message: str = "") -> Result:
         kind = slot.kind
-        data = to_ds_bmp(image)
-        validation = validate_bmp(data, kind.size)
+        data = encode(kind, image)
+        validation = validate(kind, data)
         if not validation.ok:
             return Result(entry, "error", "Umwandlung fehlgeschlagen: " + "; ".join(validation.errors), kind=kind)
         record = {"path": slot.sd_path, "source": source, "sha1": _sha1(data), "time": int(time.time())}
+        if kind.key in STYLES:
+            record["style"] = STYLES[kind.key]
         if not self.options.dry_run:
             _write_file(slot.target, data)
         replaced = slot.existing and not slot.ours
@@ -676,10 +784,7 @@ class Updater:
 
     def _clean(self, result: ScanResult, kind: Kind) -> None:
         """Deletes files this tool wrote for entries that are gone from the card."""
-        if kind is ART:
-            current = {entry.art_sd_path.lower() for entry in result.entries if entry.art_sd_path}
-        else:
-            current = {entry.tile_sd_path.lower() for entry in result.entries if entry.tile_sd_path}
+        current = {path.lower() for path in (kind_path(entry, kind) for entry in result.entries) if path}
         manifest = self.manifests[kind.key]
         for key, record in list(manifest.records.items()):
             if key in current:
@@ -718,8 +823,8 @@ def _write_file(target: Path, data: bytes) -> None:
 
 
 def check_card(sd_root: Path, log: Log) -> int:
-    """Validates every artwork and tile image on the card like the launcher would. Returns the number of
-    bad files."""
+    """Validates every artwork, tile image, cover and icon on the card like the launcher would. Returns
+    the number of bad files."""
     total_bad = 0
     for kind in KINDS:
         root = to_fs_path(Path(sd_root), kind.folder)
@@ -731,10 +836,12 @@ def check_card(sd_root: Path, log: Log) -> int:
                     continue
                 count += 1
                 path = Path(folder) / file_name
-                validation = validate_bmp(path.read_bytes(), kind.size)
+                validation = validate(kind, path.read_bytes())
                 relative = path.relative_to(root).as_posix()
                 if kind is TILE:
                     relative = "tiles/" + relative
+                elif kind is not ART:
+                    relative = kind.folder.lstrip("/") + "/" + relative
                 if not validation.ok:
                     bad += 1
                     log(f"✗ {relative}: {'; '.join(validation.errors)}", "error")

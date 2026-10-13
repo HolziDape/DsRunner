@@ -21,6 +21,12 @@ OVERRIDE_FOLDER = "/_dsrunner/art-override"
 TILE_FOLDER = "/_dsrunner/tiles"
 TILE_OVERRIDE_FOLDER = "/_dsrunner/tile-override"
 MANIFEST_NAME = ".dsrunner-art.json"
+# Pico's covers (cover flow) and icons by file name, see CoverRepository / IconRepository and
+# docs/Customization.md: /_pico/covers/user/<file name with extension>.bmp
+COVER_FOLDER = "/_pico/covers/user"
+ICON_FOLDER = "/_pico/icons/user"
+# Pico builds "<file name>.bmp" in a 256 byte buffer
+USER_NAME_BUFFER = 256
 
 # folders in the SD root that are never consoles (only relevant without a library folder)
 _ROOT_SYSTEM_FOLDERS = {"system", "system volume information", "$recycle.bin", "recycler", "found.000"}
@@ -69,6 +75,20 @@ def tile_path_for_entry(entry_path: str, is_folder: bool) -> Optional[str]:
     if is_folder:
         return None
     return art_path_for_entry(entry_path, False, TILE_FOLDER)
+
+
+def user_file_path(entry_path: str, is_folder: bool, root: str) -> Optional[str]:
+    """Path of a cover or icon by file name: /Games/GBA/Kirby.gba -> /_pico/covers/user/Kirby.gba.bmp.
+
+    root is COVER_FOLDER or ICON_FOLDER. None for folders and for names Pico can't look up (longer
+    than its buffer, or than a FAT long file name)."""
+    if is_folder:
+        return None
+    name = skip_drive(entry_path).rstrip("/").rsplit("/", 1)[-1]
+    file_name = name + ".bmp"
+    if not name or len(file_name.encode()) >= USER_NAME_BUFFER or len(file_name) > 255:
+        return None
+    return f"{root}/{file_name}"
 
 
 def to_fs_path(sd_root: Path, sd_path: str) -> Path:
@@ -122,6 +142,14 @@ class Entry:
     @property
     def tile_sd_path(self) -> Optional[str]:
         return tile_path_for_entry(self.sd_path, self.is_folder)
+
+    @property
+    def cover_sd_path(self) -> Optional[str]:
+        return user_file_path(self.sd_path, self.is_folder, COVER_FOLDER)
+
+    @property
+    def icon_sd_path(self) -> Optional[str]:
+        return user_file_path(self.sd_path, self.is_folder, ICON_FOLDER)
 
     @property
     def stem(self) -> str:
