@@ -1,0 +1,8 @@
+# Pico Loader upstream that loader/build.sh clones before applying loader/patches/*.patch.
+# Plain KEY=value lines, read by loader/build.sh. See loader/README.md ("Aktualisieren").
+PICO_LOADER_REPO=https://github.com/LNH-team/pico-loader.git
+# develop after v1.7.1 ("Update changelog", 18.09.2026)
+PICO_LOADER_COMMIT=b9f923e59ddced0528e3bd4e2c4f7e00f69b4d60
+# toolchain of the upstream CI (.github/workflows/nightly.yml in pico-loader)
+PICO_LOADER_BLOCKSDS_IMAGE=skylyrac/blocksds:slim-v1.20.0
+PICO_LOADER_DOTNET_VERSION=9.0
