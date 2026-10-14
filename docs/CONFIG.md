@@ -55,7 +55,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
   /...     weitere Ordner werden ebenfalls als Konsole angezeigt
 ```
 
-Konsolen mit eigener Farbe und eigenem Kürzel: `NDS` (auch `DS`), `GBA`, `GBC`, `GB`, `NES` (auch `FC`), `SNES` (auch `SFC`), `SMS`, `GG`, `MD` (auch `GEN`, `MEGADRIVE`), `PCE`, `Apps` (auch `Homebrew`). Die Namen werden ohne Beachtung der Groß-/Kleinschreibung verglichen. Jeder andere Ordner bekommt eine neutrale Kachel mit den ersten vier Buchstaben, außer er steht in der [`systems.json`](#eigene-konsolen-systemsjson).
+Konsolen mit eigener Farbe und eigenem Kürzel: `NDS` (auch `DS`), `GBA`, `GBC`, `GB`, `NES` (auch `FC`), `SNES` (auch `SFC`), `SMS`, `GG`, `MD` (auch `GEN`, `MEGADRIVE`), `PCE`, `Apps` (auch `Homebrew`). Die Namen werden ohne Beachtung der Groß-/Kleinschreibung verglichen. Jede dieser Konsolen hat ein [eingebautes Bild](#eingebaute-konsolen-bilder) (Kachel, Hintergrund oben, Cover). Jeder andere Ordner bekommt eine neutrale Kachel mit einem Ordner-Bild und seinem Namen, außer er steht in der [`systems.json`](#eigene-konsolen-systemsjson).
 
 Spiele anderer Konsolen als DS werden nur angezeigt, wenn es ein Programm (einen [Emulator](#emulatoren)) für sie gibt. Ohne eigenes Icon bekommen sie die Kachel ihrer Konsole (Farbe und Kürzel), bis DsRunner Art ein [Kachel-Bild](#kachel-bilder) für sie anlegt.
 
@@ -134,7 +134,7 @@ Jeder Schlüssel unter `systems` ist ein **Ordnername** der Bibliothek (Groß-/K
 | Feld | Bedeutung | Ohne Angabe |
 |---|---|---|
 | `name` | Name der Konsole oben auf dem Bildschirm | eingebaute Konsole: ihr Name, sonst der Ordnername |
-| `label` | Kürzel auf der Kachel (höchstens 4 Zeichen werden gezeigt) | eingebaute Konsole: ihr Kürzel, sonst der Ordnername |
+| `label` | Kürzel auf der Kachel unter dem Konsolen-Bild (so viel, wie in die Kachel passt) und auf der Kachel von Spielen ohne Icon (höchstens 4 Zeichen) | eingebaute Konsole: ihr Kürzel, sonst der Ordnername |
 | `color` | Farbe der Kachel: `"#RRGGBB"` oder `[R, G, B]` (0 bis 255). Der Verlauf oben wird daraus etwas dunkler berechnet. | eingebaute Farbe bzw. das neutrale Grau-Blau |
 | `heroColor` | eigene Farbe für den Verlauf oben, gleiches Format | aus `color` berechnet |
 | `extensions` | Dateiendungen dieser Konsole, höchstens 4, ohne Punkt (`"ws"`) | eingebaute Konsole: ihre Endungen, sonst keine |
@@ -165,7 +165,7 @@ Für alle drei Ansichten zeigt der obere Bildschirm das [Artwork](#artworks) des
 ### Kachelraster
 
 - Die Kacheln füllen sich **zeilenweise** (Lesereihenfolge) und das Raster blättert nach unten. Steuerkreuz bewegt die Auswahl, **L/R** blättern eine Seite (2 bzw. 3 Reihen).
-- Konsolen-Ordner bekommen die Farbe der Konsole, Spiele zeigen ihr Kachel-Bild (3×2) bzw. ihr Icon (4×3).
+- Konsolen-Ordner bekommen die Farbe der Konsole und ihr [eingebautes Bild](#eingebaute-konsolen-bilder) mit dem Kürzel darunter, Spiele zeigen ihr Kachel-Bild (3×2) bzw. ihr Icon (4×3).
 - Auf der Konsolen-Ebene steht unter dem Namen der Konsole die **Spielanzahl** („34 Spiele“). DsRunner zählt dafür nach dem Start einmal im Hintergrund die Dateien jedes Konsolen-Ordners, die es auch anzeigen würde (bekannte Dateitypen, keine Unterordner, keine versteckten Dateien). Solange gezählt wird, bleibt die Zeile leer.
 
 ## Spielverlauf
@@ -216,7 +216,7 @@ Pico Launcher spielt Hintergrundmusik pro Theme, DsRunner übernimmt das unverä
 
 ## Artworks
 
-Der obere Bildschirm zeigt ein bildschirmfüllendes Artwork für die ausgewählte Konsole bzw. das ausgewählte Spiel. Fehlt es, bleibt der Farbverlauf in der Konsolenfarbe. Beim Wechsel der Auswahl blendet das alte Bild in den Farbverlauf aus und das neue ein. Der untere Teil (ab Zeile 92, ab Zeile 118 voll) wird abgedunkelt, damit Titel und Untertitel lesbar bleiben.
+Der obere Bildschirm zeigt ein bildschirmfüllendes Artwork für die ausgewählte Konsole bzw. das ausgewählte Spiel. Fehlt es, zeigen Ordner ihr [eingebautes Konsolen-Bild](#eingebaute-konsolen-bilder), Spiele den Farbverlauf in der Konsolenfarbe. Beim Wechsel der Auswahl blendet das alte Bild in den Farbverlauf aus und das neue ein. Der untere Teil (ab Zeile 92, ab Zeile 118 voll) wird abgedunkelt, damit Titel und Untertitel lesbar bleiben.
 
 **Ablage:** Die Artworks spiegeln den Pfad auf der SD-Karte unter `/_dsrunner/art`:
 
@@ -244,12 +244,15 @@ Regel: Pfad ab SD-Root, bei Dateien die Endung durch `.bmp` ersetzen, bei Ordner
 
 Im 3×2-Raster zeigt ein Spiel statt seines Icons (32 × 32, bei GBA-Spielen ohne eigenes Icon gar keins) ein **Kachel-Bild**, wenn es eins gibt. Sonst bleibt es beim Icon (doppelt groß). Das 4×3-Raster lädt keine Kachel-Bilder, dort ist es immer das Icon.
 
-**Ablage:** gleiche Regel wie bei den [Artworks](#artworks), nur mit `/_dsrunner/tiles` statt `/_dsrunner/art`, und **nur für Spiele** (Dateien), nicht für Ordner:
+**Ablage:** gleiche Regel wie bei den [Artworks](#artworks), nur mit `/_dsrunner/tiles` statt `/_dsrunner/art`:
 
-| Spiel | Kachel-Bild |
+| Eintrag | Kachel-Bild |
 |---|---|
 | `/Games/NDS/Mario Kart DS.nds` | `/_dsrunner/tiles/Games/NDS/Mario Kart DS.bmp` |
 | `/Games/GBA/Rennen/Golden Sun.gba` | `/_dsrunner/tiles/Games/GBA/Rennen/Golden Sun.bmp` |
+| Ordner `/Games/NDS` | `/_dsrunner/tiles/Games/NDS.bmp` (ersetzt das [eingebaute Bild](#eingebaute-konsolen-bilder), dann ohne Kürzel) |
+
+DsRunner Art legt Kachel-Bilder nur für Spiele an, eigene Bilder für Ordner muss man selbst ablegen.
 
 Regel: Pfad ab SD-Root, Endung durch `.bmp` ersetzen (nur die letzte, `Platin.v1.2.nds` → `Platin.v1.2.bmp`). Der ganze Pfad muss wie bei den Artworks in 255 Bytes (UTF-8) passen. Groß-/Kleinschreibung spielt keine Rolle (FAT).
 
@@ -263,9 +266,35 @@ Regel: Pfad ab SD-Root, Endung durch `.bmp` ersetzen (nur die letzte, `Platin.v1
 
 **DsRunner Art** führt die Liste der eigenen Kachel-Bilder in `/_dsrunner/tiles/.dsrunner-art.json` und liest eigene Kachel-Bilder aus `/_dsrunner/tile-override/` (gleicher Pfad wie das Spiel oder nur der Name, beliebiges Bildformat). DsRunner selbst nutzt beides nicht.
 
+## Eingebaute Konsolen-Bilder
+
+Das DsRunner-Theme bringt für jeden Konsolen-Ordner eigene Bilder mit, damit die Konsolen-Ebene auch ohne DsRunner Art nach etwas aussieht: eine gezeichnete Konsole (bzw. ein Stern für ★ Favoriten) in der Farbe der Konsole. Sie stammen von `tools/console-art/make_console_art.py` (eigene Zeichnungen, keine Logos) und liegen in `/_pico/themes/dsrunner/consoles/`:
+
+| Datei | wo | Format |
+|---|---|---|
+| `NDS.bmp` | oberer Bildschirm | 256 × 192, 8 bit |
+| `NDS-tile.bmp` | Kachel im 3×2-Raster, das Kürzel steht darunter | 64 × 64, 8 bit, Farbe 0 durchsichtig, Bild in den oberen 48 Zeilen |
+| `NDS-icon.bmp` | Kachel im 4×3-Raster (Kürzel darunter) und Icon oben rechts | 32 × 32, 4 bit, Farbe 0 durchsichtig, Bild in den Zeilen 4 bis 27 |
+| `NDS-cover.bmp` | Coverflow | 128 × 96, 8 bit, sichtbar die linken 106 × 96 |
+
+Namen der Bilder: `NDS` (Ordner `NDS`, `DS`), `GBA`, `GBC`, `GB`, `NES` (`NES`, `FC`), `SNES` (`SNES`, `SFC`), `SMS`, `GG`, `MD` (`MD`, `GEN`, `MEGADRIVE`), `PCE`, `APPS` (`Apps`, `Homebrew`), `FAV` (★ Favoriten). Eigene Konsolen aus der [`systems.json`](#eigene-konsolen-systemsjson) zeigen `CART` (ein Modul), alle anderen Ordner `FOLDER`.
+
+**Farben:** Die Bilder sind Vorlagen in Graustufen. DsRunner färbt jede graue Palettenfarbe in der Farbe der Konsole ein: 0 = Hintergrund des Themes, 128 = Konsolenfarbe (`color` bzw. für oben `heroColor`), 255 = Weiß. Farbige Palettenfarben bleiben, wie sie sind. So passt ein Bild zu jeder Farbe, auch zu geänderten Farben aus der `systems.json`.
+
+**Vorrang:** Eigene Bilder gewinnen immer:
+
+- oberer Bildschirm: `/_dsrunner/art/Games/NDS.bmp` (siehe [Artworks](#artworks)) vor `NDS.bmp`
+- 3×2-Raster: `/_dsrunner/tiles/Games/NDS.bmp` (siehe [Kachel-Bilder](#kachel-bilder)) vor `NDS-tile.bmp`
+- 4×3-Raster: `icon.bmp` im Ordner selbst (Pico, siehe [Customization.md](Customization.md#icons)) vor `NDS-icon.bmp`
+- Coverflow: `cover.bmp` im Ordner selbst (Pico) vor `NDS-cover.bmp`
+
+Wer die Bilder des Themes ändern will, ersetzt die Dateien (gleiches Format, Graustufen für die Einfärbung) oder ändert das Skript und lässt es neu laufen. Fehlt `FOLDER-icon.bmp`, nutzt DsRunner gar keine eingebauten Bilder und zeigt wie früher Kacheln mit Kürzel und den Farbverlauf. DsRunner liest den Ordner beim Start.
+
+[DsRunner Art](ART-TOOL.md) erzeugt für Ordner mit eingebautem Bild kein eigenes Artwork mehr und löscht seine alten (siehe dort).
+
 ## Cover (CoverFlow)
 
-Die CoverFlow-Ansicht ist Picos große Ansicht: ein Cover pro Spiel, mit dem Steuerkreuz seitwärts geblättert. Ohne Cover zeigt sie ein „?“. Die Cover liest Pico (siehe [Customization.md](Customization.md#covers)):
+Die CoverFlow-Ansicht ist Picos große Ansicht: ein Cover pro Spiel, mit dem Steuerkreuz seitwärts geblättert. Ohne Cover zeigt sie ein „?“, Ordner zeigen ihr [eingebautes Konsolen-Bild](#eingebaute-konsolen-bilder). Die Cover liest Pico (siehe [Customization.md](Customization.md#covers)):
 
 1. `/_pico/covers/user/<Dateiname mit Endung>.bmp`, z. B. `/_pico/covers/user/Golden Sun.gba.bmp`
 2. `/_pico/covers/nds/<Game-Code>.bmp` bzw. `/_pico/covers/gba/<Game-Code>.bmp`

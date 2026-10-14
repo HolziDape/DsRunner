@@ -6,6 +6,12 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 
 ## Unveröffentlicht
 
+### Hinzugefügt
+- **Eigene Bilder für die Konsolen-Ordner, schon eingebaut:** Jeder Ordner auf der Konsolen-Ebene (NDS, GBA, GB, GBC, NES, SNES, Master System, Game Gear, Mega Drive, PC Engine, Apps) und die Kachel ★ Favoriten zeigen eine gezeichnete Konsole bzw. einen Stern in der Konsolenfarbe, mit dem Kürzel darunter. Oben gibt es dazu ein passendes Hintergrundbild, im Coverflow ein passendes Cover. Eigene Konsolen aus `systems.json` bekommen ein Modul, andere Ordner einen Ordner, jeweils in ihrer Farbe. Die Bilder liegen im Theme (`/_pico/themes/dsrunner/consoles`) und funktionieren ohne DsRunner Art. Eigene Bilder in `/_dsrunner/art` und `/_dsrunner/tiles` haben weiter Vorrang, siehe [docs/CONFIG.md](docs/CONFIG.md#eingebaute-konsolen-bilder).
+
+### Geändert
+- DsRunner Art erzeugt keine Ordner-Bilder mehr, wenn das Theme auf der Karte eingebaute Konsolen-Bilder hat, und löscht seine früher erzeugten Ordner-Bilder (Farbverlauf mit Kürzel), damit die neuen sichtbar werden. Selbst abgelegte Bilder bleiben.
+
 ## [0.2.0](https://github.com/HolziDape/DsRunner/releases/tag/v0.2.0) - 2026-10-14
 
 ### Hinzugefügt

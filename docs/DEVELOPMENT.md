@@ -49,6 +49,10 @@ DeSmuME 0.9.11 rechnet Farbverläufe gröber als die Hardware (sichtbare Stufen 
 
 `icon.png` wird von `tools/icon/make_icon.py` erzeugt (32×32, RGBA, höchstens 15 Farben plus Transparenz). Kein `.bmp` verwenden: ndstool baut die Banner-Palette aus den Farben neu auf und erkennt Transparenz nur am Alpha-Kanal, Farbe 0 einer BMP wird sonst als normale Farbe (Magenta) angezeigt.
 
+## Konsolen-Bilder
+
+Die eingebauten Bilder der Konsolen-Ordner (`_pico/themes/dsrunner/consoles/`, siehe [CONFIG.md](CONFIG.md#eingebaute-konsolen-bilder)) zeichnet `tools/console-art/make_console_art.py` (Pillow). Nach einer Änderung an den Zeichnungen das Skript laufen lassen und die erzeugten BMPs mit committen; `--preview vorschau.png` zeigt alle Bilder eingefärbt nebeneinander. Die Zuordnung Ordnername → Bild steht doppelt: `DsRunnerConsoleArt::kArtKeys` und `ART_KEYS` in `tools/dsrunner-art/dsrunnerart/consoles.py` (ein Test prüft, dass beide gleich sind).
+
 ## Pico-Updates übernehmen
 
 Remote `upstream` = [LNH-team/pico-launcher](https://github.com/LNH-team/pico-launcher), Branch `develop`.
