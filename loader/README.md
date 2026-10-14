@@ -18,7 +18,7 @@ Hintergrund und Recherche: [docs/LOADER.md](../docs/LOADER.md).
 ## Basis
 
 - **Upstream:** `LNH-team/pico-loader` Branch `develop` @ `b9f923e` (18.09.2026, „Update changelog“). Das ist v1.7.1 plus drei Fixes (Banner-Saves, BG2/BG3-Register, argv auf DSi). Die Listen `aplist`/`savelist`/`patchlist` sind seit v1.7.1 unverändert, die gebauten `.bin` sind byte-gleich mit dem Release.
-- **Plattform:** `M3DS` (M3 DS Real). Andere Plattformen: `PICO_PLATFORM=… loader/build.sh`.
+- **Plattform:** `M3DS` (M3 DS Real, im SD-Paket). Andere Plattformen: `PICO_PLATFORM=… loader/build.sh`; alle 19 Plattformen von Pico Loader bauen damit (geprüft am 14.10.2026). Der Release-Workflow hängt für 17 davon `PicoLoader-DsRunner_<PLATTFORM>.zip` an. Getestet ist nur M3DS. Welche Karte welche Plattform braucht: [docs/FLASHCARDS.md](../docs/FLASHCARDS.md).
 
 ## Patches
 
