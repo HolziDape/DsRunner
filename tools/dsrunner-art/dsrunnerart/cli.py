@@ -49,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Ordner mit eigenen Bildern (Standard: <SD>/_dsrunner/art-override)")
     parser.add_argument("--sources", type=_sources, default=SOURCE_IDS,
                         help=f"Quellen in dieser Reihenfolge (Standard: {','.join(SOURCE_IDS)})")
-    parser.add_argument("--no-console-art", action="store_true", help="keine Bilder für Konsolen-Ordner erzeugen")
+    parser.add_argument("--no-console-art", action="store_true", help="keine Bilder für Ordner erzeugen (Ordner mit eingebautem Konsolen-Bild des Themes bekommen ohnehin keins)")
     parser.add_argument("--no-icon", action="store_true",
                         help="kein Ersatzbild aus dem Spiel-Icon, wenn nichts gefunden wird")
     parser.add_argument("--no-tiles", action="store_true",

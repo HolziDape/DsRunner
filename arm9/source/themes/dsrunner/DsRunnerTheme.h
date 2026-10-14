@@ -13,6 +13,7 @@ class DsRunnerTheme : public Theme
 {
 public:
     DsRunnerTheme(const TCHAR* folderName, const Rgb<8, 8, 8>& primaryColor, bool darkMode);
+    ~DsRunnerTheme() override;
 
     const IFontRepository* GetFontRepository() const override
     {

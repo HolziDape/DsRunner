@@ -7,6 +7,7 @@
 #include <libtwl/dma/dmaNitro.h>
 #include "fat/File.h"
 #include "VBlank.h"
+#include "DsRunnerConsoleArt.h"
 #include "DsRunnerTopArt.h"
 
 #define ART_WIDTH           256
@@ -58,18 +59,26 @@ DsRunnerTopArt::~DsRunnerTopArt()
     REG_BLDCNT_SUB = 0;
 }
 
-void DsRunnerTopArt::Request(const char* path, TaskQueueBase* ioTaskQueue)
+void DsRunnerTopArt::Request(const char* path, const char* fallbackPath, const DsRunnerConsoles::Color& fallbackTint,
+    TaskQueueBase* ioTaskQueue)
 {
     if (!path)
         path = "";
-    if (strcmp(path, _requestedPath) == 0)
+    if (!fallbackPath)
+        fallbackPath = "";
+    if (strcmp(path, _requestedPath) == 0 && strcmp(fallbackPath, _requestedFallbackPath) == 0 &&
+        fallbackTint.r == _requestedTint.r && fallbackTint.g == _requestedTint.g && fallbackTint.b == _requestedTint.b)
+    {
         return;
+    }
 
     strlcpy(_requestedPath, path, sizeof(_requestedPath));
+    strlcpy(_requestedFallbackPath, fallbackPath, sizeof(_requestedFallbackPath));
+    _requestedTint = fallbackTint;
     _ioTaskQueue = ioTaskQueue;
     // a running load notices the new number and stops; the next one starts when it is done
     _requestNumber = _requestNumber + 1;
-    _loadNeeded = path[0] != 0;
+    _loadNeeded = path[0] != 0 || fallbackPath[0] != 0;
     _uploadPending = false;
     _loadDelay = LOAD_DELAY_FRAMES;
     // fade out the current art, the new one fades in once it's loaded
@@ -112,15 +121,24 @@ void DsRunnerTopArt::StartLoad()
 {
     u32 requestNumber = _requestNumber;
     strlcpy(_loadingPath, _requestedPath, sizeof(_loadingPath));
+    strlcpy(_loadingFallbackPath, _requestedFallbackPath, sizeof(_loadingFallbackPath));
+    _loadingTint = _requestedTint;
     _loadTask = _ioTaskQueue->Enqueue([this, requestNumber] (const vu8& cancelRequested)
     {
-        _loadResult = Load(_loadingPath, requestNumber, cancelRequested);
+        // the user's own artwork first, then the built-in console image
+        LoadResult result = LoadResult::Failed;
+        if (_loadingPath[0] != 0)
+            result = Load(_loadingPath, nullptr, requestNumber, cancelRequested);
+        if (result == LoadResult::Failed && _loadingFallbackPath[0] != 0)
+            result = Load(_loadingFallbackPath, &_loadingTint, requestNumber, cancelRequested);
+        _loadResult = result;
         _loadedNumber = requestNumber;
         return TaskResult<void>::Completed();
     });
 }
 
-DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, u32 requestNumber, const vu8& cancelRequested)
+DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, const DsRunnerConsoles::Color* tint,
+    u32 requestNumber, const vu8& cancelRequested)
 {
     if (IsStale(requestNumber, cancelRequested))
         return LoadResult::None;
@@ -180,14 +198,8 @@ DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, u32 requestNum
         }
     }
 
-    // BGRA -> BGR555
-    for (int i = 0; i < 256; i++)
-    {
-        u32 b = bmpPalette[i * 4 + 0] >> 3;
-        u32 g = bmpPalette[i * 4 + 1] >> 3;
-        u32 r = bmpPalette[i * 4 + 2] >> 3;
-        _palette[i] = r | (g << 5) | (b << 10);
-    }
+    // BGRA -> BGR555, the built-in console images are tinted with the console color
+    DsRunnerConsoleArt::ConvertPalette(bmpPalette, 256, tint, _palette);
 
     // Color 0 of a bitmap background is transparent: draw those pixels with the closest other color.
     int closest = 1;

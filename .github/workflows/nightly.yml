@@ -11,6 +11,43 @@ on:
   workflow_dispatch:
 
 jobs:
+  pico_loader:
+    runs-on: ubuntu-latest
+    # same toolchain as the pico-loader CI; keep in sync with PICO_LOADER_BLOCKSDS_IMAGE in loader/UPSTREAM
+    container: skylyrac/blocksds:slim-v1.20.0
+    # catches patches that no longer apply or build; the artifact is the loader of the SD package
+    name: Build Pico Loader (loader/)
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: 1
+      DOTNET_NOLOGO: true
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Check the toolchain image
+        run: |
+          grep -qx 'PICO_LOADER_BLOCKSDS_IMAGE=skylyrac/blocksds:slim-v1.20.0' loader/UPSTREAM || {
+            echo "::error::container image of this job and loader/UPSTREAM differ"
+            exit 1
+          }
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.x
+      - name: Cache the pico-loader clone
+        uses: actions/cache@v4
+        with:
+          path: loader/work/pico-loader
+          key: pico-loader-${{ hashFiles('loader/UPSTREAM') }}
+          restore-keys: pico-loader-
+      - name: Clone, patch and build
+        run: sh loader/build.sh loader/out
+      - name: Publish build to GH Actions
+        uses: actions/upload-artifact@v4
+        with:
+          path: loader/out/
+          name: PicoLoader_M3DS_DsRunner
+
   pico_launcher:
     runs-on: ubuntu-latest
     container: skylyrac/blocksds:slim-v1.16.0

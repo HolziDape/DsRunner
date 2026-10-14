@@ -1,10 +1,39 @@
 # Loader: Pico Loader vs. YSMenu, zurück zum Launcher aus Spielen
 
-Recherche zu Phase 8 ([PLAN.md](PLAN.md#phase-8-loader-bei-bedarf)). Noch nichts davon ist umgesetzt.
+Recherche zu Phase 8 ([PLAN.md](PLAN.md#phase-8-loader-bei-bedarf)). Der Weg aus Abschnitt 5 ist inzwischen umgesetzt, siehe [Umsetzung](#umsetzung-stand-14102026). Auf der Hardware getestet ist er noch nicht.
 
 Stand: 13.10.2026 · Basis: `LNH-team/pico-loader` develop @ `b9f923e` (18.09.2026, nach v1.7.1), DsRunner @ `36184e8`.
 
 **Netzwerk:** github.com (git und Webseiten) war erreichbar. Die GitHub-REST-API für fremde Repos, **gbatemp.net**, **gamebrew.org**, **wiki.ds-homebrew.com** und **git.randommeaninglesscharacters.com** waren per Proxy-Policy gesperrt. Angaben zu YSMenu und AKAIO stammen daher nur aus Suchergebnis-Auszügen und sind als *unverifiziert* markiert.
+
+---
+
+## Umsetzung (Stand 14.10.2026)
+
+Statt eines eigenen GitHub-Forks liegt der Loader als **Patch-Serie im DsRunner-Repo**: [loader/](../loader/README.md).
+
+| Was | Wie |
+|---|---|
+| Basis | `LNH-team/pico-loader` develop @ `b9f923e` (v1.7.1 + 3 Fixes), festgelegt in `loader/UPSTREAM` |
+| Patches 0001–0011 | danyocom: DLDI-Cache (`dldi-cache`, PR #220, inkl. BSS-Fix `84962d8`) und In-Game-Reset (`igr-hooks` `a7def04` plus `igr-dispatcher-variants` bis `ca06bd5`: `igr`-Argument, eigene Dispatcher für Golden Sun DD, Black Sigil, Diddy Kong Racing). Alle ohne Konflikte auf `b9f923e` |
+| 0012 | Combo **L+R+Unten+B, 2 s** (danyocom hatte zuletzt L+R+Unten+B+A, 1 s) |
+| 0013 | **Launcher-Pfad über den Reset:** Pico speichert bei jedem normalen Start den `launcherPath` aus dem Header in `/_pico/launcher.txt` (nur bei Änderung, `.tmp` + Umbenennen, wie der DLDI-Cache). Nach `PIGR` bootet er diesen Pfad, sonst die erste vorhandene Datei aus `/_nds/TWiLightMenu/main.srldr`, `/BOOT.NDS`, `/_picoboot.nds` |
+| 0014 | **Abschalter:** Gibt es `/_pico/igr.off`, lässt Pico den Hotkey-Patch weg (Flag im `SET_ROM_FILE_INFO`-Befehl an die ARM9). `OS_ResetSystem`-Patch bleibt |
+| Build | `loader/build.sh`: Klon + `git am` + `make PICO_PLATFORM=M3DS` mit BlocksDS 1.20 und .NET 9 (wie die Upstream-CI), per Docker, wenn nichts installiert ist. Ergebnis `loader/out/` |
+| DsRunner | `main.cpp`: Launcher-Pfad aus `argv[0]`, wenn das eine Datei auf der Karte ist, sonst `/_nds/TWiLightMenu/main.srldr`, `/BOOT.NDS`, `/DsRunner.nds`; Auswahl und `igr`-Start werden geloggt (`DsRunnerInGameReset.cpp`). Einstellung `inGameReset` (Standard `true`) in `settings.json`: vor dem Start legt DsRunner `/_pico/igr.off` an oder löscht sie |
+| Paket | `tools/make-sd-package.sh`: `DSRUNNER_LOADER=custom` (Standard, `loader/out`, baut bei Bedarf neu) oder `upstream` (unverändertes v1.7.1). Infodatei `_pico/picoLoader-DsRunner.txt` |
+| CI | Job `pico_loader` in `release.yml` und `nightly.yml`, Artefakt `PicoLoader_M3DS_DsRunner`; das M3-Paket im Release nimmt diesen Build |
+
+**Warum `/_pico/launcher.txt` und nicht nur ein fester Pfad:** Der Pfad kommt von dem Launcher, der das Spiel tatsächlich gestartet hat, funktioniert also auch für BOOT.NDS oder einen anderen Ort, ohne neuen Loader-Build. Die feste Liste greift nur, wenn die Datei fehlt. Gelesen wird über FatFs des frisch geladenen Pico, nicht im Spielkontext. Der Speicher des alten Loaders oder des Spiels ist nach dem Reset nicht verlässlich, eine Datei schon.
+
+**Offene Frage `argv[0]` im Autostart:** weiter ungeklärt (kein Hardwarezugriff). Weil DsRunner jetzt auf vorhandene Dateien zurückfällt, ist sie für die Funktion egal. Welcher Weg genommen wurde, steht im Log (`Launcher path from argv[0]` bzw. `from fallback`), sichtbar nur mit einem Logger (nocash/no$gba, IS-NITRO). Nach dem ersten Spielstart zeigt außerdem `/_pico/launcher.txt` auf der Karte, welchen Pfad DsRunner übergeben hat. Ein Pfad mit Laufwerk (z. B. `fat:/_nds/TWiLightMenu/main.srldr`) kann nur aus `argv[0]` stammen, denn die Fallback-Liste hat keine Laufwerksangabe. Ohne Laufwerk ist beides möglich.
+
+**Geprüft ohne Hardware:**
+- Patch-Serie lässt sich auf `b9f923e` anwenden, `loader/build.sh` baut M3DS (picoLoader7.bin 52 860 Byte, picoLoader9.bin 51 636 Byte; v1.7.1: 47 900 / 46 584), dazu testweise R4 und MELONDS. Zwei Läufe ergeben byte-gleiche Dateien. `aplist.bin`, `savelist.bin`, `patchlist.bin` sind byte-gleich mit dem v1.7.1-Release.
+- Das unveränderte v1.7.1 aus demselben Image gebaut ist **nicht** byte-gleich mit dem offiziellen Release-Zip (andere Codeanordnung, vermutlich ein anderer Stand des Images oder der Toolchain beim Release). Heißt: Auch ohne Hotkey ist unser Build ein anderer Build als der bisher getestete. Der erste Hardwaretest prüft deshalb zuerst normales Spielen.
+- DsRunner baut ohne Warnungen. In DeSmuME (Loader-Plattform R4) startet DsRunner über den gepatchten Loader ein Homebrew. Retail-Spiele und der Hotkey lassen sich im Emulator nicht prüfen.
+
+**Unverifiziert (braucht den DS Lite + M3 DS Real):** ob der Hotkey auf M3DS auslöst, ob DsRunner danach mit SD-Zugriff startet (DLDI aus dem Cache), Verhalten beim Speichern, mit Cheats, mit DMA-Patches, und die Spielkompatibilität allgemein. Testplan: [compat/pico-vs-ysmenu.md](compat/pico-vs-ysmenu.md#testplan-hotkey--launcher).
 
 ---
 

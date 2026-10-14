@@ -44,6 +44,18 @@ CONSOLES: tuple[Console, ...] = (
 UNKNOWN_TILE: Rgb = (64, 74, 100)
 UNKNOWN_HERO: Rgb = (40, 48, 70)
 
+# Built-in console images of the DsRunner theme (_pico/themes/dsrunner/consoles/<key>.bmp, drawn by
+# tools/console-art): folder name -> image key. Keep in sync with DsRunnerConsoleArt::kArtKeys
+# (checked by tests/test_consoles.py).
+ART_KEYS: dict[str, str] = {
+    "NDS": "NDS", "DS": "NDS", "GBA": "GBA", "GBC": "GBC", "GB": "GB", "NES": "NES", "FC": "NES",
+    "SNES": "SNES", "SFC": "SNES", "SMS": "SMS", "GG": "GG", "GEN": "MD", "MD": "MD", "MEGADRIVE": "MD",
+    "PCE": "PCE", "APPS": "APPS", "HOMEBREW": "APPS", "★ Favoriten": "FAV",
+}
+# image of consoles from systems.json without a built-in image, and of all other folders
+ART_KEY_CUSTOM_CONSOLE = "CART"
+ART_KEY_FOLDER = "FOLDER"
+
 
 @dataclass(frozen=True)
 class System:
@@ -136,6 +148,16 @@ def find_by_folder_name(name: str) -> Optional[Console]:
         if custom.console.folder_name.lower() == lowered:
             return custom.console
     return find_builtin_by_folder_name(name)
+
+
+def art_key(folder_name: str) -> str:
+    """Image key of a folder like DsRunnerConsoleArt::GetKey: its built-in console, CART for the other
+    consoles of systems.json, FOLDER for everything else."""
+    lowered = folder_name.lower()
+    for name, key in ART_KEYS.items():
+        if name.lower() == lowered:
+            return key
+    return ART_KEY_CUSTOM_CONSOLE if find_by_folder_name(folder_name) else ART_KEY_FOLDER
 
 
 def _truncate_utf8(text: str, buffer_size: int) -> str:

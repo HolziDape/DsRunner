@@ -1,6 +1,6 @@
 # DsRunner Art: Artworks automatisch auf die Karte
 
-**DsRunner Art** ist ein kleines PC-Programm für Windows (läuft auch unter Linux und macOS). Es liest die Spiele auf deiner SD-Karte, sucht passende Bilder im Internet und speichert sie im Format, das DsRunner auf dem oberen Bildschirm zeigt. Konsolen-Ordner bekommen ein eigenes Bild in der Farbe der Konsole. Außerdem bekommt jedes Spiel passende Bilder für die drei Ansichten des Launchers:
+**DsRunner Art** ist ein kleines PC-Programm für Windows (läuft auch unter Linux und macOS). Es liest die Spiele auf deiner SD-Karte, sucht passende Bilder im Internet und speichert sie im Format, das DsRunner auf dem oberen Bildschirm zeigt. Konsolen-Ordner haben schon eingebaute Bilder im Theme (siehe [CONFIG.md](CONFIG.md#eingebaute-konsolen-bilder)); nur wenn die auf der Karte fehlen, erzeugt das Tool für Ordner ein Bild in der Farbe der Konsole. Außerdem bekommt jedes Spiel passende Bilder für die drei Ansichten des Launchers:
 
 | Ansicht | Bild | Stil |
 |---|---|---|
@@ -47,7 +47,7 @@ Beim nächsten Mal lädt das Tool nur noch, was fehlt: neue Spiele, neue eigene 
 | **Region** | Welche Fassung bevorzugt wird, wenn es ein Spiel mehrfach gibt (Deutschland, Europa, USA, Japan). Steht die Region im Dateinamen (`(Germany)`, `(E)`, `GER`) oder im Game-Code, hat diese Vorrang. |
 | **Vorhandene überschreiben** | Lädt alle Bilder neu, die das Tool früher angelegt hat, und sucht auch Bilder erneut, die beim letzten Mal nicht gefunden wurden. Nötig, wenn du die Bildart oder Region wechselst. Von Hand abgelegte Bilder bleiben dabei unangetastet (dafür gibt es die nächste Option). |
 | **Auch von Hand abgelegte Bilder ersetzen** | Normalerweise lässt das Tool BMP-Dateien in Ruhe, die es nicht selbst geschrieben hat (z. B. ein Testbild, das du nach `_dsrunner/art` kopiert hast). Mit dieser Option ersetzt es sie, sobald es ein Bild findet. Am Ende jedes Laufs steht, wie viele von Hand abgelegte Bilder behalten wurden. Nur bei Bedarf einschalten, die Option wird nicht gespeichert. |
-| **Bilder für Konsolen-Ordner erzeugen** | Jeder Konsolen-Ordner (`NDS`, `GBA`, …) und jeder Unterordner bekommt ein Bild: Farbverlauf in der Konsolenfarbe mit großem Kürzel. Dafür ist kein Internet nötig. |
+| **Bilder für Ordner erzeugen (ohne eingebaute Konsolen-Bilder)** | Nur für Karten, deren Theme keine [eingebauten Konsolen-Bilder](CONFIG.md#eingebaute-konsolen-bilder) hat (`/_pico/themes/dsrunner/consoles/`): Jeder Konsolen-Ordner (`NDS`, `GBA`, …) und jeder Unterordner bekommt ein Bild, Farbverlauf in der Konsolenfarbe mit großem Kürzel. Liegen die eingebauten Bilder auf der Karte, erzeugt das Tool für Ordner nichts und **löscht seine früher erzeugten Ordner-Bilder**, damit DsRunner die eingebauten zeigt (selbst abgelegte Bilder und Bilder aus `art-override` bleiben bzw. haben Vorrang). Fehlt im Theme nur das Bild einer Konsole, bekommt dieser Ordner wie bisher ein erzeugtes. Dafür ist kein Internet nötig. |
 | **Spiel-Icon als Ersatzbild** | Findet das Tool für ein DS-Spiel kein Bild (z. B. Homebrew, keine Verbindung), baut es eins aus dem Icon des Spiels, auch für die Kachel. Bei der nächsten Aktualisierung wird erneut nach einem richtigen Bild gesucht. |
 | **Kachel-Bilder erzeugen** | Jedes Spiel bekommt ein Kachel-Bild (64 × 64) für das 3×2-Raster, siehe [Kachel-Bilder](#kachel-bilder). Standard: an. |
 | **Cover erzeugen** | Jedes Spiel bekommt ein Cover für die CoverFlow-Ansicht, siehe [Cover und Icons](#cover-und-icons). Standard: an. |
@@ -160,7 +160,7 @@ Gleichwertig: `py -m dsrunnerart --sd E:\` im Ordner `tools\dsrunner-art`. Die `
 | `--offline` | nichts herunterladen: nur eigene Bilder, Konsolen-Bilder, Icons |
 | `--override ORDNER` | Ordner mit eigenen Bildern |
 | `--sources libretro,gametdb` | Quellen und ihre Reihenfolge |
-| `--no-console-art`, `--no-icon` | keine Konsolen-Bilder bzw. Icon-Ersatzbilder |
+| `--no-console-art`, `--no-icon` | keine Ordner-Bilder (nur ohne eingebaute Konsolen-Bilder) bzw. Icon-Ersatzbilder |
 | `--no-tiles` | keine Kachel-Bilder erzeugen |
 | `--no-covers` | keine Cover für die CoverFlow-Ansicht erzeugen |
 | `--no-icons` | keine kleinen Icons (32 × 32) erzeugen (nicht verwechseln mit `--no-icon`) |

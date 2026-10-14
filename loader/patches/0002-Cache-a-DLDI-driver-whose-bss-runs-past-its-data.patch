@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Sat, 19 Sep 2026 16:33:10 -0400
+Subject: [PATCH 02/14] Cache a DLDI driver whose bss runs past its data
+
+driverEndAddress is the end of a driver's initialised data, and a bss
+section legitimately starts there and extends beyond it, still inside
+the allocated image. Bounding the glue, GOT and bss ranges by
+driverEndAddress rejected any driver that sets FIX_BSS, so nothing was
+ever saved on those cards. Bound the ranges by the image size instead.
+---
+ arm7/source/fat/dldi.cpp | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/arm7/source/fat/dldi.cpp b/arm7/source/fat/dldi.cpp
+index a0ab2fd..eba49ba 100644
+--- a/arm7/source/fat/dldi.cpp
++++ b/arm7/source/fat/dldi.cpp
+@@ -133,9 +133,18 @@ void dldi_copyTo(void* target)
+     memcpy(target, sDldiBuffer, sizeof(sDldiBuffer));
+ }
+ 
+-static bool isRangeInsideDriver(const dldi_header_t* driver, u32 start, u32 end)
++/// @brief Checks that a range lies inside the driver's allocated image.
++/// @note The range is bounded by the image size rather than by driverEndAddress.
++///       driverEndAddress is the end of the driver's initialised data, and a driver's bss
++///       legitimately begins there and runs past it, still inside the allocated image.
++/// @param driver The driver header.
++/// @param imageSize The number of bytes available for the driver image.
++/// @param start The first address of the range.
++/// @param end One past the last address of the range.
++static bool isRangeInsideImage(const dldi_header_t* driver, u32 imageSize, u32 start, u32 end)
+ {
+-    return start <= end && driver->driverStartAddress <= start && end <= driver->driverEndAddress;
++    return start <= end && driver->driverStartAddress <= start &&
++        end - driver->driverStartAddress <= imageSize;
+ }
+ 
+ static bool isFunctionInsideDriver(const dldi_header_t* driver, u32 function)
+@@ -176,18 +185,18 @@ static bool isCacheableDriver(const dldi_header_t* driver, u32 imageSize)
+     if (!(driver->fixFlags & DLDI_FIX_ALL))
+     {
+         if ((driver->fixFlags & DLDI_FIX_GLUE) &&
+-            !isRangeInsideDriver(driver, driver->glueStartAddress, driver->glueEndAddress))
++            !isRangeInsideImage(driver, imageSize, driver->glueStartAddress, driver->glueEndAddress))
+         {
+             return false;
+         }
+         if ((driver->fixFlags & DLDI_FIX_GOT) &&
+-            !isRangeInsideDriver(driver, driver->gotStartAddress, driver->gotEndAddress))
++            !isRangeInsideImage(driver, imageSize, driver->gotStartAddress, driver->gotEndAddress))
+         {
+             return false;
+         }
+     }
+     if ((driver->fixFlags & DLDI_FIX_BSS) &&
+-        !isRangeInsideDriver(driver, driver->bssStartAddress, driver->bssEndAddress))
++        !isRangeInsideImage(driver, imageSize, driver->bssStartAddress, driver->bssEndAddress))
+     {
+         return false;
+     }

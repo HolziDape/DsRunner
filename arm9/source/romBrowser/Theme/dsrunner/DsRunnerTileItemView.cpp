@@ -4,6 +4,12 @@
 #include "gui/GraphicsContext.h"
 #include "gui/OamManager.h"
 #include "gui/PaletteManager.h"
+#include "gui/OamBuilder.h"
+#include "gui/palette/GradientPalette.h"
+#include "gui/font/nitroFont2.h"
+#include "core/StringUtil.h"
+#include "themes/IFontRepository.h"
+#include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "core/math/RgbMixer.h"
 #include "themes/dsrunner/DsRunnerColorScheme.h"
 #include "romBrowser/IRomBrowserController.h"
@@ -33,6 +39,16 @@
 #define Z_STAR              (-340)
 // tile image size in the 4x3 grid: the tile height minus a small margin (64 px in the 3x2 grid)
 #define IMAGE_MARGIN        3
+
+// label under the console image of a folder: 64x16 pixels, 4 bpp, as two 32x16 sprites
+#define LABEL_WIDTH         64
+#define LABEL_HEIGHT        16
+#define LABEL_BYTES         (LABEL_WIDTH * LABEL_HEIGHT / 2)
+// the console templates have the image in their upper 48 lines, the label starts below it (3x2 grid)
+#define LABEL_Y_LARGE       50
+// 4x3 grid: the icon (image in its lines 4 to 27) moves up, the label follows below it
+#define ICON_Y_OFFSET_SMALL (-6)
+#define LABEL_Y_SMALL       27
 
 // favorite star: outer radius in the 3x2 / 4x3 grid and distance of its center to the top right
 // corner. It sits on the rounded corner like a badge, the large icons of the 3x2 grid leave no room
@@ -194,12 +210,69 @@ void DsRunnerTileItemView::InitVram(const VramContext& vramContext)
         _plttVramOffset = texPlttVramManager->Alloc(sizeof(_tilePalette));
         _hasTextureVram = true;
     }
+    const auto objVramManager = vramContext.GetObjVramManager();
+    if (objVramManager && gDsRunnerConsoleArt.IsAvailable())
+    {
+        _labelVramOffset = objVramManager->Alloc(LABEL_BYTES);
+        _labelVram = objVramManager->GetVramAddress(_labelVramOffset);
+    }
+}
+
+void DsRunnerTileItemView::SetLabel(const char* label)
+{
+    StringUtil::Copy(_label, label ? label : "", sizeof(_label));
+    _labelRendered = false;
+}
+
+void DsRunnerTileItemView::RenderLabel()
+{
+    const auto* fontRepository = gDsRunnerConsoleArt.GetFontRepository();
+    if (!_labelVram || !fontRepository || _label[0] == 0)
+        return;
+
+    char16_t text[sizeof(_label)];
+    StringUtil::Copy(text, _label, sizeof(_label));
+    // the larger font when it fits, otherwise the smaller one and as many characters as fit
+    int maxWidth = std::min(LABEL_WIDTH, _width - 4);
+    auto font = fontRepository->GetFont(_iconScale == 2 ? FontType::Medium11 : FontType::Medium10);
+    u32 textWidth, textHeight;
+    nft2_measureString(font, text, textWidth, textHeight);
+    if ((int)textWidth > maxWidth)
+    {
+        font = fontRepository->GetFont(_iconScale == 2 ? FontType::Medium10 : FontType::Medium7_5);
+        nft2_measureString(font, text, textWidth, textHeight);
+        u32 length = 0;
+        while (text[length] != 0)
+            length++;
+        while ((int)textWidth > maxWidth && length > 1)
+        {
+            text[--length] = 0;
+            nft2_measureString(font, text, textWidth, textHeight);
+        }
+    }
+
+    alignas(4) u8 tiles[LABEL_BYTES];
+    memset(tiles, 0, sizeof(tiles));
+    nft2_string_render_params_t renderParams;
+    renderParams.x = (LABEL_WIDTH - (int)textWidth) / 2;
+    renderParams.y = 0;
+    renderParams.width = LABEL_WIDTH;
+    renderParams.height = LABEL_HEIGHT;
+    renderParams.a5i3 = false;
+    // tiled in blocks of 32x16 pixels: exactly the two sprites one after the other
+    nft2_renderString(font, text, tiles, LABEL_WIDTH, &renderParams);
+    const u32* source = (const u32*)tiles;
+    vu32* destination = (vu32*)_labelVram;
+    for (u32 i = 0; i < LABEL_BYTES / 4; i++)
+        destination[i] = source[i];
+    _labelRendered = true;
 }
 
 void DsRunnerTileItemView::ClearTileImage()
 {
     _bindNumber = _bindNumber + 1;
     _tileImageLoaded = false;
+    _tileImageIsConsoleArt = false;
     if (_tileImageRequested)
     {
         _textureLoader->CancelLoad(_textureLoadRequest);
@@ -212,7 +285,8 @@ static inline u32 readLe32(const u8* data)
     return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
 }
 
-bool DsRunnerTileItemView::LoadTileImage(const char* path, const vu8& cancelRequested)
+bool DsRunnerTileItemView::LoadTileImage(const char* path, const DsRunnerConsoles::Color* tint,
+    const vu8& cancelRequested)
 {
     if (!_hasTextureVram || cancelRequested)
         return false;
@@ -261,17 +335,15 @@ bool DsRunnerTileItemView::LoadTileImage(const char* path, const vu8& cancelRequ
                 std::swap(top[x], bottom[x]);
         }
     }
-    for (u32 i = 0; i < 256; i++)
-    {
-        const u8* bgra = &sBmpPalette[i * 4];
-        _tilePalette[i] = i < colors ? ((bgra[2] >> 3) | ((bgra[1] >> 3) << 5) | ((bgra[0] >> 3) << 10)) : 0;
-    }
+    memset(_tilePalette, 0, sizeof(_tilePalette));
+    DsRunnerConsoleArt::ConvertPalette(sBmpPalette, colors, tint, _tilePalette);
     // the vblank texture loader copies the buffers with dma
     DC_FlushRange(_tileTexels, sizeof(_tileTexels));
     DC_FlushRange(_tilePalette, sizeof(_tilePalette));
 
     if (cancelRequested || bindNumber != _bindNumber)
         return false;
+    _tileImageIsConsoleArt = tint != nullptr;
     _tileImageLoaded = true;
     return true;
 }
@@ -307,8 +379,9 @@ void DsRunnerTileItemView::DrawTileImage()
         top64 = _clipTop << 6;
     }
 
+    // the console templates are transparent around the image
     Gx::TexImageParam(_texVramOffset >> 3, false, false, false, false, GX_TEXSIZE_64, GX_TEXSIZE_64,
-        GX_TEXFMT_PLTT256, false, GX_TEXGEN_NONE);
+        GX_TEXFMT_PLTT256, _tileImageIsConsoleArt, GX_TEXGEN_NONE);
     Gx::TexPlttBase(_plttVramOffset >> 4);
     Gx::Color(0x7FFF);
     auto texTop = fix16<4>::FromRawValue(texTop64 >> 2);
@@ -360,7 +433,13 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
     {
         // console tiles: the console badge (icon) sits on a frame that is lighter than the badge
         // when selected and sunk into the background otherwise
-        if (isSelected)
+        if (isSelected && gDsRunnerConsoleArt.IsAvailable())
+        {
+            // the light console images need a body that stays close to the console color
+            top = RgbMixer::Lerp(_tint, DsRunnerColors::White, 1, 8);
+            bottom = RgbMixer::Lerp(_tint, DsRunnerColors::BgTop, 1, 8);
+        }
+        else if (isSelected)
         {
             top = RgbMixer::Lerp(_tint, DsRunnerColors::White, 3, 8);
             bottom = RgbMixer::Lerp(_tint, DsRunnerColors::White, 2, 8);
@@ -424,21 +503,49 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
             DsRunnerColors::Accent, DsRunnerColors::Accent, Z_GLOW - 10, _clipTop - margin);
     }
 
+    // Folders with a console image get their label below it: the 3x2 grid shows the 64x64 template,
+    // the 4x3 grid the 32x32 icon moved up a bit.
+    bool hasLabel = _labelRendered && gDsRunnerConsoleArt.IsAvailable() &&
+        (showTileImage ? _tileImageIsConsoleArt : (_iconScale == 1 && _icon));
+    int labelY = _position.y + (showTileImage ? LABEL_Y_LARGE : LABEL_Y_SMALL);
+    if (hasLabel && labelY >= _clipTop)
+        DrawLabel(graphicsContext, labelY, RgbMixer::Lerp(top, bottom, labelY + 8 - _position.y, _height));
+
     // sprites can't be cut off: the icon of a tile that scrolls under the app bar disappears
     // as soon as it would reach into it
     int iconHalfSize = 16 * _iconScale;
-    if (!showTileImage && _icon && _position.y + _height / 2 - iconHalfSize >= _clipTop)
+    int iconYOffset = hasLabel ? ICON_Y_OFFSET_SMALL : 0;
+    if (!showTileImage && _icon && _position.y + _height / 2 + iconYOffset - iconHalfSize >= _clipTop)
     {
         // the icon blends into the middle of the body gradient
-        DrawIcon(graphicsContext, RgbMixer::Lerp(top, bottom, 1, 2));
+        DrawIcon(graphicsContext, RgbMixer::Lerp(top, bottom, 1, 2), iconYOffset);
     }
 }
 
-void DsRunnerTileItemView::DrawIcon(GraphicsContext& graphicsContext, const Rgb888& bodyColor)
+void DsRunnerTileItemView::DrawLabel(GraphicsContext& graphicsContext, int y, const Rgb888& bodyColor)
+{
+    // the font's 16 levels blend from the body color to white
+    int x = _position.x + (_width - LABEL_WIDTH) / 2;
+    // sprite coordinates wrap around: a label below the screen would show up at the top
+    if (!graphicsContext.IsVisible(Rectangle(x, y, LABEL_WIDTH, LABEL_HEIGHT)) || y >= 192)
+        return;
+    u32 paletteRow = graphicsContext.GetPaletteManager().AllocRow(
+        GradientPalette(bodyColor, DsRunnerColors::White), y, y + LABEL_HEIGHT);
+    auto oams = graphicsContext.GetOamManager().AllocOams(2);
+    for (int i = 0; i < 2; i++)
+    {
+        OamBuilder::OamWithSize<32, 16>(x + i * 32, y, (_labelVramOffset + i * (LABEL_BYTES / 2)) >> 7)
+            .WithPalette16(paletteRow)
+            .WithPriority(graphicsContext.GetPriority())
+            .Build(oams[i]);
+    }
+}
+
+void DsRunnerTileItemView::DrawIcon(GraphicsContext& graphicsContext, const Rgb888& bodyColor, int yOffset)
 {
     // icons are 32x32, drawn centered on the tile
     int centerX = _position.x + _width / 2;
-    int centerY = _position.y + _height / 2;
+    int centerY = _position.y + _height / 2 + yOffset;
     _icon->SetPosition(centerX - 16, centerY - 16);
 
     if (_iconScale != 2 ||

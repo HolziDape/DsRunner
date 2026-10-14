@@ -50,3 +50,6 @@ Thumbs.db
 
 # DsRunner
 sd-package/
+
+# Pico Loader build (loader/build.sh)
+loader/work/

@@ -1,5 +1,6 @@
 #pragma once
 #include "core/task/TaskQueue.h"
+#include "DsRunnerConsoles.h"
 
 /// @brief Full screen artwork on the top screen (256x192, 8 bpp BMP from /_dsrunner/art).
 ///        Shown on sub BG2 above the gradient. Changing the art fades the old one out to the gradient
@@ -11,9 +12,11 @@ public:
     DsRunnerTopArt();
     ~DsRunnerTopArt();
 
-    /// @brief Shows the artwork at \p path, or none for nullptr / an empty path.
-    ///        A missing or invalid file shows no artwork (the gradient stays visible).
-    void Request(const char* path, TaskQueueBase* ioTaskQueue);
+    /// @brief Shows the artwork at \p path, or none for nullptr / an empty path. When it can't be
+    ///        loaded, the template at \p fallbackPath tinted with \p fallbackTint (see DsRunnerConsoleArt),
+    ///        if there is one. Without an image the gradient stays visible.
+    void Request(const char* path, const char* fallbackPath, const DsRunnerConsoles::Color& fallbackTint,
+        TaskQueueBase* ioTaskQueue);
 
     /// @brief Advances loading and fading. Call once per frame.
     void Update();
@@ -31,8 +34,12 @@ private:
 
     // the art that should be shown (main thread only)
     char _requestedPath[256] = { 0 };
-    // the file the load task reads, only changed while no load task exists
+    char _requestedFallbackPath[128] = { 0 };
+    DsRunnerConsoles::Color _requestedTint;
+    // the files the load task reads, only changed while no load task exists
     char _loadingPath[256] = { 0 };
+    char _loadingFallbackPath[128] = { 0 };
+    DsRunnerConsoles::Color _loadingTint;
     TaskQueueBase* _ioTaskQueue = nullptr;
     // frames to wait before loading, so holding the dpad doesn't read every file on the way
     int _loadDelay = 0;
@@ -61,7 +68,8 @@ private:
     alignas(32) u16 _blendTable[193];
 
     void StartLoad();
-    LoadResult Load(const char* path, u32 requestNumber, const vu8& cancelRequested);
+    LoadResult Load(const char* path, const DsRunnerConsoles::Color* tint, u32 requestNumber,
+        const vu8& cancelRequested);
     bool IsStale(u32 requestNumber, const vu8& cancelRequested) const
     {
         return cancelRequested || requestNumber != _requestNumber;

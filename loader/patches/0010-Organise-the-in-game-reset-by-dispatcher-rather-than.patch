@@ -1,0 +1,1408 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Thu, 17 Sep 2026 21:11:37 -0400
+Subject: [PATCH 10/14] Organise the in-game reset by dispatcher rather than by
+ layer
+
+The dispatcher table and its function pointers cost more to read than they
+saved to write. They existed so that adding a dispatcher touched one table row,
+which only pays off with many more versions than there are; at three, the
+indirection is the harder half to follow.
+
+Replacing them with an explicit chain of searches and two switches removes the
+table, the descriptor struct, and six thunks that existed only to fill it in,
+and lets each search inline its own validation instead of splitting it across a
+function with a fixed signature.
+
+What made the table worth having in the first place is kept: the search itself
+is still written once, since iterating every candidate, rejecting a second
+match and bounds checking are the parts worth getting right in one place.
+
+The files are now grouped by dispatcher instead of by layer, so a dispatcher's
+pattern, checks and patch code sit together rather than in three files, and the
+whole feature moves into a directory of its own. The generated patch code is
+unchanged, and all five sections are the same size as before.
+---
+ arm9/source/Arm9Patcher.cpp                   |   2 +-
+ .../{ => InGameReset}/InGameResetPatch.cpp    |  66 ++-
+ .../arm9/{ => InGameReset}/InGameResetPatch.h |  19 +-
+ .../{ => InGameReset}/InGameResetPatchCode.h  |  77 +---
+ .../{ => InGameReset}/InGameResetPatchCode.s  |   0
+ .../arm9/InGameReset/IrqDispatcher.cpp        |  64 +++
+ .../patches/arm9/InGameReset/IrqDispatcher.h  |  79 ++++
+ .../arm9/InGameReset/IrqDispatcherBlx.cpp     |  84 ++++
+ .../arm9/InGameReset/IrqDispatcherBlx.h       |  33 ++
+ .../arm9/InGameReset/IrqDispatcherNested.cpp  |  86 ++++
+ .../arm9/InGameReset/IrqDispatcherNested.h    |  34 ++
+ .../arm9/InGameReset/IrqDispatcherSdk.cpp     | 105 +++++
+ .../arm9/InGameReset/IrqDispatcherSdk.h       |  31 ++
+ .../patches/arm9/IrqDispatcherVariants.cpp    | 436 ------------------
+ .../patches/arm9/IrqDispatcherVariants.h      |  72 ---
+ 15 files changed, 593 insertions(+), 595 deletions(-)
+ rename arm9/source/patches/arm9/{ => InGameReset}/InGameResetPatch.cpp (53%)
+ rename arm9/source/patches/arm9/{ => InGameReset}/InGameResetPatch.h (73%)
+ rename arm9/source/patches/arm9/{ => InGameReset}/InGameResetPatchCode.h (52%)
+ rename arm9/source/patches/arm9/{ => InGameReset}/InGameResetPatchCode.s (100%)
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcher.h
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.cpp
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.h
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.cpp
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.h
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.h
+ delete mode 100644 arm9/source/patches/arm9/IrqDispatcherVariants.cpp
+ delete mode 100644 arm9/source/patches/arm9/IrqDispatcherVariants.h
+
+diff --git a/arm9/source/Arm9Patcher.cpp b/arm9/source/Arm9Patcher.cpp
+index 885635d..e54b314 100644
+--- a/arm9/source/Arm9Patcher.cpp
++++ b/arm9/source/Arm9Patcher.cpp
+@@ -12,7 +12,7 @@
+ #include "patches/arm9/sdk5/CardiReadRomWithCpuPatch.h"
+ #include "patches/arm9/CardiReadRomIdCorePatch.h"
+ #include "patches/arm9/OSResetSystemPatch.h"
+-#include "patches/arm9/InGameResetPatch.h"
++#include "patches/arm9/InGameReset/InGameResetPatch.h"
+ #include "patches/arm9/PokemonDownloaderArm9Patch.h"
+ #include "patches/arm9/DSProtectArm9Patch.h"
+ #include "patches/arm9/LastWindowCrcPatch.h"
+diff --git a/arm9/source/patches/arm9/InGameResetPatch.cpp b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+similarity index 53%
+rename from arm9/source/patches/arm9/InGameResetPatch.cpp
+rename to arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+index 37a9bf4..3c06fdd 100644
+--- a/arm9/source/patches/arm9/InGameResetPatch.cpp
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+@@ -3,21 +3,72 @@
+ #include "patches/PatchContext.h"
+ #include "sharedMemory.h"
+ #include "inGameReset.h"
+-#include "OSResetSystemPatch.h"
+-#include "OSResetSystemPatchCode.h"
++#include "../OSResetSystemPatch.h"
++#include "../OSResetSystemPatchCode.h"
+ #include "InGameResetPatchCode.h"
+-#include "IrqDispatcherVariants.h"
++#include "IrqDispatcherSdk.h"
++#include "IrqDispatcherBlx.h"
++#include "IrqDispatcherNested.h"
+ #include "InGameResetPatch.h"
+ 
+ bool InGameResetPatch::FindPatchTarget(PatchContext& patchContext)
+ {
+-    _irqDispatcherVariant = FindIrqDispatcher(patchContext, _irqDispatcherMatch);
++    // Tried in order, stopping at the first that matches. The stock dispatcher is first
++    // because nearly every game has it.
++    if (FindSdkIrqDispatcher(patchContext, _irqDispatcherMatch))
++    {
++        _irqDispatcherVariant = IrqDispatcherVariant::Sdk;
++    }
++    else if (FindBlxIrqDispatcher(patchContext, _irqDispatcherMatch))
++    {
++        _irqDispatcherVariant = IrqDispatcherVariant::Blx;
++    }
++    else if (FindNestedIrqDispatcher(patchContext, _irqDispatcherMatch))
++    {
++        _irqDispatcherVariant = IrqDispatcherVariant::Nested;
++    }
++    else
++    {
++        LOG_DEBUG("In-game reset: no known irq dispatcher found\n");
++    }
+     return true;
+ }
+ 
++u32 InGameResetPatch::GetDispatchPatchCodeSize() const
++{
++    switch (_irqDispatcherVariant)
++    {
++        case IrqDispatcherVariant::Sdk:    return InGameResetSdkDispatchPatchCode::GetSize();
++        case IrqDispatcherVariant::Blx:    return InGameResetBlxDispatchPatchCode::GetSize();
++        case IrqDispatcherVariant::Nested: return InGameResetNestedDispatchPatchCode::GetSize();
++        default:                           return 0;
++    }
++}
++
++const InGameResetDispatchPatchCode* InGameResetPatch::CreateDispatchPatchCode(
++    PatchContext& patchContext, const InGameResetKeyCheckPatchCode* keyCheckPatchCode) const
++{
++    auto& patchCodeCollection = patchContext.GetPatchCodeCollection();
++    auto& patchHeap = patchContext.GetPatchHeap();
++    switch (_irqDispatcherVariant)
++    {
++        case IrqDispatcherVariant::Sdk:
++            return patchCodeCollection.AddUniquePatchCode<InGameResetSdkDispatchPatchCode>(
++                patchHeap, _irqDispatcherMatch, keyCheckPatchCode);
++        case IrqDispatcherVariant::Blx:
++            return patchCodeCollection.AddUniquePatchCode<InGameResetBlxDispatchPatchCode>(
++                patchHeap, _irqDispatcherMatch, keyCheckPatchCode);
++        case IrqDispatcherVariant::Nested:
++            return patchCodeCollection.AddUniquePatchCode<InGameResetNestedDispatchPatchCode>(
++                patchHeap, _irqDispatcherMatch, keyCheckPatchCode);
++        default:
++            return nullptr;
++    }
++}
++
+ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+ {
+-    if (!_irqDispatcherVariant)
++    if (_irqDispatcherVariant == IrqDispatcherVariant::None)
+     {
+         return;
+     }
+@@ -44,7 +95,7 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+     }
+     sizes[count++] = InGameResetResetPatchCode::GetSize();
+     sizes[count++] = InGameResetKeyCheckPatchCode::GetSize();
+-    sizes[count++] = _irqDispatcherVariant->getPatchCodeSize();
++    sizes[count++] = GetDispatchPatchCodeSize();
+     if (!patchContext.GetPatchHeap().CanAllocAll(sizes.data(), count))
+     {
+         LOG_WARNING("In-game reset: not enough patch space\n");
+@@ -69,8 +120,7 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+         patchContext.GetPatchHeap(),
+         resetPatchCode
+     );
+-    auto dispatchPatchCode = _irqDispatcherVariant->createPatchCode(
+-        patchContext, _irqDispatcherMatch, keyCheckPatchCode);
++    auto dispatchPatchCode = CreateDispatchPatchCode(patchContext, keyCheckPatchCode);
+ 
+     // Overwrite two of the dispatcher's instructions with a jump to the dispatch part.
+     // 0xE51FF004 is ldr pc, [pc, #-4]: load pc from the word that follows it.
+diff --git a/arm9/source/patches/arm9/InGameResetPatch.h b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.h
+similarity index 73%
+rename from arm9/source/patches/arm9/InGameResetPatch.h
+rename to arm9/source/patches/arm9/InGameReset/InGameResetPatch.h
+index a01d2e8..9b4e729 100644
+--- a/arm9/source/patches/arm9/InGameResetPatch.h
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.h
+@@ -1,9 +1,11 @@
+ #pragma once
+-#include "../Patch.h"
++#include "patches/Patch.h"
+ #include "LoaderInfo.h"
+-#include "IrqDispatcherVariants.h"
++#include "IrqDispatcher.h"
+ 
+ class OSResetSystemPatch;
++class InGameResetDispatchPatchCode;
++class InGameResetKeyCheckPatchCode;
+ 
+ /// @brief Arm9 patch that returns to the launcher when a key combination is held during
+ ///        gameplay, regardless of whether the game implements a soft reset of its own.
+@@ -11,8 +13,8 @@ class OSResetSystemPatch;
+ ///        The keys are sampled in the game's arm9 interrupt dispatcher, and the reset enters
+ ///        the same reboot into Pico Loader that \see OSResetSystemPatch uses. Nearly every
+ ///        retail title uses the stock SDK dispatcher, but a few developers replaced it, so
+-///        the dispatcher is looked up in a table of known versions
+-///        (\see irq_dispatcher_variant_t). That reboot is installed here when the
++///        the dispatcher is searched for as each known version in turn
++///        (\see IrqDispatcherVariant). That reboot is installed here when the
+ ///        game has no OS_ResetSystem, which is common, as the linker drops it from games
+ ///        that never call it. When the dispatcher cannot be found the patch does nothing
+ ///        and the game boots as it would without it.
+@@ -39,6 +41,13 @@ private:
+     // not bool.
+     u16 _twlArm7Sync;
+     u16 _hasSdReadPatchCode;
+-    const irq_dispatcher_variant_t* _irqDispatcherVariant = nullptr;
++    IrqDispatcherVariant _irqDispatcherVariant = IrqDispatcherVariant::None;
+     IrqDispatcherMatch _irqDispatcherMatch = { };
++
++    /// @brief Returns the patch heap space the matched dispatcher's dispatch part needs.
++    u32 GetDispatchPatchCodeSize() const;
++
++    /// @brief Creates the matched dispatcher's dispatch part.
++    const InGameResetDispatchPatchCode* CreateDispatchPatchCode(PatchContext& patchContext,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode) const;
+ };
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.h b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+similarity index 52%
+rename from arm9/source/patches/arm9/InGameResetPatchCode.h
+rename to arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+index 45e9693..6e05725 100644
+--- a/arm9/source/patches/arm9/InGameResetPatchCode.h
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+@@ -1,5 +1,5 @@
+ #pragma once
+-#include "../PatchCode.h"
++#include "patches/PatchCode.h"
+ #include "sections.h"
+ 
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_keycheck);
+@@ -80,8 +80,9 @@ public:
+ };
+ 
+ /// @brief Base class for the part of the in-game reset that replaces the dispatch of a game's
+-///        arm9 interrupt dispatcher. There is one of these per dispatcher version, and only
+-///        the one matching the game is placed in the patch heap.
++///        arm9 interrupt dispatcher. There is one subclass per dispatcher version, each in its
++///        own IrqDispatcher header, and only the one matching the game is placed in the patch
++///        heap.
+ class InGameResetDispatchPatchCode : public PatchCode
+ {
+ public:
+@@ -97,73 +98,3 @@ public:
+ private:
+     const void* const _entry;
+ };
+-
+-/// @brief Dispatch part for the stock SDK interrupt dispatcher.
+-class InGameResetSdkDispatchPatchCode : public InGameResetDispatchPatchCode
+-{
+-public:
+-    InGameResetSdkDispatchPatchCode(PatchHeap& patchHeap, u32 irqTable, u32 irqReturn,
+-        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
+-        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_sdk),
+-            SECTION_SIZE(patch_ingamereset_dispatch_sdk), patchHeap,
+-            (void*)patch_ingamereset_sdkDispatch)
+-    {
+-        patch_ingamereset_sdkIrqTable = irqTable;
+-        patch_ingamereset_sdkIrqReturn = irqReturn;
+-        patch_ingamereset_sdkKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
+-    }
+-
+-    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
+-    static u32 GetSize()
+-    {
+-        return SECTION_SIZE(patch_ingamereset_dispatch_sdk);
+-    }
+-};
+-
+-/// @brief Dispatch part for a dispatcher that picks the interrupt with a single clz and calls
+-///        the handler with blx. It needs no interrupt table address, because the dispatcher
+-///        already holds one in a register at the point where this takes over.
+-class InGameResetBlxDispatchPatchCode : public InGameResetDispatchPatchCode
+-{
+-public:
+-    InGameResetBlxDispatchPatchCode(PatchHeap& patchHeap, u32 irqReturn,
+-        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
+-        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_blx),
+-            SECTION_SIZE(patch_ingamereset_dispatch_blx), patchHeap,
+-            (void*)patch_ingamereset_blxDispatch)
+-    {
+-        patch_ingamereset_blxIrqReturn = irqReturn;
+-        patch_ingamereset_blxKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
+-    }
+-
+-    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
+-    static u32 GetSize()
+-    {
+-        return SECTION_SIZE(patch_ingamereset_dispatch_blx);
+-    }
+-};
+-
+-/// @brief Dispatch part for the stock dispatcher wrapped so that interrupts can nest. It hooks
+-///        before the game switches to system mode with irqs enabled, so normal dispatch carries
+-///        on in the game's own code rather than at the handler.
+-class InGameResetNestedDispatchPatchCode : public InGameResetDispatchPatchCode
+-{
+-public:
+-    InGameResetNestedDispatchPatchCode(PatchHeap& patchHeap, u32 irqTable, u32 continueAddress,
+-        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
+-        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_nested),
+-            SECTION_SIZE(patch_ingamereset_dispatch_nested), patchHeap,
+-            (void*)patch_ingamereset_nestedDispatch)
+-    {
+-        patch_ingamereset_nestedIrqTable = irqTable;
+-        patch_ingamereset_nestedContinue = continueAddress;
+-        patch_ingamereset_nestedResumeAddress = (u32)GetAddressAtTarget((void*)patch_ingamereset_nestedResume);
+-        patch_ingamereset_nestedKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
+-    }
+-
+-    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
+-    static u32 GetSize()
+-    {
+-        return SECTION_SIZE(patch_ingamereset_dispatch_nested);
+-    }
+-};
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+similarity index 100%
+rename from arm9/source/patches/arm9/InGameResetPatchCode.s
+rename to arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp
+new file mode 100644
+index 0000000..13867c2
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp
+@@ -0,0 +1,64 @@
++#include "common.h"
++#include "patches/PatchContext.h"
++#include "IrqDispatcher.h"
++
++// The first four words of a pattern are what the search looks for, because that is the only
++// width it supports.
++#define IRQ_DISPATCHER_ANCHOR_SIZE  (4 * sizeof(u32))
++
++// Compares a candidate against the whole pattern, skipping the wildcard words.
++static bool matchesPattern(const u32* candidate, const u32* pattern, u32 patternWordCount,
++    u32 wildcardMask, const u32* dataEnd)
++{
++    if (candidate + patternWordCount > dataEnd)
++    {
++        return false;
++    }
++    for (u32 i = 0; i < patternWordCount; i++)
++    {
++        if (!(wildcardMask & (1u << i)) && candidate[i] != pattern[i])
++        {
++            return false;
++        }
++    }
++    return true;
++}
++
++u32* FindUniqueIrqDispatcherPattern(PatchContext& patchContext, const u32* pattern,
++    u32 patternWordCount, u32 wildcardMask, const char* name)
++{
++    const u32* dataEnd = patchContext.GetDataEnd();
++
++    u32* match = nullptr;
++    u32 matchCount = 0;
++    for (u32* hit = patchContext.FindPattern32(pattern, IRQ_DISPATCHER_ANCHOR_SIZE);
++         hit != nullptr;
++         hit = patchContext.FindPattern32(pattern, IRQ_DISPATCHER_ANCHOR_SIZE, hit + 1))
++    {
++        if (!matchesPattern(hit, pattern, patternWordCount, wildcardMask, dataEnd))
++        {
++            continue;
++        }
++        if (matchCount++ == 0)
++        {
++            match = hit;
++        }
++    }
++
++    if (matchCount > 1)
++    {
++        LOG_WARNING("In-game reset: %s irq dispatcher is ambiguous\n", name);
++        return nullptr;
++    }
++    return match;
++}
++
++const u32* ResolvePcRelativeLoad(PatchContext& patchContext, const u32* load, u32 opcode)
++{
++    if ((*load & PC_RELATIVE_LOAD_MASK) != opcode)
++    {
++        return nullptr;
++    }
++    const u32* literal = load + 2 + ((*load & ~PC_RELATIVE_LOAD_MASK) >> 2);
++    return literal < patchContext.GetDataEnd() ? literal : nullptr;
++}
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h
+new file mode 100644
+index 0000000..3c35cbf
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h
+@@ -0,0 +1,79 @@
++#pragma once
++#include "patches/PatchContext.h"
++
++/// @brief The version of the arm9 interrupt dispatcher a game was built with. Nearly every
++///        retail game has the stock one; the others are developer replacements, named for
++///        what the dispatcher does rather than for the game they were found in, since a
++///        second game could share a shape.
++enum class IrqDispatcherVariant
++{
++    /// @brief No known dispatcher was found, and the in-game reset is not installed.
++    None,
++
++    /// @brief The stock SDK dispatcher (OS_IrqHandler), used from SDK 2 through SDK 5.
++    Sdk,
++
++    /// @brief Picks the interrupt with a single clz and calls the handler with blx.
++    ///        Found in Golden Sun: Dark Dawn.
++    Blx,
++
++    /// @brief The stock dispatcher wrapped so that interrupts can nest.
++    ///        Found in Black Sigil: Blade of the Exiled.
++    Nested
++};
++
++/// @brief Where and how the in-game reset hooks into a game's arm9 interrupt dispatcher,
++///        filled in by the search for that dispatcher.
++struct IrqDispatcherMatch
++{
++    /// @brief The two words of the dispatcher that are overwritten with a jump to the
++    ///        dispatch part.
++    u32* hook;
++
++    /// @brief The address, after autoload has moved the dispatcher, at which the dispatch
++    ///        part carries on with the game's own code. What it is used for depends on the
++    ///        dispatcher: it may be the address the handler returns to, or the instruction
++    ///        the dispatch part resumes at.
++    u32 continueAddress;
++
++    /// @brief The address of the game's interrupt handler table, or 0 for a dispatcher that
++    ///        does not need it because it already has it in a register.
++    u32 irqTable;
++};
++
++/// @brief Finds the one place a dispatcher pattern matches in the ntr region.
++///
++///        The search only supports a four word pattern, so the first four words are used to
++///        find candidates and the rest is compared afterwards. Those four words may appear in
++///        unrelated code, and in another dispatcher, so every candidate is compared against
++///        the whole pattern rather than only the first. A pattern must therefore begin with
++///        four words that are not wildcards.
++///
++///        Matching in more than one place means it is unclear which is the real dispatcher,
++///        which is reported and treated as no match, because patching the wrong one would
++///        break the game.
++///
++/// @param patchContext The patch context to use.
++/// @param pattern The instructions that identify the dispatcher.
++/// @param patternWordCount The number of words in \p pattern.
++/// @param wildcardMask One bit per pattern word, set when that word is allowed to be
++///                    anything. Literal pool offsets differ between builds of the same
++///                    dispatcher, which is what this is for.
++/// @param name The name of the dispatcher version, used in the log.
++/// @return The single location the pattern matches, or \c nullptr when it matches no place
++///         or more than one.
++u32* FindUniqueIrqDispatcherPattern(PatchContext& patchContext, const u32* pattern,
++    u32 patternWordCount, u32 wildcardMask, const char* name);
++
++/// @brief Resolves a "ldr Rd, [pc, #imm]" into the word it reads. Reading pc gives the address
++///        of the instruction plus 8, so the literal is two words past the load plus its offset.
++/// @param patchContext The patch context to use.
++/// @param load The instruction to resolve.
++/// @param opcode The expected instruction with a zero offset, which is checked so that a
++///               wildcarded pattern word is still known to be the right load.
++/// @return The word the load reads, or \c nullptr when it is not that instruction or the
++///         literal falls outside the ntr region.
++const u32* ResolvePcRelativeLoad(PatchContext& patchContext, const u32* load, u32 opcode);
++
++/// @brief Mask covering everything but the offset of a pc relative load.
++#define PC_RELATIVE_LOAD_MASK   0xFFFFF000u
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.cpp
+new file mode 100644
+index 0000000..69c5d96
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.cpp
+@@ -0,0 +1,84 @@
++#include "common.h"
++#include "patches/PatchContext.h"
++#include "IrqDispatcherBlx.h"
++
++// A dispatcher that picks the interrupt with a single clz and calls the handler with blx,
++// found in Golden Sun: Dark Dawn. Everything after the IME test is conditional, so the whole
++// run from the dispatcher's first instruction to its call is one pattern, which identifies it
++// far more tightly than the stock dispatcher's four instructions do.
++static const u32 sPattern[] =
++{
++    0xE3A0C301u, // mov ip, #0x04000000
++    0xE5BC2208u, // ldr r2, [ip, #0x208]!        @ IME
++    0xE1EC00D8u, // ldrd r0, r1, [ip, #8]!       @ IE, IF
++    0xE3520000u, // cmp r2, #0
++    0x10101001u, // andsne r1, r0, r1
++    0x152DE004u, // pushne {lr}
++    0x159FE000u, // ldrne lr, [pc, #irqTableEnd] @ offset differs between builds
++    0x12610000u, // rsbne r0, r1, #0
++    0x10001001u, // andne r1, r0, r1
++    0x116F0F11u, // clzne r0, r1
++    0x171EE100u, // ldrne lr, [lr, -r0, lsl #2]
++    0x158C1004u, // strne r1, [ip, #4]
++    0xE12FFF3Eu  // blx lr
++};
++
++// The load of the table address, whose literal pool offset is the only part of this
++// dispatcher that differs between builds.
++#define IRQ_TABLE_LOAD_WORD     6
++#define IRQ_TABLE_LOAD_OPCODE   0x159FE000u // ldrne lr, [pc, #imm12], adding the offset
++
++// The two conditional instructions the jump replaces, and the address of the instruction
++// after the call, which is where the handler returns to. 13 words = 0x34 bytes.
++#define HOOK_WORD               10
++#define IRQ_RETURN_OFFSET       0x34
++
++// SDK code that runs from instruction tightly-coupled memory is linked into this range, which
++// is a mirror of ITCM. A dispatcher that autoload does not place there is not this one.
++#define ITCM_MIRROR_START       0x01FF8000u
++#define ITCM_MIRROR_END         0x02000000u
++
++bool FindBlxIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result)
++{
++    u32* match = FindUniqueIrqDispatcherPattern(patchContext, sPattern,
++        sizeof(sPattern) / sizeof(u32), 1u << IRQ_TABLE_LOAD_WORD, "blx");
++    if (!match)
++    {
++        return false;
++    }
++
++    // This dispatcher has no literal holding the address it runs from, so instead check that
++    // autoload does move it into ITCM, which is where it has to run.
++    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
++    if (finalAddress < ITCM_MIRROR_START || finalAddress >= ITCM_MIRROR_END)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher is not in itcm (0x%X)\n", finalAddress);
++        return false;
++    }
++
++    // The dispatch part does not need the table, because the dispatcher has already loaded
++    // it, but a match whose table is nonsense is not this dispatcher. Resolving the load also
++    // confirms the wildcarded word is still the pc relative load it should be.
++    const u32* tableLiteral = ResolvePcRelativeLoad(patchContext,
++        &match[IRQ_TABLE_LOAD_WORD], IRQ_TABLE_LOAD_OPCODE);
++    if (!tableLiteral)
++    {
++        LOG_WARNING("In-game reset: irq table load mismatch\n");
++        return false;
++    }
++
++    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
++    u32 irqTable = *tableLiteral;
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return false;
++    }
++
++    result.hook = match + HOOK_WORD;
++    result.irqTable = irqTable;
++    result.continueAddress = finalAddress + IRQ_RETURN_OFFSET;
++    LOG_DEBUG("In-game reset: blx irq dispatcher at 0x%p (final 0x%X), table 0x%X\n",
++        match, finalAddress, irqTable);
++    return true;
++}
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.h b/arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.h
+new file mode 100644
+index 0000000..3ba5dc3
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherBlx.h
+@@ -0,0 +1,33 @@
++#pragma once
++#include "IrqDispatcher.h"
++#include "InGameResetPatchCode.h"
++
++/// @brief Dispatch part for a dispatcher that picks the interrupt with a single clz and calls
++///        the handler with blx. It needs no interrupt table address, because the dispatcher
++///        already holds one in a register at the point where this takes over.
++class InGameResetBlxDispatchPatchCode : public InGameResetDispatchPatchCode
++{
++public:
++    InGameResetBlxDispatchPatchCode(PatchHeap& patchHeap, const IrqDispatcherMatch& match,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_blx),
++            SECTION_SIZE(patch_ingamereset_dispatch_blx), patchHeap,
++            (void*)patch_ingamereset_blxDispatch)
++    {
++        patch_ingamereset_blxIrqReturn = match.continueAddress;
++        patch_ingamereset_blxKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_dispatch_blx);
++    }
++};
++
++/// @brief Searches for a dispatcher that picks the interrupt with a single clz and calls the
++///        handler with blx.
++/// @param patchContext The patch context to use.
++/// @param result Receives the hook location and addresses when it is found.
++/// @return True when it was found, or false otherwise.
++bool FindBlxIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result);
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.cpp
+new file mode 100644
+index 0000000..9a2e95f
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.cpp
+@@ -0,0 +1,86 @@
++#include "common.h"
++#include "patches/PatchContext.h"
++#include "IrqDispatcherNested.h"
++
++// The stock dispatcher wrapped so that interrupts can nest, found in Black Sigil: Blade of
++// the Exiled. It is the stock dispatcher up to the table lookup, which is why the pattern has
++// to reach past it into the mode switch: without those instructions it would also match the
++// stock dispatcher.
++static const u32 sPattern[] =
++{
++    0xE16F0F11u, // clz r0, r1
++    0xE1D11033u, // bics r1, r1, r3, lsr r0
++    0x1AFFFFFCu, // bne clz
++    0xE1A01033u, // lsr r1, r3, r0
++    0xE58C1004u, // str r1, [ip, #4]              @ acknowledge
++    0xE270001Fu, // rsbs r0, r0, #31
++    0xE59F1000u, // ldr r1, [pc, #irqTable]       @ offset differs between builds
++    0xE7910100u, // ldr r0, [r1, r0, lsl #2]
++    0xE10F3000u, // mrs r3, CPSR                  @ switch to system mode with irqs on
++    0xE3C330DFu, // bic r3, r3, #0xDF
++    0xE383301Fu, // orr r3, r3, #0x1F
++    0xE129F003u, // msr CPSR_fc, r3
++    0xE92D4000u, // stmfd sp!, {lr}
++    0xE59FE000u, // ldr lr, [pc, #irqReturn]      @ offset differs between builds
++    0xE12FFF10u  // bx r0
++};
++
++// The two pc relative loads, whose literal pool offsets are the only parts of this dispatcher
++// that differ between builds.
++#define IRQ_TABLE_LOAD_WORD     6
++#define IRQ_TABLE_LOAD_OPCODE   0xE59F1000u // ldr r1, [pc, #imm12], adding the offset
++#define IRQ_RETURN_LOAD_WORD    13
++#define IRQ_RETURN_LOAD_OPCODE  0xE59FE000u // ldr lr, [pc, #imm12], adding the offset
++
++// The two loads the jump replaces, the mode switch the dispatch part carries on at, and the
++// instruction the handler returns to, which is the whole pattern away.
++#define HOOK_WORD               6
++#define CONTINUE_OFFSET         0x20
++#define IRQ_RETURN_OFFSET       0x3C
++
++bool FindNestedIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result)
++{
++    u32* match = FindUniqueIrqDispatcherPattern(patchContext, sPattern,
++        sizeof(sPattern) / sizeof(u32),
++        (1u << IRQ_TABLE_LOAD_WORD) | (1u << IRQ_RETURN_LOAD_WORD), "nested");
++    if (!match)
++    {
++        return false;
++    }
++
++    // Resolving the loads also confirms the wildcarded words are still the pc relative loads
++    // they should be.
++    const u32* tableLiteral = ResolvePcRelativeLoad(patchContext,
++        &match[IRQ_TABLE_LOAD_WORD], IRQ_TABLE_LOAD_OPCODE);
++    const u32* returnLiteral = ResolvePcRelativeLoad(patchContext,
++        &match[IRQ_RETURN_LOAD_WORD], IRQ_RETURN_LOAD_OPCODE);
++    if (!tableLiteral || !returnLiteral)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher literal loads mismatch\n");
++        return false;
++    }
++
++    // The literal return address is where the instruction after the dispatcher's call ends
++    // up, which ties the match to the real dispatcher at its final location.
++    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
++    if (*returnLiteral != finalAddress + IRQ_RETURN_OFFSET)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
++        return false;
++    }
++
++    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
++    u32 irqTable = *tableLiteral;
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return false;
++    }
++
++    result.hook = match + HOOK_WORD;
++    result.irqTable = irqTable;
++    result.continueAddress = finalAddress + CONTINUE_OFFSET;
++    LOG_DEBUG("In-game reset: nested irq dispatcher at 0x%p (final 0x%X), table 0x%X\n",
++        match, finalAddress, irqTable);
++    return true;
++}
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.h b/arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.h
+new file mode 100644
+index 0000000..e8b8e63
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherNested.h
+@@ -0,0 +1,34 @@
++#pragma once
++#include "IrqDispatcher.h"
++#include "InGameResetPatchCode.h"
++
++/// @brief Dispatch part for the stock dispatcher wrapped so that interrupts can nest. It hooks
++///        before the game switches to system mode with irqs enabled, so normal dispatch carries
++///        on in the game's own code rather than at the handler.
++class InGameResetNestedDispatchPatchCode : public InGameResetDispatchPatchCode
++{
++public:
++    InGameResetNestedDispatchPatchCode(PatchHeap& patchHeap, const IrqDispatcherMatch& match,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_nested),
++            SECTION_SIZE(patch_ingamereset_dispatch_nested), patchHeap,
++            (void*)patch_ingamereset_nestedDispatch)
++    {
++        patch_ingamereset_nestedIrqTable = match.irqTable;
++        patch_ingamereset_nestedContinue = match.continueAddress;
++        patch_ingamereset_nestedResumeAddress = (u32)GetAddressAtTarget((void*)patch_ingamereset_nestedResume);
++        patch_ingamereset_nestedKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_dispatch_nested);
++    }
++};
++
++/// @brief Searches for the stock dispatcher wrapped so that interrupts can nest.
++/// @param patchContext The patch context to use.
++/// @param result Receives the hook location and addresses when it is found.
++/// @return True when it was found, or false otherwise.
++bool FindNestedIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result);
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp
+new file mode 100644
+index 0000000..6b3a1c8
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp
+@@ -0,0 +1,105 @@
++#include "common.h"
++#include "patches/PatchContext.h"
++#include "IrqDispatcherSdk.h"
++
++// The stock SDK interrupt dispatcher (OS_IrqHandler). The same code is used from SDK 2
++// through SDK 5, on both cpus, and it is what almost every retail game contains.
++//
++//     ldr r1, =irqTable
++//     ldr r0, [r1, r0, lsl #2]
++//     ldr lr, =irqReturn
++//     bx  r0
++//
++// The interrupt table and the address the handler returns to follow in the literal pool.
++static const u32 sPattern[] =
++{
++    0xE59F1008u, // ldr r1, =irqTable
++    0xE7910100u, // ldr r0, [r1, r0, lsl #2]
++    0xE59FE004u, // ldr lr, =irqReturn
++    0xE12FFF10u  // bx r0
++};
++
++// Start of the same dispatcher: fetching REG_IE, which is not something unrelated code
++// ending in the same four instructions would do. Four instructions is short enough that this
++// extra check is worth making; the other dispatchers have patterns long enough not to need one.
++static const u32 sHandlerStart[] =
++{
++    0xE92D4000u, // push {lr}
++    0xE3A0C301u, // mov r12, #0x04000000
++    0xE28CCE21u  // add r12, r12, #0x210
++};
++
++// How many words before the dispatch to look for the start of the same dispatcher. This
++// covers the dispatcher's own length with slack, without reaching far into other code.
++#define HANDLER_MAX_LENGTH_WORDS    32
++
++// Word positions after the four matched instructions: word 4 is the irqTable literal and
++// word 5 the irqReturn literal. irqReturn is the instruction right after those two literals,
++// so 4 instructions + 2 literals = 6 words = 0x18 bytes past the start of the match.
++#define IRQ_TABLE_WORD              4
++#define IRQ_RETURN_WORD             5
++#define IRQ_RETURN_OFFSET           0x18
++
++// The jump replaces the whole four instruction dispatch.
++#define HOOK_WORD                   0
++
++// Looks backwards from the dispatch for the dispatcher's first three instructions.
++static bool hasHandlerStart(const u32* dispatch, const u32* dataStart)
++{
++    for (u32 i = 1; i <= HANDLER_MAX_LENGTH_WORDS; i++)
++    {
++        const u32* candidate = dispatch - i;
++        if (candidate < dataStart)
++        {
++            break;
++        }
++        if (candidate[0] == sHandlerStart[0] &&
++            candidate[1] == sHandlerStart[1] &&
++            candidate[2] == sHandlerStart[2])
++        {
++            return true;
++        }
++    }
++    return false;
++}
++
++bool FindSdkIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result)
++{
++    u32* match = FindUniqueIrqDispatcherPattern(patchContext, sPattern,
++        sizeof(sPattern) / sizeof(u32), 0, "sdk");
++    if (!match)
++    {
++        return false;
++    }
++
++    if (!hasHandlerStart(match, patchContext.GetDataStart()))
++    {
++        LOG_WARNING("In-game reset: irq dispatcher start not found\n");
++        return false;
++    }
++
++    // The dispatcher normally lives in ITCM and is copied there by autoload when the game
++    // starts. Its literal return address is where the instruction after the dispatch ends
++    // up, which ties the match to the real dispatcher at its final location.
++    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
++    if (match[IRQ_RETURN_WORD] != finalAddress + IRQ_RETURN_OFFSET)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
++        return false;
++    }
++
++    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
++    u32 irqTable = match[IRQ_TABLE_WORD];
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return false;
++    }
++
++    result.hook = match + HOOK_WORD;
++    result.irqTable = irqTable;
++    result.continueAddress = match[IRQ_RETURN_WORD];
++    LOG_DEBUG("In-game reset: sdk irq dispatcher at 0x%p (final 0x%X), table 0x%X\n",
++        match, finalAddress, irqTable);
++    return true;
++}
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.h b/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.h
+new file mode 100644
+index 0000000..6048046
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.h
+@@ -0,0 +1,31 @@
++#pragma once
++#include "IrqDispatcher.h"
++#include "InGameResetPatchCode.h"
++
++/// @brief Dispatch part for the stock SDK interrupt dispatcher.
++class InGameResetSdkDispatchPatchCode : public InGameResetDispatchPatchCode
++{
++public:
++    InGameResetSdkDispatchPatchCode(PatchHeap& patchHeap, const IrqDispatcherMatch& match,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_sdk),
++            SECTION_SIZE(patch_ingamereset_dispatch_sdk), patchHeap,
++            (void*)patch_ingamereset_sdkDispatch)
++    {
++        patch_ingamereset_sdkIrqTable = match.irqTable;
++        patch_ingamereset_sdkIrqReturn = match.continueAddress;
++        patch_ingamereset_sdkKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_dispatch_sdk);
++    }
++};
++
++/// @brief Searches for the stock SDK interrupt dispatcher.
++/// @param patchContext The patch context to use.
++/// @param result Receives the hook location and addresses when it is found.
++/// @return True when it was found, or false otherwise.
++bool FindSdkIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result);
+diff --git a/arm9/source/patches/arm9/IrqDispatcherVariants.cpp b/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
+deleted file mode 100644
+index 03077d3..0000000
+--- a/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
++++ /dev/null
+@@ -1,436 +0,0 @@
+-#include "common.h"
+-#include <array>
+-#include "patches/PatchContext.h"
+-#include "InGameResetPatchCode.h"
+-#include "IrqDispatcherVariants.h"
+-
+-// The search only supports a four word pattern, so every dispatcher is found by four of its
+-// words and then compared in full.
+-#define IRQ_DISPATCHER_ANCHOR_WORDS     4
+-#define IRQ_DISPATCHER_ANCHOR_SIZE      (IRQ_DISPATCHER_ANCHOR_WORDS * sizeof(u32))
+-
+-// The stock SDK interrupt dispatcher (OS_IrqHandler). The same code is used from SDK 2
+-// through SDK 5, on both cpus, and it is what almost every retail game contains.
+-//
+-//     ldr r1, =irqTable
+-//     ldr r0, [r1, r0, lsl #2]
+-//     ldr lr, =irqReturn
+-//     bx  r0
+-//
+-// The interrupt table and the address the handler returns to follow in the literal pool.
+-static const u32 sSdkPattern[] =
+-{
+-    0xE59F1008u, // ldr r1, =irqTable
+-    0xE7910100u, // ldr r0, [r1, r0, lsl #2]
+-    0xE59FE004u, // ldr lr, =irqReturn
+-    0xE12FFF10u  // bx r0
+-};
+-
+-// Start of the same dispatcher: fetching REG_IE, which is not something unrelated code
+-// ending in the same four instructions would do.
+-static const u32 sSdkHandlerStart[] =
+-{
+-    0xE92D4000u, // push {lr}
+-    0xE3A0C301u, // mov r12, #0x04000000
+-    0xE28CCE21u  // add r12, r12, #0x210
+-};
+-
+-// How many words before the dispatch to look for the start of the same dispatcher. This
+-// covers the dispatcher's own length with slack, without reaching far into other code.
+-#define SDK_HANDLER_MAX_LENGTH_WORDS    32
+-
+-// Word positions after the four matched instructions: word 4 is the irqTable literal and
+-// word 5 the irqReturn literal. irqReturn is the instruction right after those two literals,
+-// so 4 instructions + 2 literals = 6 words = 0x18 bytes past the start of the match.
+-#define SDK_IRQ_TABLE_WORD              4
+-#define SDK_IRQ_RETURN_WORD             5
+-#define SDK_IRQ_RETURN_OFFSET           0x18
+-
+-// Looks backwards from the dispatch for the dispatcher's first three instructions.
+-static bool hasSdkHandlerStart(const u32* dispatch, const u32* dataStart)
+-{
+-    for (u32 i = 1; i <= SDK_HANDLER_MAX_LENGTH_WORDS; i++)
+-    {
+-        const u32* candidate = dispatch - i;
+-        if (candidate < dataStart)
+-        {
+-            break;
+-        }
+-        if (candidate[0] == sSdkHandlerStart[0] &&
+-            candidate[1] == sSdkHandlerStart[1] &&
+-            candidate[2] == sSdkHandlerStart[2])
+-        {
+-            return true;
+-        }
+-    }
+-    return false;
+-}
+-
+-static bool validateSdk(PatchContext& patchContext, u32* match, IrqDispatcherMatch& result)
+-{
+-    if (!hasSdkHandlerStart(match, patchContext.GetDataStart()))
+-    {
+-        LOG_WARNING("In-game reset: irq dispatcher start not found\n");
+-        return false;
+-    }
+-
+-    // The dispatcher normally lives in ITCM and is copied there by autoload when the game
+-    // starts. Its literal return address is where the instruction after the dispatch ends
+-    // up, which ties the match to the real dispatcher at its final location.
+-    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
+-    if (match[SDK_IRQ_RETURN_WORD] != finalAddress + SDK_IRQ_RETURN_OFFSET)
+-    {
+-        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
+-        return false;
+-    }
+-
+-    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
+-    u32 irqTable = match[SDK_IRQ_TABLE_WORD];
+-    if (irqTable == 0 || (irqTable & 3) != 0)
+-    {
+-        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
+-        return false;
+-    }
+-
+-    result.irqTable = irqTable;
+-    result.continueAddress = match[SDK_IRQ_RETURN_WORD];
+-    return true;
+-}
+-
+-static u32 getSdkPatchCodeSize()
+-{
+-    return InGameResetSdkDispatchPatchCode::GetSize();
+-}
+-
+-static const InGameResetDispatchPatchCode* createSdkPatchCode(PatchContext& patchContext,
+-    const IrqDispatcherMatch& match, const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
+-{
+-    return patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetSdkDispatchPatchCode>
+-    (
+-        patchContext.GetPatchHeap(),
+-        match.irqTable,
+-        match.continueAddress,
+-        keyCheckPatchCode
+-    );
+-}
+-
+-// A dispatcher that picks the interrupt with a single clz and calls the handler with blx,
+-// found in Golden Sun: Dark Dawn. Everything after the IME test is conditional, so the whole
+-// run from the dispatcher's first instruction to its call is one pattern, which identifies it
+-// far more tightly than the stock dispatcher's four instructions do.
+-static const u32 sBlxPattern[] =
+-{
+-    0xE3A0C301u, // mov ip, #0x04000000
+-    0xE5BC2208u, // ldr r2, [ip, #0x208]!        @ IME
+-    0xE1EC00D8u, // ldrd r0, r1, [ip, #8]!       @ IE, IF
+-    0xE3520000u, // cmp r2, #0
+-    0x10101001u, // andsne r1, r0, r1
+-    0x152DE004u, // pushne {lr}
+-    0x159FE000u, // ldrne lr, [pc, #irqTableEnd] @ offset differs between builds
+-    0x12610000u, // rsbne r0, r1, #0
+-    0x10001001u, // andne r1, r0, r1
+-    0x116F0F11u, // clzne r0, r1
+-    0x171EE100u, // ldrne lr, [lr, -r0, lsl #2]
+-    0x158C1004u, // strne r1, [ip, #4]
+-    0xE12FFF3Eu  // blx lr
+-};
+-
+-// The load of the table address, whose literal pool offset is the only part of this
+-// dispatcher that differs between builds.
+-#define BLX_IRQ_TABLE_LOAD_WORD         6
+-#define BLX_IRQ_TABLE_LOAD_OPCODE       0x159FE000u // ldrne lr, [pc, #imm12], adding the offset
+-#define BLX_IRQ_TABLE_LOAD_MASK         0xFFFFF000u
+-
+-// The two conditional instructions the jump replaces, and the address of the instruction
+-// after the call, which is where the handler returns to. 13 words = 0x34 bytes.
+-#define BLX_HOOK_WORD                   10
+-#define BLX_IRQ_RETURN_OFFSET           0x34
+-
+-// SDK code that runs from instruction tightly-coupled memory is linked into this range, which
+-// is a mirror of ITCM. A dispatcher that autoload does not place there is not this one.
+-#define ITCM_MIRROR_START               0x01FF8000u
+-#define ITCM_MIRROR_END                 0x02000000u
+-
+-static bool validateBlx(PatchContext& patchContext, u32* match, IrqDispatcherMatch& result)
+-{
+-    // This dispatcher has no literal holding the address it runs from, so instead check that
+-    // autoload does move it into ITCM, which is where it has to run.
+-    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
+-    if (finalAddress < ITCM_MIRROR_START || finalAddress >= ITCM_MIRROR_END)
+-    {
+-        LOG_WARNING("In-game reset: irq dispatcher is not in itcm (0x%X)\n", finalAddress);
+-        return false;
+-    }
+-
+-    // The wildcard word must still be the pc relative load this dispatcher has there.
+-    u32 tableLoad = match[BLX_IRQ_TABLE_LOAD_WORD];
+-    if ((tableLoad & BLX_IRQ_TABLE_LOAD_MASK) != BLX_IRQ_TABLE_LOAD_OPCODE)
+-    {
+-        LOG_WARNING("In-game reset: irq table load mismatch (0x%X)\n", tableLoad);
+-        return false;
+-    }
+-
+-    // Reading pc gives the address of the instruction plus 8, so the literal is two words
+-    // past the load plus its offset.
+-    const u32* tableLiteral = &match[BLX_IRQ_TABLE_LOAD_WORD] + 2 + ((tableLoad & ~BLX_IRQ_TABLE_LOAD_MASK) >> 2);
+-    if (tableLiteral >= patchContext.GetDataEnd())
+-    {
+-        LOG_WARNING("In-game reset: irq table literal is out of range\n");
+-        return false;
+-    }
+-
+-    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
+-    // The dispatch part does not need it, because the dispatcher has already loaded it, but a
+-    // match whose table is nonsense is not this dispatcher.
+-    u32 irqTable = *tableLiteral;
+-    if (irqTable == 0 || (irqTable & 3) != 0)
+-    {
+-        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
+-        return false;
+-    }
+-
+-    result.irqTable = irqTable;
+-    result.continueAddress = finalAddress + BLX_IRQ_RETURN_OFFSET;
+-    return true;
+-}
+-
+-static u32 getBlxPatchCodeSize()
+-{
+-    return InGameResetBlxDispatchPatchCode::GetSize();
+-}
+-
+-static const InGameResetDispatchPatchCode* createBlxPatchCode(PatchContext& patchContext,
+-    const IrqDispatcherMatch& match, const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
+-{
+-    return patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetBlxDispatchPatchCode>
+-    (
+-        patchContext.GetPatchHeap(),
+-        match.continueAddress,
+-        keyCheckPatchCode
+-    );
+-}
+-
+-// The stock dispatcher wrapped so that interrupts can nest, found in Black Sigil: Blade of
+-// the Exiled. It is the stock dispatcher up to the table lookup, which is why the pattern has
+-// to reach past it into the mode switch: without those instructions it would also match the
+-// stock dispatcher.
+-static const u32 sNestedPattern[] =
+-{
+-    0xE16F0F11u, // clz r0, r1
+-    0xE1D11033u, // bics r1, r1, r3, lsr r0
+-    0x1AFFFFFCu, // bne clz
+-    0xE1A01033u, // lsr r1, r3, r0
+-    0xE58C1004u, // str r1, [ip, #4]              @ acknowledge
+-    0xE270001Fu, // rsbs r0, r0, #31
+-    0xE59F1000u, // ldr r1, [pc, #irqTable]       @ offset differs between builds
+-    0xE7910100u, // ldr r0, [r1, r0, lsl #2]
+-    0xE10F3000u, // mrs r3, CPSR                  @ switch to system mode with irqs on
+-    0xE3C330DFu, // bic r3, r3, #0xDF
+-    0xE383301Fu, // orr r3, r3, #0x1F
+-    0xE129F003u, // msr CPSR_fc, r3
+-    0xE92D4000u, // stmfd sp!, {lr}
+-    0xE59FE000u, // ldr lr, [pc, #irqReturn]      @ offset differs between builds
+-    0xE12FFF10u  // bx r0
+-};
+-
+-// The two pc relative loads, whose literal pool offsets are the only parts of this dispatcher
+-// that differ between builds.
+-#define NESTED_IRQ_TABLE_LOAD_WORD      6
+-#define NESTED_IRQ_TABLE_LOAD_OPCODE    0xE59F1000u // ldr r1, [pc, #imm12], adding the offset
+-#define NESTED_IRQ_RETURN_LOAD_WORD     13
+-#define NESTED_IRQ_RETURN_LOAD_OPCODE   0xE59FE000u // ldr lr, [pc, #imm12], adding the offset
+-#define NESTED_PC_RELATIVE_LOAD_MASK    0xFFFFF000u
+-
+-// The two loads the jump replaces, the mode switch the dispatch part carries on at, and the
+-// instruction the handler returns to, which is the whole pattern away.
+-#define NESTED_HOOK_WORD                6
+-#define NESTED_CONTINUE_OFFSET          0x20
+-#define NESTED_IRQ_RETURN_OFFSET        0x3C
+-
+-// Resolves a pc relative load into the word it reads. Reading pc gives the address of the
+-// instruction plus 8, so the literal is two words past the load plus its offset.
+-static const u32* resolvePcRelativeLoad(const u32* load, u32 opcode, const u32* dataEnd)
+-{
+-    if ((*load & NESTED_PC_RELATIVE_LOAD_MASK) != opcode)
+-    {
+-        return nullptr;
+-    }
+-    const u32* literal = load + 2 + ((*load & ~NESTED_PC_RELATIVE_LOAD_MASK) >> 2);
+-    return literal < dataEnd ? literal : nullptr;
+-}
+-
+-static bool validateNested(PatchContext& patchContext, u32* match, IrqDispatcherMatch& result)
+-{
+-    const u32* dataEnd = patchContext.GetDataEnd();
+-
+-    const u32* tableLiteral = resolvePcRelativeLoad(
+-        &match[NESTED_IRQ_TABLE_LOAD_WORD], NESTED_IRQ_TABLE_LOAD_OPCODE, dataEnd);
+-    const u32* returnLiteral = resolvePcRelativeLoad(
+-        &match[NESTED_IRQ_RETURN_LOAD_WORD], NESTED_IRQ_RETURN_LOAD_OPCODE, dataEnd);
+-    if (!tableLiteral || !returnLiteral)
+-    {
+-        LOG_WARNING("In-game reset: irq dispatcher literal loads mismatch\n");
+-        return false;
+-    }
+-
+-    // The literal return address is where the instruction after the dispatcher's call ends
+-    // up, which ties the match to the real dispatcher at its final location.
+-    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
+-    if (*returnLiteral != finalAddress + NESTED_IRQ_RETURN_OFFSET)
+-    {
+-        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
+-        return false;
+-    }
+-
+-    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
+-    u32 irqTable = *tableLiteral;
+-    if (irqTable == 0 || (irqTable & 3) != 0)
+-    {
+-        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
+-        return false;
+-    }
+-
+-    result.irqTable = irqTable;
+-    result.continueAddress = finalAddress + NESTED_CONTINUE_OFFSET;
+-    return true;
+-}
+-
+-static u32 getNestedPatchCodeSize()
+-{
+-    return InGameResetNestedDispatchPatchCode::GetSize();
+-}
+-
+-static const InGameResetDispatchPatchCode* createNestedPatchCode(PatchContext& patchContext,
+-    const IrqDispatcherMatch& match, const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
+-{
+-    return patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetNestedDispatchPatchCode>
+-    (
+-        patchContext.GetPatchHeap(),
+-        match.irqTable,
+-        match.continueAddress,
+-        keyCheckPatchCode
+-    );
+-}
+-
+-// Dispatcher versions in the order they are tried. The stock one comes first, because it is
+-// what nearly every game has.
+-static const std::array<const irq_dispatcher_variant_t, 3> sIrqDispatcherVariants
+-{
+-    irq_dispatcher_variant_t
+-    {
+-        .name = "sdk",
+-        .pattern = sSdkPattern,
+-        .patternWordCount = sizeof(sSdkPattern) / sizeof(u32),
+-        .wildcardMask = 0,
+-        .anchorWordIndex = 0,
+-        .hookWordIndex = 0,
+-        .validate = validateSdk,
+-        .getPatchCodeSize = getSdkPatchCodeSize,
+-        .createPatchCode = createSdkPatchCode
+-    },
+-    irq_dispatcher_variant_t
+-    {
+-        .name = "blx",
+-        .pattern = sBlxPattern,
+-        .patternWordCount = sizeof(sBlxPattern) / sizeof(u32),
+-        .wildcardMask = 1u << BLX_IRQ_TABLE_LOAD_WORD,
+-        .anchorWordIndex = 0,
+-        .hookWordIndex = BLX_HOOK_WORD,
+-        .validate = validateBlx,
+-        .getPatchCodeSize = getBlxPatchCodeSize,
+-        .createPatchCode = createBlxPatchCode
+-    },
+-    irq_dispatcher_variant_t
+-    {
+-        .name = "nested",
+-        .pattern = sNestedPattern,
+-        .patternWordCount = sizeof(sNestedPattern) / sizeof(u32),
+-        .wildcardMask = (1u << NESTED_IRQ_TABLE_LOAD_WORD) | (1u << NESTED_IRQ_RETURN_LOAD_WORD),
+-        .anchorWordIndex = 0,
+-        .hookWordIndex = NESTED_HOOK_WORD,
+-        .validate = validateNested,
+-        .getPatchCodeSize = getNestedPatchCodeSize,
+-        .createPatchCode = createNestedPatchCode
+-    }
+-};
+-
+-// Compares a candidate against the whole pattern, skipping the wildcard words.
+-static bool matchesPattern(const u32* candidate, const u32* dataStart, const u32* dataEnd,
+-    const irq_dispatcher_variant_t& variant)
+-{
+-    if (candidate < dataStart || candidate + variant.patternWordCount > dataEnd)
+-    {
+-        return false;
+-    }
+-    for (u32 i = 0; i < variant.patternWordCount; i++)
+-    {
+-        if (!(variant.wildcardMask & (1u << i)) && candidate[i] != variant.pattern[i])
+-        {
+-            return false;
+-        }
+-    }
+-    return true;
+-}
+-
+-const irq_dispatcher_variant_t* FindIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result)
+-{
+-    auto autoloadAdjuster = patchContext.GetAutoloadAdjuster();
+-    if (!autoloadAdjuster)
+-    {
+-        LOG_WARNING("In-game reset: no autoload information\n");
+-        return nullptr;
+-    }
+-
+-    const u32* dataStart = patchContext.GetDataStart();
+-    const u32* dataEnd = patchContext.GetDataEnd();
+-
+-    for (const auto& variant : sIrqDispatcherVariants)
+-    {
+-        const u32* anchor = variant.pattern + variant.anchorWordIndex;
+-
+-        // The anchor can appear in unrelated code, so every hit is compared against the
+-        // whole pattern rather than only the first.
+-        u32* match = nullptr;
+-        u32 matchCount = 0;
+-        for (u32* hit = patchContext.FindPattern32(anchor, IRQ_DISPATCHER_ANCHOR_SIZE);
+-             hit != nullptr;
+-             hit = patchContext.FindPattern32(anchor, IRQ_DISPATCHER_ANCHOR_SIZE, hit + 1))
+-        {
+-            u32* candidate = hit - variant.anchorWordIndex;
+-            if (!matchesPattern(candidate, dataStart, dataEnd, variant))
+-            {
+-                continue;
+-            }
+-            if (matchCount++ == 0)
+-            {
+-                match = candidate;
+-            }
+-        }
+-
+-        if (matchCount == 0)
+-        {
+-            continue;
+-        }
+-
+-        // A second match means it is unclear which one is the real dispatcher, so patch neither.
+-        if (matchCount > 1)
+-        {
+-            LOG_WARNING("In-game reset: %s irq dispatcher is ambiguous\n", variant.name);
+-            continue;
+-        }
+-
+-        result = { };
+-        result.hook = match + variant.hookWordIndex;
+-        if (!variant.validate(patchContext, match, result))
+-        {
+-            continue;
+-        }
+-
+-        LOG_DEBUG("In-game reset: %s irq dispatcher at 0x%p (final 0x%X), table 0x%X\n",
+-            variant.name, match, autoloadAdjuster->AdjustInitialToFinal((u32)match), result.irqTable);
+-        return &variant;
+-    }
+-
+-    LOG_DEBUG("In-game reset: no known irq dispatcher found\n");
+-    return nullptr;
+-}
+diff --git a/arm9/source/patches/arm9/IrqDispatcherVariants.h b/arm9/source/patches/arm9/IrqDispatcherVariants.h
+deleted file mode 100644
+index fb322d9..0000000
+--- a/arm9/source/patches/arm9/IrqDispatcherVariants.h
++++ /dev/null
+@@ -1,72 +0,0 @@
+-#pragma once
+-#include "IAutoloadAdjuster.h"
+-#include "patches/PatchContext.h"
+-
+-class InGameResetDispatchPatchCode;
+-class InGameResetKeyCheckPatchCode;
+-
+-/// @brief Where and how the in-game reset hooks into a game's arm9 interrupt dispatcher,
+-///        filled in by \see irq_dispatcher_variant_t::validate.
+-struct IrqDispatcherMatch
+-{
+-    /// @brief The two words of the dispatcher that are overwritten with a jump to the
+-    ///        dispatch part.
+-    u32* hook;
+-
+-    /// @brief The address, after autoload has moved the dispatcher, at which the dispatch
+-    ///        part carries on with the game's own code. What it is used for depends on the
+-    ///        dispatcher: it may be the address the handler returns to, or the instruction
+-    ///        the dispatch part resumes at.
+-    u32 continueAddress;
+-
+-    /// @brief The address of the game's interrupt handler table, or 0 for a dispatcher that
+-    ///        does not need it because it already has it in a register.
+-    u32 irqTable;
+-};
+-
+-/// @brief One version of the arm9 interrupt dispatcher, describing how to recognise it and
+-///        how to hook it. Everything after the dispatch is shared, so supporting a newly
+-///        found dispatcher means adding a dispatch part and one entry to the table.
+-struct irq_dispatcher_variant_t
+-{
+-    /// @brief Name of this dispatcher version, used in the log.
+-    const char* name;
+-
+-    /// @brief The instructions that identify this dispatcher.
+-    const u32* pattern;
+-
+-    /// @brief The number of words in \see pattern.
+-    u32 patternWordCount;
+-
+-    /// @brief One bit per pattern word, set when that word is allowed to be anything.
+-    ///        Literal pool offsets differ between builds of the same dispatcher.
+-    u32 wildcardMask;
+-
+-    /// @brief The index of the four pattern words that are searched for. The search only
+-    ///        supports a four word pattern, so the rest is compared afterwards. These four
+-    ///        words may match unrelated code; what identifies the dispatcher is the whole
+-    ///        pattern.
+-    u32 anchorWordIndex;
+-
+-    /// @brief The index of the first of the two pattern words that the jump overwrites.
+-    u32 hookWordIndex;
+-
+-    /// @brief Performs the checks that the pattern alone cannot make, such as comparing a
+-    ///        literal against the address the dispatcher ends up at after autoload, and
+-    ///        fills in \p result. Returning false rejects the match.
+-    bool (*validate)(PatchContext& patchContext, u32* match, IrqDispatcherMatch& result);
+-
+-    /// @brief Returns the patch heap space this version's dispatch part needs.
+-    u32 (*getPatchCodeSize)();
+-
+-    /// @brief Creates this version's dispatch part.
+-    const InGameResetDispatchPatchCode* (*createPatchCode)(PatchContext& patchContext,
+-        const IrqDispatcherMatch& match, const InGameResetKeyCheckPatchCode* keyCheckPatchCode);
+-};
+-
+-/// @brief Searches the ntr region for an arm9 interrupt dispatcher that the in-game reset
+-///        knows how to hook.
+-/// @param patchContext The patch context to use.
+-/// @param result Receives the hook location and addresses when a dispatcher is found.
+-/// @return The dispatcher version that was found, or \c nullptr when none was.
+-const irq_dispatcher_variant_t* FindIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result);

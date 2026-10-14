@@ -12,6 +12,7 @@
 #include "cheats/PicoLoaderCheatDataFactory.h"
 #include "Theme/dsrunner/DsRunnerLibrary.h"
 #include "Theme/dsrunner/DsRunnerSystems.h"
+#include "Theme/dsrunner/DsRunnerInGameReset.h"
 #include "RomBrowserController.h"
 
 // Skips a drive prefix like "fat:" and the leading slashes of a path.
@@ -516,6 +517,8 @@ void RomBrowserController::SetPicoLoaderParams() const
     loadParams->argumentsLength = 0;
     if (_triggerFileInfo.GetFileType()->TrySetLaunchParameters(loadParams, _navigatePath))
     {
+        // DsRunner: switch the in-game reset of the DsRunner Pico Loader on or off (settings.json "inGameReset")
+        DsRunnerInGameReset::ApplySetting(_appSettingsService->GetAppSettings().inGameReset);
         gProcessManager.Goto<PicoLoaderProcess>();
     }
     else

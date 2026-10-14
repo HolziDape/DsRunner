@@ -16,6 +16,7 @@
 #define KEY_LAST_USED_FILE_PATH      "lastUsedFilePath"
 #define KEY_LIBRARY_PATH             "libraryPath"
 #define KEY_SHOW_CLOCK               "showClock"
+#define KEY_IN_GAME_RESET            "inGameReset"
 #define KEY_FILE_ASSOCIATIONS        "fileAssociations"
 #define KEY_FILE_ASSOCIATIONS_APPLICATION_PATH  "appPath"
 
@@ -144,6 +145,7 @@ static std::unique_ptr<u8[]> writeJson(const AppSettings* appSettings, u32& leng
     json[KEY_LAST_USED_FILE_PATH] = appSettings->lastUsedFilePath.GetString();
     json[KEY_LIBRARY_PATH] = appSettings->libraryPath.GetString();
     json[KEY_SHOW_CLOCK] = appSettings->showClock;
+    json[KEY_IN_GAME_RESET] = appSettings->inGameReset;
     serializeFileAssociations(json, appSettings);
 
     u32 outputSize = measureJsonPretty(json);
@@ -184,6 +186,7 @@ static void readJson(AppSettings* appSettings, const JsonDocument& json)
     appSettings->lastUsedFilePath = json[KEY_LAST_USED_FILE_PATH] | appSettings->lastUsedFilePath.GetString();
     appSettings->libraryPath = json[KEY_LIBRARY_PATH] | appSettings->libraryPath.GetString();
     appSettings->showClock = json[KEY_SHOW_CLOCK] | appSettings->showClock;
+    appSettings->inGameReset = json[KEY_IN_GAME_RESET] | appSettings->inGameReset;
 
     RomBrowserLayout romBrowserLayout;
     if (tryParseRomBrowserLayout(json[KEY_ROM_BROWSER_LAYOUT].as<const char*>(),

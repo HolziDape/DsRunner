@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 10:18:24 +0000
+Subject: [PATCH 12/14] DsRunner: hold L+R+Down+B for two seconds for the
+ in-game reset
+
+The igr branch moved the combo to L+R+Down+B+A held for one second.
+DsRunner documents L+R+Down+B held for two seconds, the combo of the
+first version of the patch, so the key mask and the hold time go back
+to that. Everything else about the key check is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018ba2i77rK9QaTUSsETPJXV
+---
+ .../patches/arm9/InGameReset/InGameResetPatchCode.s | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+index c94c4f2..2304a59 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+@@ -1,13 +1,14 @@
+ .cpu arm946e-s
+ .syntax unified
+ 
+-// L + R + Down + B + A, as the bits that read 0 in REG_KEYINPUT while held.
+-// Bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B, bit 0 = A, giving 0x383.
+-.equ IN_GAME_RESET_KEY_MASK, (1 << 9) | (1 << 8) | (1 << 7) | (1 << 1) | (1 << 0)
++// DsRunner: L + R + Down + B held for two seconds, as documented in the DsRunner README.
++// L + R + Down + B, as the bits that read 0 in REG_KEYINPUT while held.
++// Bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B, giving 0x382.
++.equ IN_GAME_RESET_KEY_MASK, (1 << 9) | (1 << 8) | (1 << 7) | (1 << 1)
+ 
+ // Number of consecutive vblanks the keys must be held before the reset is performed.
+-// The DS draws 60 frames per second, so 60 is one second.
+-.equ IN_GAME_RESET_HOLD_FRAMES, 60
++// The DS draws 60 frames per second, so 120 is two seconds.
++.equ IN_GAME_RESET_HOLD_FRAMES, 120
+ 
+ // Lock id used while holding the slot 1 lock. The SDK hands out ids starting at 0x40 and
+ // the game never runs again once the lock is taken, so any nonzero id is sufficient.
+@@ -51,7 +52,7 @@ patch_ingamereset_keyCheck:
+     ldr r0, regKeyInput
+     ldrh r0, [r0]
+     // Thumb can only load an 8-bit constant, so the 10-bit key mask is built in two steps:
+-    // 0x38 << 4 = 0x380, then + 0x3 = 0x383.
++    // 0x38 << 4 = 0x380, then + 0x2 = 0x382.
+     movs r1, #(IN_GAME_RESET_KEY_MASK >> 4)
+     lsls r1, r1, #4
+     adds r1, #(IN_GAME_RESET_KEY_MASK & 0xF)

@@ -1,6 +1,7 @@
 #include "common.h"
 #include <libtwl/mem/memVram.h>
 #include "romBrowser/Theme/Material/CarouselRecyclerView.h"
+#include "DsRunnerConsoleArt.h"
 #include "DsRunnerTheme.h"
 
 DsRunnerTheme::DsRunnerTheme(const TCHAR* folderName, const Rgb<8, 8, 8>& primaryColor, bool darkMode)
@@ -10,6 +11,13 @@ DsRunnerTheme::DsRunnerTheme(const TCHAR* folderName, const Rgb<8, 8, 8>& primar
 {
     // Apply DsRunner dark colors to the color scheme
     DsRunnerColors::ApplyDarkScheme(_materialColorScheme);
+    // the io thread doesn't run yet: the console images can be looked up on the sd card here
+    gDsRunnerConsoleArt.Initialize(folderName, &_fontRepository);
+}
+
+DsRunnerTheme::~DsRunnerTheme()
+{
+    gDsRunnerConsoleArt.Reset();
 }
 
 void DsRunnerTheme::LoadRomBrowserResources(const VramContext& mainVramContext, const VramContext& subVramContext)

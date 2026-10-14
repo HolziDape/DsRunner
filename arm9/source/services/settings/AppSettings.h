@@ -15,6 +15,8 @@ public:
     String<char, 256> libraryPath = "/Games";
     /// DsRunner: show the clock in the status bar of the DsRunner theme.
     bool showClock = true;
+    /// DsRunner: L+R+Down+B held for two seconds in a game returns to DsRunner (DsRunner Pico Loader).
+    bool inGameReset = true;
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;

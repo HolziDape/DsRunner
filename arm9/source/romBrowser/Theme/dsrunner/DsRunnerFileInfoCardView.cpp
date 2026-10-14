@@ -8,6 +8,7 @@
 #include "themes/IFontRepository.h"
 #include "themes/dsrunner/DsRunnerColorScheme.h"
 #include "themes/dsrunner/DsRunnerConsoles.h"
+#include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "themes/dsrunner/DsRunnerHeroState.h"
 #include "DsRunnerLibrary.h"
 #include "DsRunnerFileInfoCardView.h"
@@ -123,10 +124,13 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
 void DsRunnerFileInfoCardView::RequestArt(const TCHAR* fileName)
 {
     char path[256];
-    if (DsRunnerPaths::MirrorPath(ART_FOLDER, _folderPath, fileName, _isFolder, path, sizeof(path)))
-        _heroState->SetArt(path, _ioTaskQueue);
-    else
-        _heroState->SetArt(nullptr, _ioTaskQueue);
+    bool hasPath = DsRunnerPaths::MirrorPath(ART_FOLDER, _folderPath, fileName, _isFolder, path, sizeof(path));
+    // folders without an artwork of their own show the built-in image of their console
+    char fallbackPath[128];
+    bool hasFallback = _isFolder && gDsRunnerConsoleArt.IsAvailable() &&
+        gDsRunnerConsoleArt.GetImagePath(fileName, DsRunnerConsoleArt::ImageType::Top, fallbackPath, sizeof(fallbackPath));
+    _heroState->SetArt(hasPath ? path : nullptr, hasFallback ? fallbackPath : nullptr,
+        DsRunnerConsoles::GetHeroColor(fileName), _ioTaskQueue);
 }
 
 bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName)
