@@ -25,7 +25,7 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
 
 **Welche Nummer?** `VERSION` enthält die Version des **nächsten** Releases. Vor 1.0: neue Funktionen erhöhen die mittlere Zahl (0.1.2 → 0.2.0), reine Fehlerbehebungen die letzte (0.2.0 → 0.2.1).
 
-**Tag und VERSION müssen passen.** Der Release-Workflow prüft als Erstes, dass der Tag genau `v` + `VERSION` ist, dass DsRunner Art dieselbe Version hat und dass `CHANGELOG.md` einen Abschnitt `## [X.Y.Z]` hat. Sonst bricht er mit einer klaren Meldung ab und baut nichts. Die Version wird bewusst nicht aus dem Tag übernommen: so zeigt auch ein lokaler Build aus demselben Commit dieselbe Nummer, und ein Tippfehler im Tag fällt auf, statt eine falsche Version zu verteilen.
+**Der Tag entscheidet.** Der Release-Workflow nimmt die Version aus dem Tag (`v0.2.0`, auch `V0.2.0`). Passen `VERSION`, DsRunner Art oder `CHANGELOG.md` noch nicht dazu, setzt er sie in seinem Checkout selbst (`tools/version.sh release <tag>`, wie `set`) und zeigt eine Warnung im Lauf; die Release-Notizen kommen dann aus „Unveröffentlicht“. Abgebrochen wird nur, wenn der Tag keine Version ist. Sauberer ist trotzdem, vorher `tools/version.sh set` auszuführen (Schritt 2): dann zeigt auch ein lokaler Build aus demselben Commit dieselbe Nummer.
 
 ## Schritt für Schritt
 
@@ -63,7 +63,7 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
 
    | Job | Was er tut |
    |---|---|
-   | Check version | `tools/version.sh check <tag>`; schlägt er fehl, laufen die anderen nicht |
+   | Check version | `tools/version.sh release <tag>`: Version aus dem Tag, Warnungen, wenn `VERSION` oder Changelog nicht passen; nur bei einem Tag ohne Version laufen die anderen nicht |
    | Build DsRunner | `make` im BlocksDS-Container mit `DSRUNNER_RELEASE=1`, packt `DsRunner.zip` und mit `tools/make-sd-package.sh` `DsRunner_M3DSReal.zip` (lädt Pico Loader und TWiLight Menu++ mit festen Versionen und SHA-256) und hängt beide an |
    | Build DsRunner Art (Windows) | Tests, `DsRunnerArt.exe` mit PyInstaller, hängt sie an |
    | Release notes from CHANGELOG.md | setzt den Changelog-Abschnitt an den Anfang der Release-Beschreibung (läuft zuletzt, auch wenn ein Build fehlschlägt) |
@@ -77,7 +77,8 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
 
 ## Wenn etwas schiefgeht
 
-- **„Tag … passt nicht zu VERSION“ oder fehlender Changelog-Abschnitt:** Release und Tag löschen (`gh release delete v0.2.0 --cleanup-tag` oder auf GitHub Release löschen und unter *Tags* den Tag löschen), Schritte 2 bis 6 wiederholen.
+- **Warnung „VERSION enthält …“ oder „keinen Abschnitt“ im Lauf:** Das Release ist trotzdem gebaut. Danach `tools/version.sh set X.Y.Z` ausführen und committen, damit `main` zum Release passt.
+- **„Der Tag … ist keine Version“:** Release und Tag löschen (auf GitHub Release löschen und unter *Tags* den Tag löschen, oder `gh release delete <tag> --cleanup-tag`) und mit einem Tag `vX.Y.Z` neu anlegen.
 - **Build bricht wegen eines Downloads ab** (Pico Loader, TWiLight Menu++, apt): im Workflow-Lauf „Re-run failed jobs“. Die Notizen werden dabei nicht doppelt eingefügt.
 - **Prüfsumme passt nicht** in `make-sd-package.sh`: Die Datei auf GitHub hat sich geändert. Erst prüfen, warum, dann Version und SHA-256 im Skript zusammen anpassen (siehe [DEVELOPMENT.md](DEVELOPMENT.md)).
 - **Datei fehlt am Release:** im Lauf nachsehen, welcher Job fehlgeschlagen ist. Die gebauten Dateien liegen außerdem als Artefakte („DsRunner“, „DsRunnerArt“) am Workflow-Lauf.
