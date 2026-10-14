@@ -1,0 +1,1015 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 11:50:48 +0000
+Subject: [PATCH] DsRunner: write /_pico/igr-log.txt and show when the hotkey
+ is recognized
+
+A hotkey that does nothing on real hardware gives no hint why: the patch
+may have been left out (switched off, no dispatcher found, no patch
+space), the reset may wait for the slot 1 lock, or the loader may not
+even be this build.
+
+The arm9 now records what the in-game reset search and patch did
+(sdk version, result per dispatcher version, hook address, OS_ResetSystem,
+why it was not applied, patch space needed) in a word-only struct, since
+the arm9 runs from vram. The arm7 asks for it with a new IPC command
+after the arm9 patches are done, before the game starts, and writes
+/_pico/igr-log.txt with the build id, boot mode, rom, game code and
+title, platform, DLDI cache state, launcher path and where it came from,
+and whether /_pico/igr.off was seen. A normal start rewrites the file;
+a start after a reset appends to it, so the record of the game survives
+the return to the launcher. Homebrew starts are logged before the
+"DLDI driver not found" error, which is where a return without a cached
+driver ends.
+
+When the keys have been held long enough, the key check sets the main
+screen's master brightness half way to white before entering the reset.
+A bright screen that keeps running means the reset waits for the slot 1
+lock. The reset part itself is unchanged, so it still fits the small
+patch space gaps.
+
+loader/build.sh passes DSRUNNER_BUILD_ID to make; without it the log
+says "unknown".
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018ba2i77rK9QaTUSsETPJXV
+---
+ Makefile.arm7                                 |   4 +
+ Makefile.arm9                                 |   2 +
+ arm7/source/fat/dldi.cpp                      |  11 +
+ arm7/source/fat/igrLog.cpp                    | 216 ++++++++++++++++++
+ arm7/source/fat/igrLog.h                      |  69 ++++++
+ arm7/source/fat/launcherPathCache.cpp         |  15 ++
+ arm7/source/loader/NdsLoader.cpp              |  23 ++
+ arm7/source/main.cpp                          |   8 +
+ arm9/source/Arm9Patcher.cpp                   |  15 ++
+ arm9/source/main.cpp                          |  22 ++
+ .../arm9/InGameReset/InGameResetPatch.cpp     |  49 +++-
+ .../arm9/InGameReset/InGameResetPatchCode.s   |  12 +
+ .../arm9/InGameReset/IrqDispatcher.cpp        |  10 +
+ .../arm9/InGameReset/IrqDispatcherSdk.cpp     |   4 +
+ arm9/source/patches/arm9/OSResetSystemPatch.h |   3 +
+ common/dsrunnerIgrDiag.h                      |  87 +++++++
+ 16 files changed, 546 insertions(+), 4 deletions(-)
+ create mode 100644 arm7/source/fat/igrLog.cpp
+ create mode 100644 arm7/source/fat/igrLog.h
+ create mode 100644 common/dsrunnerIgrDiag.h
+
+diff --git a/Makefile.arm7 b/Makefile.arm7
+index 3215c73..57a5684 100644
+--- a/Makefile.arm7
++++ b/Makefile.arm7
+@@ -21,6 +21,10 @@ BINDIRS		:=
+ # ---------------------------
+ 
+ DEFINES		:= -DLIBTWL_ARM7 -DARM7
++# DsRunner: build id for /_pico/igr-log.txt, passed by loader/build.sh
++ifneq ($(DSRUNNER_BUILD_ID),)
++DEFINES		+= -DDSRUNNER_BUILD_ID=\"$(DSRUNNER_BUILD_ID)\"
++endif
+ 
+ # Libraries
+ # ---------
+diff --git a/Makefile.arm9 b/Makefile.arm9
+index ba6d1c9..cda1ecf 100644
+--- a/Makefile.arm9
++++ b/Makefile.arm9
+@@ -25,6 +25,8 @@ AUDIODIRS	:=
+ PLATFORM	?= DSPICO
+ 
+ DEFINES		:= -DLIBTWL_ARM9 -DARM9 -DPICO_LOADER_TARGET_$(PLATFORM)
++# DsRunner: platform name for /_pico/igr-log.txt
++DEFINES		+= -DPICO_LOADER_PLATFORM_NAME=\"$(PLATFORM)\"
+ 
+ # Libraries
+ # ---------
+diff --git a/arm7/source/fat/dldi.cpp b/arm7/source/fat/dldi.cpp
+index eba49ba..db545a3 100644
+--- a/arm7/source/fat/dldi.cpp
++++ b/arm7/source/fat/dldi.cpp
+@@ -6,6 +6,7 @@
+ #include "ipcCommands.h"
+ #include "loader/DldiDriver.h"
+ #include "dldi.h"
++#include "igrLog.h" // DsRunner
+ 
+ #define DLDI_CACHE_PATH         "/_pico/dldi.bin"
+ #define DLDI_CACHE_TEMP_PATH    "/_pico/dldi.tmp"
+@@ -259,6 +260,7 @@ static void saveDriverCache()
+     if (!isCacheableDriver(driver, imageSize))
+     {
+         LOG_DEBUG("Handed down dldi driver is not cacheable\n");
++        gIgrLog.dldiState = IGR_LOG_DLDI_NOT_CACHEABLE; // DsRunner
+         return;
+     }
+ 
+@@ -276,6 +278,7 @@ static void saveDriverCache()
+         if (isUpToDate)
+         {
+             LOG_DEBUG("Cached dldi driver is up to date\n");
++            gIgrLog.dldiState = IGR_LOG_DLDI_UP_TO_DATE; // DsRunner
+             return;
+         }
+     }
+@@ -283,6 +286,7 @@ static void saveDriverCache()
+     // Write to a temporary file first, so an interrupted write can never
+     // leave a truncated driver under DLDI_CACHE_PATH.
+     LOG_DEBUG("Updating cached dldi driver\n");
++    gIgrLog.dldiState = IGR_LOG_DLDI_SAVE_FAILED; // DsRunner: until the rename below worked
+     if (f_open(file.get(), DLDI_CACHE_TEMP_PATH, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+     {
+         LOG_ERROR("Failed to create dldi cache file\n");
+@@ -310,6 +314,10 @@ static void saveDriverCache()
+     {
+         LOG_ERROR("Failed to replace dldi cache file\n");
+     }
++    else
++    {
++        gIgrLog.dldiState = IGR_LOG_DLDI_SAVED; // DsRunner
++    }
+ }
+ 
+ static void loadDriverCache()
+@@ -318,6 +326,7 @@ static void loadDriverCache()
+     if (f_open(file.get(), DLDI_CACHE_PATH, FA_READ) != FR_OK)
+     {
+         LOG_DEBUG("No cached dldi driver\n");
++        gIgrLog.dldiState = IGR_LOG_DLDI_NO_CACHE; // DsRunner
+         return;
+     }
+ 
+@@ -360,10 +369,12 @@ static void loadDriverCache()
+     // its BSS in the stub of the program being booted, which starts it itself.
+     LOG_DEBUG("Using cached dldi driver\n");
+     sCachedDriver = image;
++    gIgrLog.dldiState = IGR_LOG_DLDI_LOADED; // DsRunner
+ }
+ 
+ void dldi_updateDriverCache()
+ {
++    gIgrLog.dldiState = IGR_LOG_DLDI_CACHE_INVALID; // DsRunner: unless a path below says otherwise
+     if (sIsHandedDownDriver)
+     {
+         saveDriverCache();
+diff --git a/arm7/source/fat/igrLog.cpp b/arm7/source/fat/igrLog.cpp
+new file mode 100644
+index 0000000..4aeefaa
+--- /dev/null
++++ b/arm7/source/fat/igrLog.cpp
+@@ -0,0 +1,216 @@
++#include "common.h"
++#include <memory>
++#include <stdarg.h>
++#include <string.h>
++#include "core/mini-printf.h"
++#include "inGameReset.h"
++#include "igrLog.h"
++
++// DsRunner: see igrLog.h
++
++#define IGR_LOG_PATH    "/_pico/igr-log.txt"
++
++#ifndef DSRUNNER_BUILD_ID
++#define DSRUNNER_BUILD_ID   "unknown"
++#endif
++
++igr_log_state_t gIgrLog;
++
++static const char* const sBootModeTexts[] =
++{
++    "normal start",
++    "start after the in-game reset (PIGR): booting the launcher",
++    "start after the game's own soft reset (OS_ResetSystem): same game again",
++    "multiboot"
++};
++
++static const char* const sDldiTexts[] =
++{
++    "card not mounted",
++    "DLDI init failed",
++    "handed down by the launcher, saved to /_pico/dldi.bin",
++    "handed down by the launcher, /_pico/dldi.bin is up to date",
++    "handed down by the launcher, but not cacheable (NOT saved)",
++    "handed down by the launcher, writing /_pico/dldi.bin FAILED",
++    "none handed down, loaded /_pico/dldi.bin",
++    "none handed down and no /_pico/dldi.bin",
++    "none handed down and /_pico/dldi.bin is invalid"
++};
++
++static const char* const sLauncherTexts[] =
++{
++    "-",
++    "saved to /_pico/launcher.txt",
++    "/_pico/launcher.txt is up to date",
++    "writing /_pico/launcher.txt FAILED",
++    "the launcher handed down no path (NOT saved, the hotkey can't return)",
++    "from the loader header",
++    "from /_pico/launcher.txt",
++    "fallback, /_pico/launcher.txt missing or pointing to a missing file",
++    "NOT FOUND"
++};
++
++static const char* const sStatusTexts[] =
++{
++    "not patched (not reported by the arm9)",
++    "NOT applied: switched off by /_pico/igr.off (settings.json \"inGameReset\": false)",
++    "NOT applied: the rom has no sdk version, no arm9 patches",
++    "NOT applied: no known irq dispatcher found",
++    "NOT applied: game has no OS_ResetSystem and there is no sd read code for the reboot",
++    "NOT applied: not enough patch space",
++    "applied"
++};
++
++static const char* const sMatchTexts[] =
++{
++    "not tried",
++    "no match",
++    "ambiguous (more than one match)",
++    "dispatcher start not found",
++    "return address mismatch",
++    "invalid irq table",
++    "MATCH",
++    "pattern found, rejected by a check",
++    "?", "?", "?", "?", "?", "?", "?", "?"
++};
++
++static const char* const sVariantNames[DSRUNNER_IGR_VARIANT_COUNT] =
++{
++    "sdk", "blx", "nested", "condreturn"
++};
++
++template <typename T, u32 N>
++static const char* textOf(const T (&texts)[N], u32 index)
++{
++    return index < N ? texts[index] : "?";
++}
++
++/// @brief Collects the text in a fixed buffer; output that does not fit is dropped.
++class IgrLogText
++{
++public:
++    void Add(const char* format, ...)
++    {
++        va_list args;
++        va_start(args, format);
++        int length = mini_vsnprintf(_buffer + _length, sizeof(_buffer) - _length, format, args);
++        va_end(args);
++        if (length > 0)
++        {
++            _length += length;
++            if (_length > sizeof(_buffer) - 1)
++            {
++                _length = sizeof(_buffer) - 1;
++            }
++        }
++    }
++
++    const char* GetText() const { return _buffer; }
++    u32 GetLength() const { return _length; }
++
++private:
++    char _buffer[1536];
++    u32 _length = 0;
++};
++
++static void addRomInfo(IgrLogText& text, const char* romPath, const nds_header_ntr_t* romHeader, bool isHomebrew)
++{
++    char title[sizeof(romHeader->gameTitle) + 1];
++    memcpy(title, romHeader->gameTitle, sizeof(romHeader->gameTitle));
++    title[sizeof(romHeader->gameTitle)] = 0;
++    for (u32 i = 0; i < sizeof(romHeader->gameTitle); i++)
++    {
++        if (title[i] != 0 && (title[i] < 0x20 || title[i] > 0x7E))
++            title[i] = '?';
++    }
++    char gameCode[5];
++    memcpy(gameCode, &romHeader->gameCode, 4);
++    gameCode[4] = 0;
++    for (u32 i = 0; i < 4; i++)
++    {
++        if (gameCode[i] < 0x20 || gameCode[i] > 0x7E)
++            gameCode[i] = '?';
++    }
++    text.Add("rom: %s\r\n", romPath ? romPath : "(same rom as before the reset)");
++    text.Add("game: %s \"%s\" (%s)\r\n", gameCode, title, isHomebrew ? "homebrew" : "retail");
++}
++
++static void addPatchInfo(IgrLogText& text, const dsrunner_igr_diag_t* diag)
++{
++    char platform[sizeof(diag->platform) + 1];
++    memcpy(platform, diag->platform, sizeof(diag->platform));
++    platform[sizeof(diag->platform)] = 0;
++    text.Add("platform: %s\r\n", platform);
++    text.Add("sdk version: 0x%X\r\n", diag->sdkVersion);
++    text.Add("OS_ResetSystem: %s (0x%X)\r\n", diag->osResetSystem ? "found" : "not found", diag->osResetSystem);
++    text.Add("in-game reset: %s\r\n", textOf(sStatusTexts, diag->status));
++    for (u32 i = 0; i < DSRUNNER_IGR_VARIANT_COUNT; i++)
++    {
++        u32 result = (diag->matchResults >> (i * 4)) & 0xF;
++        if (i == DSRUNNER_IGR_VARIANT_SDK)
++        {
++            text.Add("  dispatcher %s: %s (pattern found %d times)\r\n", sVariantNames[i],
++                textOf(sMatchTexts, result), diag->sdkPatternCount);
++        }
++        else
++        {
++            text.Add("  dispatcher %s: %s\r\n", sVariantNames[i], textOf(sMatchTexts, result));
++        }
++    }
++    if (diag->hookAddress)
++    {
++        text.Add("  hook at 0x%X, continues at 0x%X\r\n", diag->hookAddress, diag->continueAddress);
++    }
++    if (diag->status == DSRUNNER_IGR_STATUS_APPLIED)
++    {
++        text.Add("  dispatch code at 0x%X, reboot %s\r\n", diag->dispatchAddress,
++            diag->rebootCreated ? "created for the hotkey" : "shared with OS_ResetSystem");
++    }
++    if (diag->status == DSRUNNER_IGR_STATUS_NO_PATCH_SPACE)
++    {
++        text.Add("  needed %d bytes of patch space\r\n", diag->spaceNeeded);
++    }
++}
++
++void igrLog_write(const char* romPath, const nds_header_ntr_t* romHeader, bool isHomebrew,
++    const dsrunner_igr_diag_t* diag, bool hasDldiDriver)
++{
++    if (gIgrLog.bootMode == IGR_LOG_BOOT_MULTIBOOT)
++    {
++        return;
++    }
++
++    auto text = std::make_unique<IgrLogText>();
++    bool isNormalBoot = gIgrLog.bootMode == IGR_LOG_BOOT_NORMAL;
++    if (isNormalBoot)
++    {
++        text->Add("DsRunner Pico Loader: in-game reset log (rewritten on every start)\r\n");
++        text->Add("build: %s\r\n", DSRUNNER_BUILD_ID);
++    }
++    text->Add("\r\n[%s]\r\n", textOf(sBootModeTexts, gIgrLog.bootMode));
++    addRomInfo(*text, romPath, romHeader, isHomebrew);
++    text->Add("DLDI: %s\r\n", textOf(sDldiTexts, gIgrLog.dldiState));
++    if (isHomebrew)
++    {
++        text->Add("DLDI for homebrew: %s\r\n", hasDldiDriver ? "available" : "MISSING (error screen)");
++    }
++    text->Add("launcher: %s [%s]\r\n",
++        gIgrLog.launcherPath && gIgrLog.launcherPath[0] ? gIgrLog.launcherPath : "(none)",
++        textOf(sLauncherTexts, gIgrLog.launcherState));
++    text->Add("%s: %s\r\n", IN_GAME_RESET_DISABLE_PATH, gIgrLog.igrOffSeen ? "present (hotkey off)" : "absent");
++    if (diag)
++    {
++        addPatchInfo(*text, diag);
++    }
++
++    auto file = std::make_unique<FIL>();
++    BYTE mode = isNormalBoot ? (FA_CREATE_ALWAYS | FA_WRITE) : (FA_OPEN_APPEND | FA_WRITE);
++    if (f_open(file.get(), IGR_LOG_PATH, mode) != FR_OK)
++    {
++        LOG_ERROR("Failed to open %s\n", IGR_LOG_PATH);
++        return;
++    }
++    UINT bytesWritten = 0;
++    f_write(file.get(), text->GetText(), text->GetLength(), &bytesWritten);
++    f_close(file.get());
++}
+diff --git a/arm7/source/fat/igrLog.h b/arm7/source/fat/igrLog.h
+new file mode 100644
+index 0000000..a0ef7a3
+--- /dev/null
++++ b/arm7/source/fat/igrLog.h
+@@ -0,0 +1,69 @@
++#pragma once
++#include "dsrunnerIgrDiag.h"
++#include "ndsHeader.h"
++
++// DsRunner: /_pico/igr-log.txt, a short text file that tells what Pico Loader did about the
++// in-game reset (L+R+Down+B) on the last start, so it can be checked on a pc without a
++// debugger. It is rewritten on every normal start and appended to on a start after a reset.
++
++/// @brief How Pico Loader was started.
++enum IgrLogBootMode : u32
++{
++    IGR_LOG_BOOT_NORMAL = 0,
++    IGR_LOG_BOOT_IN_GAME_RESET,
++    IGR_LOG_BOOT_SOFT_RESET,
++    IGR_LOG_BOOT_MULTIBOOT
++};
++
++/// @brief What happened with the DLDI driver cache (/_pico/dldi.bin).
++enum IgrLogDldiState : u32
++{
++    IGR_LOG_DLDI_NOT_MOUNTED = 0,
++    IGR_LOG_DLDI_INIT_FAILED,
++    IGR_LOG_DLDI_SAVED,
++    IGR_LOG_DLDI_UP_TO_DATE,
++    IGR_LOG_DLDI_NOT_CACHEABLE,
++    IGR_LOG_DLDI_SAVE_FAILED,
++    IGR_LOG_DLDI_LOADED,
++    IGR_LOG_DLDI_NO_CACHE,
++    IGR_LOG_DLDI_CACHE_INVALID
++};
++
++/// @brief Where the launcher path came from (/_pico/launcher.txt).
++enum IgrLogLauncherState : u32
++{
++    IGR_LOG_LAUNCHER_NONE = 0,
++    // normal start: the path handed down by the launcher and what happened to the saved copy
++    IGR_LOG_LAUNCHER_SAVED,
++    IGR_LOG_LAUNCHER_UP_TO_DATE,
++    IGR_LOG_LAUNCHER_SAVE_FAILED,
++    IGR_LOG_LAUNCHER_EMPTY,
++    // start after an in-game reset: the path that is booted
++    IGR_LOG_LAUNCHER_FROM_HEADER,
++    IGR_LOG_LAUNCHER_FROM_FILE,
++    IGR_LOG_LAUNCHER_FALLBACK,
++    IGR_LOG_LAUNCHER_NOT_FOUND
++};
++
++/// @brief Filled in by main.cpp, dldi.cpp and launcherPathCache.cpp while Pico Loader starts.
++///        Only whole words, written before the log is.
++struct igr_log_state_t
++{
++    u32 bootMode;         // IgrLogBootMode
++    u32 dldiState;        // IgrLogDldiState
++    u32 launcherState;    // IgrLogLauncherState
++    const char* launcherPath;
++    u32 igrOffSeen;
++};
++
++extern igr_log_state_t gIgrLog;
++
++/// @brief Writes /_pico/igr-log.txt: rewrites it on a normal start, appends after a reset.
++/// @param romPath The path of the rom being started, or \c nullptr when not known.
++/// @param romHeader The header of the rom being started.
++/// @param isHomebrew Whether the rom is homebrew (no arm9 patches).
++/// @param diag The arm9 diagnostics, or \c nullptr for homebrew.
++/// @param hasDldiDriver Whether a DLDI driver can be patched into homebrew.
++/// @note Requires the card to be mounted. Never fails the start: errors are ignored.
++void igrLog_write(const char* romPath, const nds_header_ntr_t* romHeader, bool isHomebrew,
++    const dsrunner_igr_diag_t* diag, bool hasDldiDriver);
+diff --git a/arm7/source/fat/launcherPathCache.cpp b/arm7/source/fat/launcherPathCache.cpp
+index b2acd43..66f9a3a 100644
+--- a/arm7/source/fat/launcherPathCache.cpp
++++ b/arm7/source/fat/launcherPathCache.cpp
+@@ -2,6 +2,7 @@
+ #include <memory>
+ #include <string.h>
+ #include "launcherPathCache.h"
++#include "igrLog.h"
+ 
+ // DsRunner: see launcherPathCache.h
+ 
+@@ -54,8 +55,10 @@ static bool readSavedPath()
+ void launcherPathCache_save(const char* launcherPath)
+ {
+     u32 length = strnlen(launcherPath, sizeof(sLauncherPath));
++    gIgrLog.launcherPath = launcherPath;
+     if (length == 0 || length >= sizeof(sLauncherPath))
+     {
++        gIgrLog.launcherState = IGR_LOG_LAUNCHER_EMPTY;
+         return;
+     }
+ 
+@@ -63,12 +66,14 @@ void launcherPathCache_save(const char* launcherPath)
+     if (readSavedPath() && strcmp(sLauncherPath, launcherPath) == 0)
+     {
+         LOG_DEBUG("Saved launcher path is up to date\n");
++        gIgrLog.launcherState = IGR_LOG_LAUNCHER_UP_TO_DATE;
+         return;
+     }
+ 
+     // Write to a temporary file first, so an interrupted write can never
+     // leave a truncated path under LAUNCHER_PATH_CACHE_PATH.
+     LOG_DEBUG("Saving launcher path %s\n", launcherPath);
++    gIgrLog.launcherState = IGR_LOG_LAUNCHER_SAVE_FAILED; // until the rename below worked
+     auto file = std::make_unique<FIL>();
+     if (f_open(file.get(), LAUNCHER_PATH_CACHE_TEMP_PATH, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+     {
+@@ -92,6 +97,10 @@ void launcherPathCache_save(const char* launcherPath)
+     {
+         LOG_ERROR("Failed to replace launcher path file\n");
+     }
++    else
++    {
++        gIgrLog.launcherState = IGR_LOG_LAUNCHER_SAVED;
++    }
+ }
+ 
+ const char* launcherPathCache_load()
+@@ -101,6 +110,8 @@ const char* launcherPathCache_load()
+         if (fileExists(sLauncherPath))
+         {
+             LOG_DEBUG("Using saved launcher path %s\n", sLauncherPath);
++            gIgrLog.launcherState = IGR_LOG_LAUNCHER_FROM_FILE;
++            gIgrLog.launcherPath = sLauncherPath;
+             return sLauncherPath;
+         }
+         LOG_ERROR("Saved launcher %s does not exist\n", sLauncherPath);
+@@ -115,10 +126,14 @@ const char* launcherPathCache_load()
+         if (fileExists(fallbackPath))
+         {
+             LOG_DEBUG("Using fallback launcher %s\n", fallbackPath);
++            gIgrLog.launcherState = IGR_LOG_LAUNCHER_FALLBACK;
++            gIgrLog.launcherPath = fallbackPath;
+             return fallbackPath;
+         }
+     }
+ 
+     LOG_ERROR("No launcher found\n");
++    gIgrLog.launcherState = IGR_LOG_LAUNCHER_NOT_FOUND;
++    gIgrLog.launcherPath = sFallbackLauncherPaths[sizeof(sFallbackLauncherPaths) / sizeof(sFallbackLauncherPaths[0]) - 1];
+     return sFallbackLauncherPaths[sizeof(sFallbackLauncherPaths) / sizeof(sFallbackLauncherPaths[0]) - 1];
+ }
+diff --git a/arm7/source/loader/NdsLoader.cpp b/arm7/source/loader/NdsLoader.cpp
+index c9e188d..34399ab 100644
+--- a/arm7/source/loader/NdsLoader.cpp
++++ b/arm7/source/loader/NdsLoader.cpp
+@@ -30,6 +30,7 @@
+ #include "PatchListFactory.h"
+ #include "CheatPreprocessor.h"
+ #include "inGameReset.h" // DsRunner
++#include "fat/igrLog.h" // DsRunner
+ #include "NdsLoader.h"
+ 
+ #define AP_LIST_PATH      "/_pico/aplist.bin"
+@@ -46,6 +47,7 @@ void NdsLoader::Load(BootMode bootMode)
+     auto fileInfo = std::make_unique<FILINFO>();
+     bool inGameResetDisabled = f_stat(IN_GAME_RESET_DISABLE_PATH, fileInfo.get()) == FR_OK;
+     fileInfo.reset();
++    gIgrLog.igrOffSeen = inGameResetDisabled;
+     if (inGameResetDisabled)
+     {
+         LOG_DEBUG("In-game reset disabled by %s\n", IN_GAME_RESET_DISABLE_PATH);
+@@ -307,6 +309,14 @@ void NdsLoader::Load(BootMode bootMode)
+             return;
+         }
+ 
++        // DsRunner: /_pico/igr-log.txt for homebrew (the launcher after an in-game reset), before
++        // the error below, which is the one an in-game reset without DLDI driver ends in
++        if (isHomebrew)
++        {
++            igrLog_write(bootMode == BootMode::Normal ? _romPath : nullptr, &_romHeader, true, nullptr,
++                !RequiresMissingDldiDriver());
++        }
++
+         if (isHomebrew && RequiresMissingDldiDriver())
+         {
+             // A power cycle is the only recovery that works on every console. The
+@@ -327,6 +337,19 @@ void NdsLoader::Load(BootMode bootMode)
+         // wait for arm9 patches to be ready
+         receiveFromArm9();
+ 
++        // DsRunner: what the arm9 did about the in-game reset, into /_pico/igr-log.txt. The game
++        // has not started yet, and only Pico Loader's own fat code touches the card here.
++        if (bootMode != BootMode::Multiboot)
++        {
++            auto diag = std::make_unique<dsrunner_igr_diag_t>();
++            sendToArm9(IPC_COMMAND_ARM9_DSRUNNER_GET_IGR_DIAG);
++            for (u32 i = 0; i < DSRUNNER_IGR_DIAG_WORDS; i++)
++            {
++                ((u32*)diag.get())[i] = receiveFromArm9();
++            }
++            igrLog_write(bootMode == BootMode::Normal ? _romPath : nullptr, &_romHeader, false, diag.get(), false);
++        }
++
+         HandleGameSpecificPatches();
+ 
+         LOG_DEBUG("Arm9 patches done\n");
+diff --git a/arm7/source/main.cpp b/arm7/source/main.cpp
+index 394e8cc..063beb5 100644
+--- a/arm7/source/main.cpp
++++ b/arm7/source/main.cpp
+@@ -16,6 +16,7 @@
+ #include "logger/PlainLogger.h"
+ #include "fat/dldi.h"
+ #include "fat/launcherPathCache.h" // DsRunner
++#include "fat/igrLog.h" // DsRunner
+ #include "loader/NdsLoader.h"
+ #include "sharedMemory.h"
+ #include "inGameReset.h"
+@@ -183,8 +184,10 @@ extern "C" void loaderMain()
+     {
+         case PLOAD_BOOT_DRIVE_DLDI:
+         {
++            gIgrLog.dldiState = IGR_LOG_DLDI_INIT_FAILED; // DsRunner
+             if (dldi_init())
+             {
++                gIgrLog.dldiState = IGR_LOG_DLDI_NOT_MOUNTED; // DsRunner
+                 // The driver cache depends only on whether a driver was handed down,
+                 // not on where the rom is loaded from, so multiboot needs no special case.
+                 if (mountDldi())
+@@ -223,6 +226,7 @@ extern "C" void loaderMain()
+     if (multiboot)
+     {
+         LOG_DEBUG("Multiboot\n");
++        gIgrLog.bootMode = IGR_LOG_BOOT_MULTIBOOT; // DsRunner
+         sLoader.Load(BootMode::Multiboot);
+     }
+     // The reboot sets the arm7 entry of the header copy to Pico Loader's own entry point, so this
+@@ -236,6 +240,9 @@ extern "C" void loaderMain()
+         // Cleared so a later reset from the launcher is not mistaken for another in-game reset.
+         TWL_SHARED_MEMORY->ntrSharedMem.resetParam = 0;
+         // DsRunner: otherwise the launcher path saved on the last normal boot, or a known launcher file
++        gIgrLog.bootMode = IGR_LOG_BOOT_IN_GAME_RESET;
++        gIgrLog.launcherState = IGR_LOG_LAUNCHER_FROM_HEADER;
++        gIgrLog.launcherPath = gLoaderHeader.v2.launcherPath;
+         const char* launcherPath = gLoaderHeader.v2.launcherPath[0] != 0
+             ? gLoaderHeader.v2.launcherPath
+             : launcherPathCache_load();
+@@ -250,6 +257,7 @@ extern "C" void loaderMain()
+     else if (((nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader)->arm7EntryAddress == (u32)gLoaderHeader.entryPoint)
+     {
+         LOG_DEBUG("Retail soft reset detected\n");
++        gIgrLog.bootMode = IGR_LOG_BOOT_SOFT_RESET; // DsRunner
+         u32 originalArm7EntryAddress = ((nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.cardRomHeader)->arm7EntryAddress;
+         ((nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader)->arm7EntryAddress = originalArm7EntryAddress;
+         sLoader.Load(BootMode::SdkResetSystem);
+diff --git a/arm9/source/Arm9Patcher.cpp b/arm9/source/Arm9Patcher.cpp
+index 40a8220..2fccb06 100644
+--- a/arm9/source/Arm9Patcher.cpp
++++ b/arm9/source/Arm9Patcher.cpp
+@@ -13,6 +13,7 @@
+ #include "patches/arm9/CardiReadRomIdCorePatch.h"
+ #include "patches/arm9/OSResetSystemPatch.h"
+ #include "patches/arm9/InGameReset/InGameResetPatch.h"
++#include "dsrunnerIgrDiag.h" // DsRunner
+ #include "patches/arm9/PokemonDownloaderArm9Patch.h"
+ #include "patches/arm9/DSProtectArm9Patch.h"
+ #include "patches/arm9/LastWindowCrcPatch.h"
+@@ -152,6 +153,18 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+         }
+     }
+     LOG_DEBUG("Arm9 region: 0x%x - 0x%x\n", romHeader->arm9LoadAddress, romHeader->arm9LoadAddress + arm9Size);
++    // DsRunner: start values of the diagnostics for /_pico/igr-log.txt, word by word (vram)
++    gDsRunnerIgrDiag.sdkVersion = (sdkVersion.GetMajor() << SDK_VERSION_MAJOR_SHIFT)
++        | (sdkVersion.GetMinor() << SDK_VERSION_MINOR_SHIFT) | sdkVersion.GetReleaseStep();
++    gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_NO_SDK_VERSION;
++    gDsRunnerIgrDiag.matchResults = 0;
++    gDsRunnerIgrDiag.sdkPatternCount = 0;
++    gDsRunnerIgrDiag.hookAddress = 0;
++    gDsRunnerIgrDiag.continueAddress = 0;
++    gDsRunnerIgrDiag.dispatchAddress = 0;
++    gDsRunnerIgrDiag.osResetSystem = 0;
++    gDsRunnerIgrDiag.rebootCreated = 0;
++    gDsRunnerIgrDiag.spaceNeeded = 0;
+     PatchContext patchContext
+     {
+         (void*)romHeader->arm9LoadAddress,
+@@ -233,6 +246,7 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+         // The reboot reuses the sd read code that the rom read patches create. It does not
+         // exist for DSiWare, or on platforms that read roms directly instead of from the sd card.
+         // DsRunner: left out when switched off with IN_GAME_RESET_DISABLE_PATH
++        gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_DISABLED; // DsRunner: until the patch reports
+         if (inGameResetEnabled)
+         {
+             patchCollection.AddPatch(new InGameResetPatch(osResetSystemPatch, loaderInfo,
+@@ -260,6 +274,7 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+     void** softResetCheatsPointer = nullptr;
+     if (osResetSystemPatch != nullptr)
+     {
++        gDsRunnerIgrDiag.osResetSystem = (u32)osResetSystemPatch->GetTargetAddress(); // DsRunner
+         softResetCheatsPointer = osResetSystemPatch->GetCheatsPointerAtTarget();
+     }
+ 
+diff --git a/arm9/source/main.cpp b/arm9/source/main.cpp
+index dae80be..3702c3d 100644
+--- a/arm9/source/main.cpp
++++ b/arm9/source/main.cpp
+@@ -30,6 +30,7 @@
+ #include "patches/homebrew/BootstubPatchCode.h"
+ #include "HomebrewBootstub.h"
+ #include "inGameReset.h" // DsRunner
++#include "dsrunnerIgrDiag.h" // DsRunner
+ 
+ #define HANDSHAKE_PART0     0xA
+ #define HANDSHAKE_PART1     0xB
+@@ -294,6 +295,22 @@ static void handleSetupHomebrewBootstub(u32 dldiRequiredSpace)
+     ipc_sendWordDirect((u32)launcherPath);
+ }
+ 
++// DsRunner: sends the in-game reset diagnostics to the arm7, which writes /_pico/igr-log.txt
++static void handleGetIgrDiagCommand()
++{
++    static const char sPlatformName[sizeof(gDsRunnerIgrDiag.platform)] alignas(4) = PICO_LOADER_PLATFORM_NAME;
++    for (u32 i = 0; i < sizeof(sPlatformName) / sizeof(u32); i++)
++    {
++        gDsRunnerIgrDiag.platform[i] = ((const u32*)sPlatformName)[i];
++    }
++    const u32* words = (const u32*)&gDsRunnerIgrDiag;
++    for (u32 i = 0; i < DSRUNNER_IGR_DIAG_WORDS; i++)
++    {
++        while (ipc_isSendFifoFull());
++        ipc_sendWordDirect(words[i]);
++    }
++}
++
+ static void handleArm7Command(u32 command)
+ {
+     switch (command)
+@@ -359,6 +376,11 @@ static void handleArm7Command(u32 command)
+             handleBootCommand();
+             break;
+         }
++        case IPC_COMMAND_ARM9_DSRUNNER_GET_IGR_DIAG: // DsRunner
++        {
++            handleGetIgrDiagCommand();
++            break;
++        }
+         case IPC_COMMAND_ARM9_SETUP_HOMEBREW_BOOTSTUB:
+         {
+             u32 dldiRequiredSpace = receiveFromArm7();
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+index 2a8359d..f0823ef 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+@@ -11,24 +11,48 @@
+ #include "IrqDispatcherNested.h"
+ #include "IrqDispatcherCondReturn.h"
+ #include "InGameResetPatch.h"
++#include "dsrunnerIgrDiag.h" // DsRunner
++
++// DsRunner: diagnostics for /_pico/igr-log.txt, sent to the arm7 on request
++dsrunner_igr_diag_t gDsRunnerIgrDiag;
++u32 gDsRunnerIgrLastPatternResult;
++
++// DsRunner: records the result of one dispatcher search. A failed search that found its
++// pattern once was rejected by a later check, unless the search named the reason itself.
++static bool recordSearch(u32 variant, bool found)
++{
++    u32 result = gDsRunnerIgrLastPatternResult;
++    if (found)
++    {
++        result = DSRUNNER_IGR_MATCH_MATCHED;
++    }
++    else if (result == DSRUNNER_IGR_MATCH_MATCHED)
++    {
++        result = DSRUNNER_IGR_MATCH_REJECTED;
++    }
++    dsrunnerIgrDiag_setMatch(variant, result);
++    return found;
++}
+ 
+ bool InGameResetPatch::FindPatchTarget(PatchContext& patchContext)
+ {
+     // Tried in order, stopping at the first that matches. The stock dispatcher is first
+     // because nearly every game has it.
+-    if (FindSdkIrqDispatcher(patchContext, _irqDispatcherMatch))
++    // DsRunner: each search is recorded for /_pico/igr-log.txt
++    gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_NO_DISPATCHER;
++    if (recordSearch(DSRUNNER_IGR_VARIANT_SDK, FindSdkIrqDispatcher(patchContext, _irqDispatcherMatch)))
+     {
+         _irqDispatcherVariant = IrqDispatcherVariant::Sdk;
+     }
+-    else if (FindBlxIrqDispatcher(patchContext, _irqDispatcherMatch))
++    else if (recordSearch(DSRUNNER_IGR_VARIANT_BLX, FindBlxIrqDispatcher(patchContext, _irqDispatcherMatch)))
+     {
+         _irqDispatcherVariant = IrqDispatcherVariant::Blx;
+     }
+-    else if (FindNestedIrqDispatcher(patchContext, _irqDispatcherMatch))
++    else if (recordSearch(DSRUNNER_IGR_VARIANT_NESTED, FindNestedIrqDispatcher(patchContext, _irqDispatcherMatch)))
+     {
+         _irqDispatcherVariant = IrqDispatcherVariant::Nested;
+     }
+-    else if (FindCondReturnIrqDispatcher(patchContext, _irqDispatcherMatch))
++    else if (recordSearch(DSRUNNER_IGR_VARIANT_COND_RETURN, FindCondReturnIrqDispatcher(patchContext, _irqDispatcherMatch)))
+     {
+         _irqDispatcherVariant = IrqDispatcherVariant::CondReturn;
+     }
+@@ -36,6 +60,11 @@ bool InGameResetPatch::FindPatchTarget(PatchContext& patchContext)
+     {
+         LOG_DEBUG("In-game reset: no known irq dispatcher found\n");
+     }
++    if (_irqDispatcherVariant != IrqDispatcherVariant::None)
++    {
++        gDsRunnerIgrDiag.hookAddress = (u32)_irqDispatcherMatch.hook; // DsRunner
++        gDsRunnerIgrDiag.continueAddress = _irqDispatcherMatch.continueAddress; // DsRunner
++    }
+     return true;
+ }
+ 
+@@ -89,6 +118,7 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+         // The size of the platform sd read code is not known up front, so its allocation
+         // cannot be checked below.
+         LOG_WARNING("In-game reset: no sd read code to reuse\n");
++        gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_NO_SD_READ_CODE; // DsRunner
+         return;
+     }
+ 
+@@ -108,6 +138,13 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+     if (!patchContext.GetPatchHeap().CanAllocAll(sizes.data(), count))
+     {
+         LOG_WARNING("In-game reset: not enough patch space\n");
++        // DsRunner: how much it would have needed, for /_pico/igr-log.txt
++        gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_NO_PATCH_SPACE;
++        gDsRunnerIgrDiag.spaceNeeded = 0;
++        for (u32 i = 0; i < count; i++)
++        {
++            gDsRunnerIgrDiag.spaceNeeded += sizes[i];
++        }
+         return;
+     }
+ 
+@@ -136,4 +173,8 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+     _irqDispatcherMatch.hook[0] = 0xE51FF004;
+     _irqDispatcherMatch.hook[1] = (u32)dispatchPatchCode->GetDispatchFunction();
+     LOG_DEBUG("In-game reset enabled\n");
++    // DsRunner: for /_pico/igr-log.txt
++    gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_APPLIED;
++    gDsRunnerIgrDiag.dispatchAddress = (u32)dispatchPatchCode->GetDispatchFunction();
++    gDsRunnerIgrDiag.rebootCreated = createsReboot ? 1 : 0;
+ }
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+index 2304a59..afe80e7 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+@@ -75,6 +75,18 @@ storeHeldFrames:
+     bx r0
+ 
+ tryReset:
++    // DsRunner: brighten the main screen (REG_MASTER_BRIGHT = 0x4008, half way to white)
++    // once the keys have been held long enough, as a visible sign that the hotkey was
++    // recognized. If the game then keeps running bright, the reset is waiting for the slot 1
++    // lock. Done here and not in the reset part, which has to fit the small patch space gaps.
++    // Only r0, r1 and r3 are used; r2 and lr must survive.
++    ldr r1, regKeyInput
++    subs r1, #(0x04000130 - 0x0400006C) // REG_MASTER_BRIGHT
++    movs r0, #0x40
++    lsls r0, r0, #8
++    adds r0, #0x08
++    strh r0, [r1]
++
+     // r2 is left as it is, so that the reset can return to it if it has to wait.
+     ldr r3, patch_ingamereset_resetAddress
+     bx r3
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp
+index 13867c2..751d8a5 100644
+--- a/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.cpp
+@@ -1,6 +1,7 @@
+ #include "common.h"
+ #include "patches/PatchContext.h"
+ #include "IrqDispatcher.h"
++#include "dsrunnerIgrDiag.h" // DsRunner
+ 
+ // The first four words of a pattern are what the search looks for, because that is the only
+ // width it supports.
+@@ -45,6 +46,15 @@ u32* FindUniqueIrqDispatcherPattern(PatchContext& patchContext, const u32* patte
+         }
+     }
+ 
++    // DsRunner: for /_pico/igr-log.txt
++    gDsRunnerIgrLastPatternResult = matchCount == 0 ? DSRUNNER_IGR_MATCH_NO_MATCH
++        : matchCount > 1 ? DSRUNNER_IGR_MATCH_AMBIGUOUS
++        : DSRUNNER_IGR_MATCH_MATCHED;
++    if (name[0] == 's') // "sdk"
++    {
++        gDsRunnerIgrDiag.sdkPatternCount = matchCount;
++    }
++
+     if (matchCount > 1)
+     {
+         LOG_WARNING("In-game reset: %s irq dispatcher is ambiguous\n", name);
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp
+index 6b3a1c8..ca5deab 100644
+--- a/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherSdk.cpp
+@@ -1,6 +1,7 @@
+ #include "common.h"
+ #include "patches/PatchContext.h"
+ #include "IrqDispatcherSdk.h"
++#include "dsrunnerIgrDiag.h" // DsRunner
+ 
+ // The stock SDK interrupt dispatcher (OS_IrqHandler). The same code is used from SDK 2
+ // through SDK 5, on both cpus, and it is what almost every retail game contains.
+@@ -75,6 +76,7 @@ bool FindSdkIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result
+     if (!hasHandlerStart(match, patchContext.GetDataStart()))
+     {
+         LOG_WARNING("In-game reset: irq dispatcher start not found\n");
++        gDsRunnerIgrLastPatternResult = DSRUNNER_IGR_MATCH_START_NOT_FOUND; // DsRunner
+         return false;
+     }
+ 
+@@ -85,6 +87,7 @@ bool FindSdkIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result
+     if (match[IRQ_RETURN_WORD] != finalAddress + IRQ_RETURN_OFFSET)
+     {
+         LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
++        gDsRunnerIgrLastPatternResult = DSRUNNER_IGR_MATCH_RETURN_MISMATCH; // DsRunner
+         return false;
+     }
+ 
+@@ -93,6 +96,7 @@ bool FindSdkIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result
+     if (irqTable == 0 || (irqTable & 3) != 0)
+     {
+         LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        gDsRunnerIgrLastPatternResult = DSRUNNER_IGR_MATCH_BAD_TABLE; // DsRunner
+         return false;
+     }
+ 
+diff --git a/arm9/source/patches/arm9/OSResetSystemPatch.h b/arm9/source/patches/arm9/OSResetSystemPatch.h
+index aec8740..e687bb8 100644
+--- a/arm9/source/patches/arm9/OSResetSystemPatch.h
++++ b/arm9/source/patches/arm9/OSResetSystemPatch.h
+@@ -19,6 +19,9 @@ public:
+         return _cheatsPointer;
+     }
+ 
++    /// @brief DsRunner: the end of OS_ResetSystem that was found, or \c nullptr.
++    const void* GetTargetAddress() const { return _osResetSystem; }
++
+     /// @brief Returns whether OS_ResetSystem was found and patched. Only valid after \see ApplyPatch.
+     bool IsApplied() const
+     {
+diff --git a/common/dsrunnerIgrDiag.h b/common/dsrunnerIgrDiag.h
+new file mode 100644
+index 0000000..ac5326e
+--- /dev/null
++++ b/common/dsrunnerIgrDiag.h
+@@ -0,0 +1,87 @@
++#pragma once
++#include <nds/ndstypes.h>
++
++// DsRunner: diagnostics of the in-game reset for /_pico/igr-log.txt (see loader/README.md in
++// the DsRunner repository). The arm9 fills dsrunner_igr_diag_t while it patches a game, and
++// the arm7 asks for it with IPC_COMMAND_ARM9_DSRUNNER_GET_IGR_DIAG and writes the log.
++
++/// @brief Arm7 to arm9: send the words of dsrunner_igr_diag_t, one after the other.
++#define IPC_COMMAND_ARM9_DSRUNNER_GET_IGR_DIAG  0x20
++
++/// @brief What became of the in-game reset patch for the game being loaded.
++enum DsRunnerIgrStatus : u32
++{
++    /// @brief The arm9 patches did not run (homebrew, or not reported).
++    DSRUNNER_IGR_STATUS_NOT_RUN = 0,
++    /// @brief Left out because /_pico/igr.off exists.
++    DSRUNNER_IGR_STATUS_DISABLED,
++    /// @brief The rom has no sdk version (no module params), so no arm9 patches were made.
++    DSRUNNER_IGR_STATUS_NO_SDK_VERSION,
++    /// @brief None of the known irq dispatchers was found.
++    DSRUNNER_IGR_STATUS_NO_DISPATCHER,
++    /// @brief The game has no OS_ResetSystem and there is no sd read code to build the reboot from.
++    DSRUNNER_IGR_STATUS_NO_SD_READ_CODE,
++    /// @brief Not enough patch space left after the patches the game needs.
++    DSRUNNER_IGR_STATUS_NO_PATCH_SPACE,
++    /// @brief The hook is installed.
++    DSRUNNER_IGR_STATUS_APPLIED
++};
++
++/// @brief Result of the search for one irq dispatcher version, 4 bits each in matchResults.
++enum DsRunnerIgrMatch : u32
++{
++    DSRUNNER_IGR_MATCH_NOT_TRIED = 0,
++    /// @brief The instruction pattern does not occur.
++    DSRUNNER_IGR_MATCH_NO_MATCH,
++    /// @brief The pattern occurs more than once.
++    DSRUNNER_IGR_MATCH_AMBIGUOUS,
++    /// @brief sdk: the start of the dispatcher (push {lr}; mov r12, #0x04000000; ...) was not found.
++    DSRUNNER_IGR_MATCH_START_NOT_FOUND,
++    /// @brief sdk: the literal return address does not match the relocated location.
++    DSRUNNER_IGR_MATCH_RETURN_MISMATCH,
++    /// @brief sdk: the irq table address is invalid.
++    DSRUNNER_IGR_MATCH_BAD_TABLE,
++    /// @brief Found and used.
++    DSRUNNER_IGR_MATCH_MATCHED,
++    /// @brief The pattern was found, but a later check rejected it.
++    DSRUNNER_IGR_MATCH_REJECTED
++};
++
++/// @brief Index of each dispatcher version in matchResults (bits 4 * index).
++#define DSRUNNER_IGR_VARIANT_SDK            0
++#define DSRUNNER_IGR_VARIANT_BLX            1
++#define DSRUNNER_IGR_VARIANT_NESTED         2
++#define DSRUNNER_IGR_VARIANT_COND_RETURN    3
++#define DSRUNNER_IGR_VARIANT_COUNT          4
++
++/// @brief Only whole words: the arm9 runs from vram, where 8-bit writes have no effect.
++typedef struct
++{
++    u32 sdkVersion;
++    u32 status;            // DsRunnerIgrStatus
++    u32 matchResults;      // DsRunnerIgrMatch per dispatcher version, 4 bits each
++    u32 sdkPatternCount;   // how often the stock dispatcher pattern occurs
++    u32 hookAddress;       // overwritten dispatcher instructions (load address), or 0
++    u32 continueAddress;   // where the dispatch part carries on (final address), or 0
++    u32 dispatchAddress;   // the dispatch part in the patch heap, or 0
++    u32 osResetSystem;     // end of OS_ResetSystem found in the game, or 0
++    u32 rebootCreated;     // 1 when the reboot was created for the in-game reset
++    u32 spaceNeeded;       // bytes the in-game reset needed when it did not fit, otherwise 0
++    u32 platform[4];       // PICO_PLATFORM name, NUL padded
++} dsrunner_igr_diag_t;
++
++#define DSRUNNER_IGR_DIAG_WORDS     (sizeof(dsrunner_igr_diag_t) / sizeof(u32))
++
++#ifdef ARM9
++#ifdef __cplusplus
++extern dsrunner_igr_diag_t gDsRunnerIgrDiag;
++/// @brief Result of the last FindUniqueIrqDispatcherPattern call (DsRunnerIgrMatch).
++extern u32 gDsRunnerIgrLastPatternResult;
++
++static inline void dsrunnerIgrDiag_setMatch(u32 variant, u32 result)
++{
++    gDsRunnerIgrDiag.matchResults = (gDsRunnerIgrDiag.matchResults & ~(0xFu << (variant * 4)))
++        | (result << (variant * 4));
++}
++#endif
++#endif
