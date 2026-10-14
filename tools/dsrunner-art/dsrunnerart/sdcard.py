@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .consoles import (MAX_SYSTEMS_FILE_SIZE, CustomConsole, System, parse_systems_json, set_custom_systems,
+from .consoles import (ART_KEY_FOLDER, MAX_SYSTEMS_FILE_SIZE, CustomConsole, System, parse_systems_json, set_custom_systems,
                        system_for_file)
 
 # see DsRunnerFileInfoCardView.cpp
@@ -19,6 +19,7 @@ SETTINGS_PATH = "/_pico/settings.json"
 # optional consoles of the launcher (DsRunnerSystems::FilePath)
 SYSTEMS_PATH = "/_dsrunner/systems.json"
 DEFAULT_LIBRARY_PATH = "/Games"
+DEFAULT_THEME = "dsrunner"
 OVERRIDE_FOLDER = "/_dsrunner/art-override"
 # tile images for the launcher grid: same path rule, other root (docs/CONFIG.md, "Kachel-Bilder")
 TILE_FOLDER = "/_dsrunner/tiles"
@@ -120,6 +121,25 @@ def read_library_path(sd_root: Path) -> str:
     if not isinstance(value, str):
         return DEFAULT_LIBRARY_PATH
     return skip_drive(value)
+
+
+def read_theme(sd_root: Path) -> str:
+    """The theme folder name of the launcher (settings.json "theme", "dsrunner" when missing)."""
+    settings = to_fs_path(sd_root, SETTINGS_PATH)
+    try:
+        with open(settings, encoding="utf-8-sig") as file:
+            data = json.load(file)
+    except (OSError, ValueError):
+        return DEFAULT_THEME
+    value = data.get("theme") if isinstance(data, dict) else None
+    return value if isinstance(value, str) and value else DEFAULT_THEME
+
+
+def builtin_console_art_folder(sd_root: Path) -> Optional[Path]:
+    """Folder of the theme's built-in console images (DsRunnerConsoleArt), None when the card has none.
+    Like the launcher, the generic folder icon stands for the whole set."""
+    folder = to_fs_path(sd_root, f"/_pico/themes/{read_theme(sd_root)}/consoles")
+    return folder if (folder / f"{ART_KEY_FOLDER}-icon.bmp").is_file() else None
 
 
 def read_systems_json(sd_root: Path) -> tuple[list[CustomConsole], list[str]]:

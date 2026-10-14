@@ -232,7 +232,7 @@ def run_gui(initial_sd: Optional[str] = None) -> int:
 
     ttk.Checkbutton(options_frame, text="Vorhandene überschreiben (vom Tool erzeugte Bilder neu laden)",
                     variable=force_var).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
-    ttk.Checkbutton(options_frame, text="Bilder für Konsolen-Ordner erzeugen", variable=console_var).grid(
+    ttk.Checkbutton(options_frame, text="Bilder für Ordner erzeugen (ohne eingebaute Konsolen-Bilder)", variable=console_var).grid(
         row=3, column=0, columnspan=3, sticky="w")
     ttk.Checkbutton(options_frame, text="Spiel-Icon als Ersatzbild, wenn nichts gefunden wird", variable=icon_var).grid(
         row=4, column=0, columnspan=3, sticky="w")
