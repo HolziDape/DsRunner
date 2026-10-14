@@ -1,11 +1,12 @@
 # Ein Release erstellen
 
-Anleitung für den Maintainer. Ein Release besteht aus einem Git-Tag `vX.Y.Z` und einem GitHub-Release mit drei Dateien, die die CI baut und anhängt:
+Anleitung für den Maintainer. Ein Release besteht aus einem Git-Tag `vX.Y.Z` und einem GitHub-Release mit diesen Dateien, die die CI baut und anhängt:
 
 | Datei | Inhalt |
 |---|---|
 | `DsRunner_M3DSReal.zip` | fertiges SD-Paket für die M3 DS Real: DsRunner als `_nds/TWiLightMenu/main.srldr` und `BOOT.NDS`, `_pico` mit dem DsRunner-Build von Pico Loader (M3DS, aus `loader/`), Autostart-Dateien aus TWiLight Menu++, `LIESMICH.txt` |
 | `DsRunner.zip` | `DsRunner.nds` und `_pico` für andere Flashkarten |
+| `PicoLoader-DsRunner_<PLATTFORM>.zip` | 17 Dateien, eine pro Pico-Loader-Plattform (die des Pico-Loader-Releases ohne `ISNITRO`/`MELONDS`): `_pico/` mit den fünf Loader-Dateien aus `loader/` und `picoLoader-DsRunner.txt`, für andere Flashkarten ([FLASHCARDS.md](FLASHCARDS.md)) |
 | `DsRunnerArt.exe` | PC-Programm DsRunner Art für Windows |
 
 Die Dateinamen enthalten keine Versionsnummer, damit der Link im README (`releases/latest`) und die Anleitung immer stimmen.
@@ -65,12 +66,13 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
    |---|---|
    | Check version | `tools/version.sh release <tag>`: Version aus dem Tag, Warnungen, wenn `VERSION` oder Changelog nicht passen; nur bei einem Tag ohne Version laufen die anderen nicht |
    | Build Pico Loader (loader/) | `loader/build.sh` im Container BlocksDS 1.20 mit .NET 9: klont pico-loader am festen Commit, wendet `loader/patches` an, baut M3DS; Artefakt `PicoLoader_M3DS_DsRunner` |
+   | Build Pico Loader `<PLATTFORM>` | dasselbe für jede der 17 Plattformen (Matrix), packt `PicoLoader-DsRunner_<PLATTFORM>.zip` und hängt sie an. Schlägt eine Plattform fehl, laufen die anderen weiter |
    | Build DsRunner | `make` im BlocksDS-Container mit `DSRUNNER_RELEASE=1`, packt `DsRunner.zip` und mit `tools/make-sd-package.sh` `DsRunner_M3DSReal.zip` (Pico Loader aus dem Artefakt, TWiLight Menu++ mit fester Version und SHA-256), in beide mit `tools/fetch-emulators.sh` die Emulatoren, und hängt beide an. Wartet auf den Loader-Job |
    | Build DsRunner Art (Windows) | Tests, `DsRunnerArt.exe` mit PyInstaller, hängt sie an |
    | Release notes from CHANGELOG.md | setzt den Changelog-Abschnitt an den Anfang der Release-Beschreibung (läuft zuletzt, auch wenn ein Build fehlschlägt) |
 
 8. **Ergebnis prüfen** auf der Release-Seite:
-   - drei Dateien: `DsRunner.zip`, `DsRunner_M3DSReal.zip`, `DsRunnerArt.exe`
+   - `DsRunner.zip`, `DsRunner_M3DSReal.zip`, `DsRunnerArt.exe` und 17 Dateien `PicoLoader-DsRunner_<PLATTFORM>.zip`
    - die Beschreibung beginnt mit dem Changelog-Abschnitt
    - `DsRunner_M3DSReal.zip` herunterladen: `LIESMICH.txt` beginnt mit „DsRunner 0.2.0 fuer M3 DS Real“ (ohne „Entwicklungsstand“)
    - auf dem DS: `_nds/TWiLightMenu/main.srldr` auf die Karte kopieren, im Menü „Anzeige“ steht `v0.2.0`
