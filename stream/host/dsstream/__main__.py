@@ -34,7 +34,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--viewport", type=parse_size, default=None,
                     help="Groesse der Seite im Browser, z. B. 640x480 (Standard 512x384, bei 256x384: 512x768)")
     ap.add_argument("--port", type=int, default=P.DEFAULT_PORT, help="UDP-Port (Standard 7770)")
-    ap.add_argument("--bind", default="0.0.0.0", help="nur an dieser IP lauschen, z. B. die des Hotspots")
+    ap.add_argument("--bind", default="0.0.0.0", help="nur an dieser IP lauschen (dann klappt die automatische Suche nicht, "
+                    "host= in stream.ini eintragen)")
     ap.add_argument("--name", default=None, help="Name, den der DS bei der Suche anzeigt")
     ap.add_argument("--fps", type=float, default=20.0, help="hoechstens so viele Bilder pro Sekunde (Standard 20)")
     ap.add_argument("--rate", type=float, default=120.0, help="Start-Senderate in KB/s (Standard 120)")

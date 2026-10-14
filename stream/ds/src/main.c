@@ -378,7 +378,10 @@ static bool find_host(void)
     struct in_addr gw, mask, dns1, dns2;
     struct in_addr ip = Wifi_GetIPInfo(&gw, &mask, &dns1, &dns2);
     status_clear();
-    printf("WLAN verbunden.\nIP des DS: %s\n", inet_ntoa(ip));
+    uint8_t mac[6] = { 0 };
+    Wifi_GetData(WIFIGETDATA_MACADDRESS, 6, mac);
+    printf("WLAN verbunden.\nIP des DS:  %s\n", inet_ntoa(ip));
+    printf("MAC des DS: %02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     if (!open_socket())
     {
         printf("Netzwerkfehler (socket)\n");

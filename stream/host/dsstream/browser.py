@@ -30,13 +30,13 @@ BASE_ARGS = [
     "--no-default-browser-check",
 ]
 # GPU rendering (WebGL/canvas). On the Raspberry Pi 5 the Chromium of Raspberry Pi OS
-# renders with the V3D GPU through EGL/GLES.
+# renders with the V3D GPU (OpenGL ES through ANGLE). Check with --url chrome://gpu.
 GPU_ARGS = [
     "--ignore-gpu-blocklist",
     "--enable-gpu-rasterization",
     "--enable-zero-copy",
 ]
-GPU_ARGS_LINUX_ARM = ["--use-gl=egl"]
+GPU_ARGS_LINUX_ARM = ["--use-angle=gles"]
 
 SYSTEM_CHROMIUM = ["/usr/bin/chromium", "/usr/bin/chromium-browser"]
 
