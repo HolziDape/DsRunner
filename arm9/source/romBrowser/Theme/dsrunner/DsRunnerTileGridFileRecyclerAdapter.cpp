@@ -3,6 +3,7 @@
 #include "romBrowser/FileType/FileType.h"
 #include "romBrowser/viewModels/RomBrowserItemViewModel.h"
 #include "themes/dsrunner/DsRunnerConsoles.h"
+#include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "romBrowser/IRomBrowserController.h"
 #include "DsRunnerLibrary.h"
 
@@ -33,6 +34,12 @@ void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int ind
         tileView->SetTint(console->tile);
     else
         tileView->ClearTint();
+    if (gDsRunnerConsoleArt.IsAvailable() && fileInfo.GetFileType()->GetClassification() == FileTypeClassification::Folder)
+    {
+        // the label under the console image: the console's short name, else the folder name
+        const char* name = fileInfo.GetFileName();
+        tileView->SetLabel(DsRunnerFavoritesFolder::IsEntry(name) ? "Favoriten" : console ? console->label : name);
+    }
     IconGridFileRecyclerAdapter::BindView(view, index);
 }
 
@@ -40,19 +47,30 @@ TaskResult<void> DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> v
     const InternalFileInfo* internalFileInfo, const vu8& cancelRequested) const
 {
     auto result = IconGridFileRecyclerAdapter::BindView(view, index, internalFileInfo, cancelRequested);
-    if (cancelRequested || !_useTileImages)
+    auto tileView = static_cast<DsRunnerTileItemView*>(view.GetPointer());
+    const auto& fileInfo = _fileInfoManager->GetItem(index);
+    bool isFolder = fileInfo.GetFileType()->GetClassification() == FileTypeClassification::Folder;
+    if (cancelRequested)
+        return result;
+    if (isFolder)
+        tileView->RenderLabel();
+    if (!_useTileImages)
         return result;
 
-    // games can have a tile image instead of the icon (folders keep their console badge)
-    const auto& fileInfo = _fileInfoManager->GetItem(index);
-    if (fileInfo.GetFileType()->GetClassification() != FileTypeClassification::Folder)
+    // games and folders can have a tile image of their own instead of the icon
+    char path[256];
+    if (DsRunnerPaths::MirrorPath(TILE_FOLDER, _romBrowserController->GetItemFolderPath(fileInfo),
+            fileInfo.GetFileName(), isFolder, path, sizeof(path)) &&
+        tileView->LoadTileImage(path, nullptr, cancelRequested))
     {
-        char path[256];
-        if (DsRunnerPaths::MirrorPath(TILE_FOLDER, _romBrowserController->GetItemFolderPath(fileInfo),
-                fileInfo.GetFileName(), false, path, sizeof(path)))
-        {
-            static_cast<DsRunnerTileItemView*>(view.GetPointer())->LoadTileImage(path, cancelRequested);
-        }
+        return result;
+    }
+    // folders without one show the built-in image of their console
+    if (isFolder && !cancelRequested && gDsRunnerConsoleArt.IsAvailable() &&
+        gDsRunnerConsoleArt.GetImagePath(fileInfo.GetFileName(), DsRunnerConsoleArt::ImageType::Tile, path, sizeof(path)))
+    {
+        auto tint = DsRunnerConsoleArt::GetTileColor(fileInfo.GetFileName());
+        tileView->LoadTileImage(path, &tint, cancelRequested);
     }
     return result;
 }

@@ -6,6 +6,7 @@
 #include "FileType/BmpFileCover.h"
 #include "FileType/InternalFileInfo.h"
 #include "SdFolderFactory.h"
+#include "Theme/dsrunner/DsRunnerConsoleCover.h" // DsRunner
 #include "CoverRepository.h"
 
 void CoverRepository::Initialize()
@@ -35,6 +36,10 @@ FileCover* CoverRepository::GetCoverForFile(const FileInfo& fileInfo, const Inte
                 }
             }
         }
+
+        // DsRunner: the built-in console image of the DsRunner theme instead of the generic folder
+        if (auto consoleCover = DsRunnerConsoleCover::Create(fileInfo.GetFileName()))
+            return consoleCover;
 
         return fileType->CreateFileCover(fileInfo.GetFileName());
     }

@@ -32,19 +32,28 @@ public:
     }
 
     /// @brief Sets the artwork to show (nullptr for none) and the queue to load it on.
-    void SetArt(const char* path, TaskQueueBase* ioTaskQueue)
+    /// @param fallbackPath Image shown when \p path doesn't exist (nullptr for none): a template of
+    ///        DsRunnerConsoleArt, tinted with \p fallbackTint.
+    void SetArt(const char* path, const char* fallbackPath, const Color& fallbackTint, TaskQueueBase* ioTaskQueue)
     {
         if (!path)
             path = "";
-        if (strcmp(path, _artPath) != 0)
+        if (!fallbackPath)
+            fallbackPath = "";
+        if (strcmp(path, _artPath) != 0 || strcmp(fallbackPath, _artFallbackPath) != 0 ||
+            fallbackTint.r != _artTint.r || fallbackTint.g != _artTint.g || fallbackTint.b != _artTint.b)
         {
             strlcpy(_artPath, path, sizeof(_artPath));
+            strlcpy(_artFallbackPath, fallbackPath, sizeof(_artFallbackPath));
+            _artTint = fallbackTint;
             _ioTaskQueue = ioTaskQueue;
             _artDirty = true;
         }
     }
 
     const char* GetArtPath() const { return _artPath; }
+    const char* GetArtFallbackPath() const { return _artFallbackPath; }
+    const Color& GetArtTint() const { return _artTint; }
     TaskQueueBase* GetIoTaskQueue() const { return _ioTaskQueue; }
 
     /// @brief Returns true once after the artwork changed.
@@ -59,6 +68,8 @@ private:
     Color _color = DsRunnerConsoles::kUnknownHero;
     bool _dirty = true;
     char _artPath[256] = { 0 };
+    char _artFallbackPath[128] = { 0 };
+    Color _artTint;
     TaskQueueBase* _ioTaskQueue = nullptr;
     bool _artDirty = false;
 };

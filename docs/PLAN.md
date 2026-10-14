@@ -9,12 +9,12 @@ Stand: 13.10.2026 · Gerät: **DS Lite + M3 DS Real** · Basis: [Pico Launcher](
 | 0 Fundament | ✅ erledigt (PR #15). Autostart auf der M3 DS Real funktioniert, DsRunner startet direkt im Pico-Look. |
 | 1 Design-System | ✅ erledigt, auf dem DS getestet |
 | 2 Konsolen-Ebene | ✅ erledigt, auf dem DS getestet (Spielanzahl kam mit Phase 3, Favoriten mit Phase 6) |
-| 3 Kachel-Raster | ✅ auf dem DS getestet (13.10.2026). Danach: Kachel-Bilder (Cover) statt Icons, Hänger behoben, nur noch drei Ansichten mit eigenem Bildstil (siehe unten), **erneuter Test auf dem DS steht aus** |
+| 3 Kachel-Raster | ✅ auf dem DS getestet, zuletzt mit den drei Ansichten (14.10.2026). Danach: eingebaute Bilder für die Konsolen-Ordner (siehe unten), **Test auf dem DS steht aus** |
 | 4 Großes Artwork oben | ✅ erledigt, auf dem DS getestet (Testbilder werden angezeigt und überblendet) |
 | 5 PC-Tool „DsRunner Art“ | ✅ im Code (Tests, echte Downloads von libretro-thumbnails, erzeugte Bilder in DeSmuME angezeigt), **Test unter Windows mit der Karte steht aus** |
 | 6 Komfort | ✅ im Code, gebaut und in DeSmuME geprüft (deutsche Oberfläche, Favoriten, Weiterspielen, Uhr im Menü), **Test auf dem DS steht aus** |
 | 7 Weitere Konsolen | ✅ im Code, gebaut und in DeSmuME geprüft (Konsolen-Kacheln, Spielanzahl, `systems.json`), **Test mit echten Emulatoren auf dem DS steht aus** |
-| 8 Loader | 🔎 recherchiert ([LOADER.md](LOADER.md)), Umsetzung erst nach Entscheidung, braucht Tests auf dem DS |
+| 8 Loader | ✅ im Code: eigener Pico-Loader-Build mit „zurück zu DsRunner“ (L+R+Unten+B 2 s), gebaut, **Test auf dem DS steht aus** ([LOADER.md](LOADER.md)) |
 | 9 Releases | ✅ Version aus `VERSION`, Changelog, Release-Workflow mit Versionsprüfung und Release-Notizen, `LIESMICH.txt` im SD-Paket ([RELEASE.md](RELEASE.md)) |
 
 **Test auf dem DS (13.10.2026, Phase 1–4):** dunkles Theme, Konsolen-Ebene mit Spielanzahl und Artworks laufen. Die neue Kachel-Ansicht war noch nicht eingeschaltet, weil eine vorhandene `settings.json` die alte Ansicht behält.
@@ -119,6 +119,13 @@ Ein eigener Launcher als Ersatz für YSMenu:
 - Picos Icon-Raster (waagrecht/senkrecht) und die Bannerliste sind aus dem Menü entfernt. Eine `settings.json` mit einer dieser Ansichten (oder `FileList`) öffnet das 3×2-Raster.
 - **Abdunkeln oben:** langer, weicher Verlauf ab Zeile 64 statt eines kurzen harten Übergangs.
 
+**Eingebaute Konsolen-Bilder (14.10.2026):** Wunsch nach dem Test: ein Icon und ein passender Hintergrund für die Konsolen-Ordner und die Favoriten.
+- Jeder Konsolen-Ordner (NDS, GBA, GB, GBC, NES, SNES, SMS, GG, MD, PCE, Apps) und ★ Favoriten zeigen eine eigene gezeichnete Konsole bzw. einen Stern: Kachel 3×2 (64×64, Kürzel darunter), 4×3 (Icon 32×32, Kürzel darunter), Hintergrund oben (256×192), Coverflow-Cover. Eigene Konsolen aus `systems.json`: Modul (CART), sonst Ordner (FOLDER).
+- Bilder in `_pico/themes/dsrunner/consoles/`, erzeugt von `tools/console-art/make_console_art.py` (eigene Zeichnungen, keine Logos). Es sind Graustufen-Vorlagen, DsRunner färbt sie in der Konsolenfarbe ein (`DsRunnerConsoleArt`), dadurch passen sie auch zu Farben aus `systems.json`.
+- Vorrang: eigene Bilder (`/_dsrunner/art`, `/_dsrunner/tiles`, `icon.bmp`/`cover.bmp` im Ordner) vor den eingebauten. Ohne `FOLDER-icon.bmp` im Theme bleibt alles wie früher.
+- DsRunner Art erzeugt dann keine Ordner-Bilder mehr und löscht seine alten (selbst abgelegte bleiben).
+- Offen: Farben und Kontrast auf dem DS Lite prüfen (graue Konsolen, ausgewählte Favoriten-Kachel). Console-Cover entstehen nur, wenn beim Laden des Ordners der Coverflow eingestellt ist.
+
 ### Phase 4: Großes Artwork oben
 1. Bildschirmfüllendes Bild (256×192, 8 bpp, 256 Farben + Dithering, ≈ 48 KB) pro Konsole und Spiel. Ersetzt das kleine Cover auf dem oberen Bildschirm.
 2. Abdunkelnder Verlauf unten, darüber Titel und Untertitel
@@ -195,6 +202,11 @@ Emulator-Homebrew einbinden (GBARunner2, nesDS, GameYob, S8DS, jEnesisDS …) ü
 - Spiele, die mit Pico schlechter laufen als mit YSMenu, sammeln und vergleichen → Fork `HolziDape/pico-loader`
 - Wunsch-Feature: **zurück zum Launcher aus Retail-Spielen** (Soft-Reset). Pico kann das bisher nur bei Homebrew.
 
+**Ergebnis (14.10.2026):** ✅ im Code, Test auf dem DS steht aus (siehe [LOADER.md](LOADER.md), [loader/README.md](../loader/README.md)):
+- Pico Loader als Patch-Serie in `loader/`: Upstream `b9f923e` (v1.7.1 plus Fixes), danyocoms DLDI-Cache und In-Game-Reset, drei DsRunner-Patches. Gebaut mit `loader/build.sh` (BlocksDS 1.20, .NET 9 für die Listen), in der CI als eigener Job. Das M3-Paket nimmt standardmäßig diesen Build, `DSRUNNER_LOADER=upstream` packt wie bisher das offizielle v1.7.1.
+- Hotkey L+R+Unten+B 2 s. Der Loader merkt sich den Launcher-Pfad in `/_pico/launcher.txt` (Fallback `/_nds/TWiLightMenu/main.srldr`). DsRunner prüft `argv[0]` und nimmt sonst einen bekannten Pfad. Abschaltbar mit `inGameReset` in `settings.json` (→ `/_pico/igr.off`).
+- Offen: Test nach dem Testplan in [compat/pico-vs-ysmenu.md](compat/pico-vs-ysmenu.md), Ergebnisse in die Spalte „Hotkey → Launcher“. Auch ohne Hotkey ist es ein anderer Build als das offizielle v1.7.1: zuerst normales Spielen und Speichern prüfen. Bei jedem Upstream-Release `loader/` nachziehen.
+
 **Recherche (13.10.2026):** siehe [LOADER.md](LOADER.md). Kurz:
 - Pico kann „zurück zum Launcher“ bisher nur bei Homebrew. Bei Retail-Spielen fehlen ein Tasten-Auslöser, ein Launcher-Pfad, der den Neustart übersteht, und ein DLDI-Treiber für den Launcher.
 - Am besten passt der Fork-Branch `igr-hooks` von danyocom (L+R+Unten+B 2 s halten, wartet auf laufende Speicherzugriffe, plattformunabhängig) zusammen mit dem DLDI-Cache aus Pico-PR #220. Auf der M3 DS Real ist er noch nicht getestet.
@@ -227,4 +239,4 @@ Versionierung `v0.x`, Changelog, Release-Paket für die M3 DS Real (siehe Phase 
 
 ## Nächster Schritt
 
-Auf dem DS und unter Windows testen: Bilder mit DsRunner Art ([ART-TOOL.md](ART-TOOL.md)) auf die Karte laden, die drei Ansichten (3×2 mit Kachel-Bildern, 4×3 mit Icons, Coverflow mit Covern) ansehen, Favoriten (X), Weiterspielen (START), Uhr im Menü, Start aus der Favoritenliste (NDS und GBA), Spielstände. Dazu je ein Spiel pro Emulator (Phase 7). Danach Release v0.2.0 ([RELEASE.md](RELEASE.md)) und Entscheidung zu Phase 8.
+Auf dem DS testen: die eingebauten Konsolen-Bilder (Kacheln, Hintergrund oben, alle drei Ansichten) und der neue Pico Loader nach dem Testplan in [compat/pico-vs-ysmenu.md](compat/pico-vs-ysmenu.md): erst normales Spielen und Speichern, dann L+R+Unten+B im Spiel. Danach Release v0.3.0.

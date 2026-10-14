@@ -7,6 +7,7 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ## Unveröffentlicht
 
 ### Hinzugefügt
+- **Eigene Bilder für die Konsolen-Ordner, schon eingebaut:** Jeder Ordner auf der Konsolen-Ebene (NDS, GBA, GB, GBC, NES, SNES, Master System, Game Gear, Mega Drive, PC Engine, Apps) und die Kachel ★ Favoriten zeigen eine gezeichnete Konsole bzw. einen Stern in der Konsolenfarbe, mit dem Kürzel darunter. Oben gibt es dazu ein passendes Hintergrundbild, im Coverflow ein passendes Cover. Eigene Konsolen aus `systems.json` bekommen ein Modul, andere Ordner einen Ordner, jeweils in ihrer Farbe. Die Bilder liegen im Theme (`/_pico/themes/dsrunner/consoles`) und funktionieren ohne DsRunner Art. Eigene Bilder in `/_dsrunner/art` und `/_dsrunner/tiles` haben weiter Vorrang, siehe [docs/CONFIG.md](docs/CONFIG.md#eingebaute-konsolen-bilder).
 - **Zurück zu DsRunner aus dem Spiel:** im laufenden DS-Spiel **L + R + Unten + B zwei Sekunden halten**, dann startet der DS neu in DsRunner. Vorher speichern, nicht Gespeichertes geht verloren; ein laufender Speichervorgang wird nicht abgebrochen. Klappt nicht in jedem Spiel (dann läuft das Spiel normal weiter, nur ohne Hotkey). Noch nicht auf der echten M3 DS Real getestet.
 - Einstellung `inGameReset` in `/_pico/settings.json` (Standard `true`): mit `false` baut Pico Loader den Hotkey nicht ein.
 - Das Paket für die M3 DS Real enthält in `_pico/picoLoader-DsRunner.txt`, welcher Pico-Loader-Build drin ist.
@@ -14,6 +15,7 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ### Geändert
 - **Pico Loader geändert:** Das M3-Paket bringt jetzt einen eigenen Build von Pico Loader mit (Stand v1.7.1 plus aktuelle Fixes aus der Entwicklung von Pico, dazu die Rückkehr aus Spielen von danyocom und kleine DsRunner-Patches, siehe [loader/README.md](loader/README.md)). Beim Update deshalb auch `picoLoader7.bin`, `picoLoader9.bin`, `aplist.bin`, `patchlist.bin` und `savelist.bin` nach `/_pico` kopieren. Pico legt neu `/_pico/dldi.bin` und `/_pico/launcher.txt` an.
 - Fehlt beim Start der eigene Pfad (`argv[0]`), merkt sich DsRunner `/_nds/TWiLightMenu/main.srldr`, `/BOOT.NDS` oder `/DsRunner.nds` als Rückkehrziel, je nachdem, was auf der Karte liegt. Vorher kehrten Homebrew-Programme dann nicht zurück.
+- DsRunner Art erzeugt keine Ordner-Bilder mehr, wenn das Theme auf der Karte eingebaute Konsolen-Bilder hat, und löscht seine früher erzeugten Ordner-Bilder (Farbverlauf mit Kürzel), damit die neuen sichtbar werden. Selbst abgelegte Bilder bleiben.
 
 ## [0.2.0](https://github.com/HolziDape/DsRunner/releases/tag/v0.2.0) - 2026-10-14
 
