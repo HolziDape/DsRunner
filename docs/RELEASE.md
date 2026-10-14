@@ -4,7 +4,7 @@ Anleitung für den Maintainer. Ein Release besteht aus einem Git-Tag `vX.Y.Z` un
 
 | Datei | Inhalt |
 |---|---|
-| `DsRunner_M3DSReal.zip` | fertiges SD-Paket für die M3 DS Real: DsRunner als `_nds/TWiLightMenu/main.srldr` und `BOOT.NDS`, `_pico` mit Pico Loader (M3DS), Autostart-Dateien aus TWiLight Menu++, `LIESMICH.txt` |
+| `DsRunner_M3DSReal.zip` | fertiges SD-Paket für die M3 DS Real: DsRunner als `_nds/TWiLightMenu/main.srldr` und `BOOT.NDS`, `_pico` mit dem DsRunner-Build von Pico Loader (M3DS, aus `loader/`), Autostart-Dateien aus TWiLight Menu++, `LIESMICH.txt` |
 | `DsRunner.zip` | `DsRunner.nds` und `_pico` für andere Flashkarten |
 | `DsRunnerArt.exe` | PC-Programm DsRunner Art für Windows |
 
@@ -29,7 +29,7 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
 
 ## Schritt für Schritt
 
-1. **Stand prüfen.** Alles für das Release ist auf `main`, die CI („Build DsRunner“) ist grün, und das Wichtigste ist auf dem DS Lite getestet (Autostart, Spiele starten, Spielstände).
+1. **Stand prüfen.** Alles für das Release ist auf `main`, die CI („Build DsRunner“, mit dem Job „Build Pico Loader (loader/)“) ist grün, und das Wichtigste ist auf dem DS Lite getestet (Autostart, Spiele starten, Spielstände, nach einer Loader-Änderung auch L+R+Unten+B zurück zu DsRunner, siehe [compat/pico-vs-ysmenu.md](compat/pico-vs-ysmenu.md#testplan-hotkey--launcher)). Hat sich `loader/` seit dem letzten Release geändert, gehört in den Changelog der Satz „Pico Loader geändert“, damit Nutzer beim Update auch die `_pico/*.bin` ersetzen.
 
 2. **Version setzen und Changelog abschließen.**
    ```sh
@@ -64,7 +64,8 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
    | Job | Was er tut |
    |---|---|
    | Check version | `tools/version.sh release <tag>`: Version aus dem Tag, Warnungen, wenn `VERSION` oder Changelog nicht passen; nur bei einem Tag ohne Version laufen die anderen nicht |
-   | Build DsRunner | `make` im BlocksDS-Container mit `DSRUNNER_RELEASE=1`, packt `DsRunner.zip` und mit `tools/make-sd-package.sh` `DsRunner_M3DSReal.zip` (lädt Pico Loader und TWiLight Menu++ mit festen Versionen und SHA-256) und hängt beide an |
+   | Build Pico Loader (loader/) | `loader/build.sh` im Container BlocksDS 1.20 mit .NET 9: klont pico-loader am festen Commit, wendet `loader/patches` an, baut M3DS; Artefakt `PicoLoader_M3DS_DsRunner` |
+   | Build DsRunner | `make` im BlocksDS-Container mit `DSRUNNER_RELEASE=1`, packt `DsRunner.zip` und mit `tools/make-sd-package.sh` `DsRunner_M3DSReal.zip` (Pico Loader aus dem Artefakt, TWiLight Menu++ mit fester Version und SHA-256) und hängt beide an. Wartet auf den Loader-Job |
    | Build DsRunner Art (Windows) | Tests, `DsRunnerArt.exe` mit PyInstaller, hängt sie an |
    | Release notes from CHANGELOG.md | setzt den Changelog-Abschnitt an den Anfang der Release-Beschreibung (läuft zuletzt, auch wenn ein Build fehlschlägt) |
 
@@ -80,6 +81,7 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
 - **Warnung „VERSION enthält …“ oder „keinen Abschnitt“ im Lauf:** Das Release ist trotzdem gebaut. Danach `tools/version.sh set X.Y.Z` ausführen und committen, damit `main` zum Release passt.
 - **„Der Tag … ist keine Version“:** Release und Tag löschen (auf GitHub Release löschen und unter *Tags* den Tag löschen, oder `gh release delete <tag> --cleanup-tag`) und mit einem Tag `vX.Y.Z` neu anlegen.
 - **Build bricht wegen eines Downloads ab** (Pico Loader, TWiLight Menu++, apt): im Workflow-Lauf „Re-run failed jobs“. Die Notizen werden dabei nicht doppelt eingefügt.
+- **„Build Pico Loader (loader/)“ schlägt fehl:** meist ein Klon- oder NuGet-Problem (dann „Re-run failed jobs“) oder ein Patch, der nicht mehr passt (dann `loader/` reparieren, siehe [DEVELOPMENT.md](DEVELOPMENT.md#pico-loader-loader)). Notlösung für ein Release ohne Rückkehr aus Spielen: lokal `DSRUNNER_LOADER=upstream ./build.sh package` und das Paket von Hand anhängen.
 - **Prüfsumme passt nicht** in `make-sd-package.sh`: Die Datei auf GitHub hat sich geändert. Erst prüfen, warum, dann Version und SHA-256 im Skript zusammen anpassen (siehe [DEVELOPMENT.md](DEVELOPMENT.md)).
 - **Datei fehlt am Release:** im Lauf nachsehen, welcher Job fehlgeschlagen ist. Die gebauten Dateien liegen außerdem als Artefakte („DsRunner“, „DsRunnerArt“) am Workflow-Lauf.
 

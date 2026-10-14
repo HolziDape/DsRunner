@@ -18,6 +18,7 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 - Uhr (abschaltbar) und Akkuanzeige, Oberfläche auf Deutsch
 - **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet; eigene Konsolen über `systems.json`
 - **Cheats** über `usrcheat.dat`
+- **Zurück zu DsRunner aus dem Spiel:** L+R+Unten+B 2 Sekunden halten (M3-Paket, [Hinweise](#zurück-zu-dsrunner-aus-einem-spiel))
 
 ## Download
 
@@ -27,7 +28,7 @@ Dort gibt es diese Dateien:
 
 | Datei | Für wen |
 |---|---|
-| **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart und Pico Loader |
+| **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart und Pico Loader (mit Rückkehr aus Spielen) |
 | `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
 | `DsRunnerArt.exe` | PC-Programm für Windows, lädt die [Artworks](#artworks) auf die Karte |
 
@@ -66,6 +67,8 @@ SD-Karte
 
 Nur eine Datei ersetzen: `DsRunner.nds` aus dem neuen Download in **`/_nds/TWiLightMenu/main.srldr`** umbenennen und die alte Datei damit überschreiben (optional zusätzlich als `/BOOT.NDS`). Spiele, Spielstände und Einstellungen bleiben erhalten.
 
+Steht im [CHANGELOG](CHANGELOG.md) „Pico Loader geändert“, zusätzlich aus `DsRunner_M3DSReal.zip` die Dateien `picoLoader7.bin`, `picoLoader9.bin`, `aplist.bin`, `patchlist.bin` und `savelist.bin` nach `/_pico` kopieren.
+
 ### Zurück zu YSMenu
 
 Die gesicherten Dateien `SYSTEM/g6dsload.1`, `SYSTEM/g6dsload.eng` und `SRESET.DAT` zurückkopieren, dann `boot.*`, `loader.eng` und den Ordner `_system_` löschen.
@@ -82,8 +85,18 @@ Die gesicherten Dateien `SYSTEM/g6dsload.1`, `SYSTEM/g6dsload.eng` und `SRESET.D
 | Y | Cheats für das ausgewählte Spiel |
 | START | auf der Konsolen-Ebene: zuletzt gespieltes Spiel weiterspielen |
 | Zahnrad (oben rechts) | Ansicht, Sortierung und Uhr ein/aus wählen |
+| **L + R + Unten + B** (2 s halten, im Spiel) | zurück zu DsRunner |
 
 Der Touchscreen funktioniert ebenfalls.
+
+### Zurück zu DsRunner aus einem Spiel
+
+Im laufenden DS-Spiel **L + R + Unten + B zwei Sekunden lang halten**: der DS startet neu in DsRunner, ohne Aus- und Einschalten. Das geht mit dem Pico Loader aus `DsRunner_M3DSReal.zip` (eigener Build mit Patches, siehe [loader/README.md](loader/README.md)).
+
+- **Vorher im Spiel speichern.** Was nicht gespeichert ist, geht verloren, genau wie beim Ausschalten. Einen laufenden Speichervorgang bricht der Hotkey nicht ab, er wartet, bis er fertig ist.
+- **Nicht jedes Spiel reagiert.** Fehlt im Spiel der passende Einsprungpunkt oder der Platz für den Patch, läuft das Spiel ganz normal, nur ohne Hotkey. Dann wie gewohnt ausschalten. Rückmeldungen gerne in die [Kompatibilitätsliste](docs/compat/pico-vs-ysmenu.md).
+- **Abschalten:** in `/_pico/settings.json` `"inGameReset": false` eintragen. DsRunner legt dann vor jedem Spielstart `/_pico/igr.off` an, und Pico Loader baut den Hotkey nicht mehr ein.
+- Homebrew kehrt wie bisher über das eigene „Beenden“ zurück.
 
 ## Artworks
 
@@ -111,6 +124,8 @@ DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 
 2. Bei [Pico Loader](https://github.com/LNH-team/pico-loader/releases) die Dateien für deine Flashkarte herunterladen und `aplist.bin`, `savelist.bin`, `patchlist.bin`, `picoLoader7.bin` und `picoLoader9.bin` nach `/_pico` kopieren.
 3. `DsRunner.nds` aus dem Menü deiner Flashkarte starten. Ein Autostart ist für andere Karten nicht vorbereitet.
 
+Mit dem offiziellen Pico Loader gibt es keine Rückkehr aus Spielen. Wer sie ausprobieren will, baut den Loader aus [loader/](loader/README.md) für seine Karte (`PICO_PLATFORM=R4 loader/build.sh`, Plattformnamen wie bei Pico Loader). Getestet ist das nicht.
+
 ## Stand
 
 DsRunner ist in Entwicklung. Was fertig ist und was als Nächstes kommt, steht in **[docs/PLAN.md](docs/PLAN.md)**, die Änderungen pro Version im **[CHANGELOG](CHANGELOG.md)**. Fehler und Wünsche gerne als [Issue](https://github.com/HolziDape/DsRunner/issues).
@@ -124,13 +139,14 @@ git clone --recursive https://github.com/HolziDape/DsRunner.git
 cd DsRunner
 ./build.sh            # → DsRunner.nds
 ./build.sh package    # → fertiges SD-Paket für die M3 DS Real in sd-package/
+loader/build.sh       # → Pico Loader mit Rückkehr aus Spielen in loader/out/ (package ruft das bei Bedarf selbst auf)
 ```
 
 Details, Test im Emulator und Pico-Updates: **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)**.
 
 ## Danke & Lizenz
 
-DsRunner ist ein Fork von **[Pico Launcher](https://github.com/LNH-team/pico-launcher)** und nutzt **[Pico Loader](https://github.com/LNH-team/pico-loader)**, beide vom [LNH team](https://github.com/LNH-team): [@Gericom](https://github.com/Gericom), [@XLuma](https://github.com/XLuma), [@Dartz150](https://github.com/Dartz150), [@lifehackerhansol](https://github.com/lifehackerhansol). Die Autostart-Dateien für die M3 DS Real stammen aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu). Icons von [icons8](https://icons8.com/).
+DsRunner ist ein Fork von **[Pico Launcher](https://github.com/LNH-team/pico-launcher)** und nutzt **[Pico Loader](https://github.com/LNH-team/pico-loader)**, beide vom [LNH team](https://github.com/LNH-team): [@Gericom](https://github.com/Gericom), [@XLuma](https://github.com/XLuma), [@Dartz150](https://github.com/Dartz150), [@lifehackerhansol](https://github.com/lifehackerhansol). Die Rückkehr aus Spielen und der DLDI-Cache im Pico Loader stammen von [@danyocom](https://github.com/danyocom/pico-loader) (Branches `igr-hooks`, `dldi-cache`). Die Autostart-Dateien für die M3 DS Real stammen aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu). Icons von [icons8](https://icons8.com/).
 
 Lizenz: Zlib, siehe `LICENSE.txt`. Weitere Lizenzen im Ordner `licenses`.
 
