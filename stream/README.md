@@ -27,7 +27,7 @@ Internet ── Router ══ Ethernet ══ Raspberry Pi 5 ─ ─ WLAN "DsRun
 ## Was du brauchst
 
 - Raspberry Pi 5 mit **Raspberry Pi OS (Bookworm, 64 Bit, mit Desktop)**, per Ethernet am Router. Ein Pi 4 geht auch, ist aber langsamer.
-- Den DS mit DsRunner (M3 DS Real) und die Datei `DsRunnerStream.nds`.
+- Den DS mit DsRunner (getestet wird mit der M3 DS Real, andere Karten siehe [Kompatible Flashkarten](../docs/FLASHCARDS.md)) und die Datei `DsRunnerStream.nds`.
 - Am Pi: Bildschirm und Tastatur für die Einrichtung, oder SSH.
 
 ## 1. Pi einrichten
