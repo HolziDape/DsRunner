@@ -72,7 +72,8 @@ class Browser:
     def __init__(self, url: str, viewport: tuple[int, int], out_size: tuple[int, int], *,
                  headless: bool = True, gpu: bool = False, executable: str = "auto",
                  capture: str = "screencast", max_fps: float = 30.0, mute: bool = False,
-                 extra_args: list[str] | None = None, allow_popups: bool = False):
+                 extra_args: list[str] | None = None, allow_popups: bool = False,
+                 image_format: str = "png"):
         self.url = resolve_url(url)
         self.viewport = viewport
         self.out_size = out_size
@@ -80,6 +81,9 @@ class Browser:
         self.gpu = gpu
         self.executable = pick_executable(executable)
         self.capture = capture
+        # how Chromium hands over the pictures: PNG (exact) or JPEG (often faster on a
+        # Raspberry Pi; the small artefacts disappear in the 256-colour DS picture)
+        self.image_format = image_format
         self.max_fps = max_fps
         self.mute = mute
         self.extra_args = extra_args or []
@@ -138,7 +142,7 @@ class Browser:
         if self.capture == "screencast":
             self.cdp.on("Page.screencastFrame", self._on_frame)
             await self.cdp.send("Page.startScreencast", {
-                "format": "png", "maxWidth": self.out_size[0], "maxHeight": self.out_size[1],
+                **self._format_args(), "maxWidth": self.out_size[0], "maxHeight": self.out_size[1],
                 "everyNthFrame": 1})
         elif self._shot_task is None:
             self._shot_task = asyncio.create_task(self._screenshot_loop())
@@ -163,7 +167,7 @@ class Browser:
         if self.capture == "screencast":
             self.cdp.on("Page.screencastFrame", self._on_frame)
             await self.cdp.send("Page.startScreencast", {
-                "format": "png", "maxWidth": self.out_size[0], "maxHeight": self.out_size[1],
+                **self._format_args(), "maxWidth": self.out_size[0], "maxHeight": self.out_size[1],
                 "everyNthFrame": 1})
         del old
 
@@ -196,6 +200,11 @@ class Browser:
                 await asyncio.sleep(3.0)
         log.error("Seite liess sich nicht wieder oeffnen")
 
+    def _format_args(self) -> dict:
+        if self.image_format == "jpeg":
+            return {"format": "jpeg", "quality": 98}
+        return {"format": "png"}
+
     def _on_frame(self, params: dict) -> None:
         self._latest = base64.b64decode(params["data"])
         self.frame_seq += 1
@@ -215,7 +224,7 @@ class Browser:
             t0 = time.monotonic()
             try:
                 r = await self.cdp.send("Page.captureScreenshot", {
-                    "format": "png", "clip": {"x": 0, "y": 0, "width": vw, "height": vh, "scale": scale}})
+                    **self._format_args(), "clip": {"x": 0, "y": 0, "width": vw, "height": vh, "scale": scale}})
                 self._latest = base64.b64decode(r["data"])
                 self.frame_seq += 1
                 self.captured += 1

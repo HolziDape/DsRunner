@@ -111,13 +111,13 @@ class StreamServer(asyncio.DatagramProtocol):
                  name: str | None = None, palette: str = "adaptive", use_lz4: bool = True,
                  max_fps: float = 20.0, rate_kbs: float = 120.0, min_rate_kbs: float = 40.0,
                  max_rate_kbs: float = 220.0, stats_every: float = 5.0,
-                 broadcast: bool = False, packet_size: int = P.MAX_CHUNK):
+                 broadcast: bool = False, packet_size: int = P.MAX_CHUNK, noise: int = 0):
         self.browser = browser
         self.mapping = mapping
         self.mode = mode
         self.port = port
         self.name = (name or socket.gethostname())[:31]
-        self.encoder = Encoder(mode, palette=palette, use_lz4=use_lz4)
+        self.encoder = Encoder(mode, palette=palette, use_lz4=use_lz4, noise=noise)
         self.max_fps = max_fps
         self.rc = RateControl(rate_kbs * 1000, min_rate_kbs * 1000, max_rate_kbs * 1000)
         self.stats_every = stats_every
