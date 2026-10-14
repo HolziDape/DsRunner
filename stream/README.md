@@ -107,6 +107,7 @@ host=                  ; leer: Pi automatisch suchen. Klappt das nicht: host=192
 port=7770
 wifi=auto              ; auto, wfc (nur WFC-Einstellungen) oder list (immer Liste zeigen)
 key=                   ; nur bei WEP-Netzen: Schlüssel (5/13 Zeichen oder 10/26 Hex-Ziffern)
+ip=auto                ; auto: per DHCP, im DsRunner-Hotspot sonst feste Adresse 192.168.4.5; dhcp; oder feste Adresse
 screen=bottom          ; Bild unten (Touch trifft das Bild) oder top
 ```
 
@@ -240,6 +241,7 @@ WEP statt offen ist auf dem Pi meist nicht möglich (der WLAN-Treiber des Pi unt
 | Problem | Lösung |
 |---|---|
 | DS findet das Netz nicht | Hotspot an? (`hotspot.sh status`) WLAN-Land gesetzt? Anderen Kanal versuchen (1, 6, 11). Manche Hotspots lassen keine 802.11b-Geräte zu; dann hilft ggf. ein USB-WLAN-Stick mit hostapd (`hw_mode=g`, ohne `ieee80211n`). |
+| „hole IP-Adresse (DHCP)“, dann „Zeitueberschreitung“ | Der DS ist im WLAN, bekommt aber keine Adresse vom Pi. Im Netz „DsRunner-Stream“ nimmt die App nach 8 s von selbst die feste Adresse 192.168.4.5 („DHCP antwortet nicht, feste Adresse“). Anderes Netz: in `stream.ini` `ip=` mit einer freien Adresse und ggf. `gateway=` eintragen. Prüfen, ob DHCP-Anfragen ankommen: `sudo tcpdump -ni wlan0 port 67 or port 68`. |
 | DS verbindet, „Noch kein Host“ | Läuft `dsstream`? Firewall am Pi (falls `ufw` installiert: `sudo ufw allow in on wlan0 to any port 7770 proto udp`). Sonst in `stream.ini` `host=192.168.4.1` eintragen. |
 | „Keine Bilder vom Host“ | Seite lädt noch oder hängt; Ausgabe im Terminal ansehen. Mit `--url test` prüfen. |
 | Bild ruckelt stark | `--mode 128x96`, `--fps 15`, DS näher an den Pi, anderer Kanal. Bei 3D-Spielen: `--headful --gpu`. |

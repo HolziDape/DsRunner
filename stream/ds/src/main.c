@@ -181,11 +181,25 @@ static bool start_connect(Wifi_AccessPoint *ap)
     return false;
 }
 
-// Waits until connected. Returns true when connected.
-static bool wait_assoc(void)
+// Fixed IP setup (network byte order, like lwIP's ip4_addr). The gateway defaults to
+// x.y.z.1 of the address.
+static void set_static_ip(void)
+{
+    u32 ip = inet_addr(cfg.ip);
+    u32 mask = inet_addr(cfg.mask);
+    u32 gw = cfg.gateway[0] ? inet_addr(cfg.gateway) : ((ip & mask) | htonl(1));
+    printf(" feste Adresse %s\n", cfg.ip);
+    Wifi_SetIP(ip, gw, mask, gw, 0);
+}
+
+// Waits until connected. Returns true when connected. dhcp_fallback: switch to the fixed
+// address when DHCP doesn't answer (the DsRunner hotspot, where it is known to be free).
+static bool wait_assoc(bool dhcp_fallback)
 {
     int last = -1;
     uint32_t start = vbl;
+    uint32_t dhcp_start = 0;
+    bool fallen_back = false;
     while (vbl - start < 60 * 25)
     {
         int s = Wifi_AssocStatus();
@@ -193,11 +207,20 @@ static bool wait_assoc(void)
         {
             printf(" %s\n", assoc_text(s));
             last = s;
+            if (s == ASSOCSTATUS_ACQUIRINGDHCP)
+                dhcp_start = vbl;
         }
         if (s == ASSOCSTATUS_ASSOCIATED)
             return true;
         if (s == ASSOCSTATUS_CANNOTCONNECT)
             return false;
+        if (s == ASSOCSTATUS_ACQUIRINGDHCP && dhcp_fallback && !fallen_back
+            && vbl - dhcp_start > 60 * 8)
+        {
+            printf(" DHCP antwortet nicht\n");
+            set_static_ip();
+            fallen_back = true;
+        }
         wait_frame();
     }
     printf(" Zeitueberschreitung\n");
@@ -272,11 +295,15 @@ static bool wifi_connect(void)
 
     for (;;)
     {
+        if (cfg.ip_mode == IP_STATIC)
+            set_static_ip();
+        else
+            Wifi_SetIP(0, 0, 0, 0, 0);   // DHCP (again, also after a fallback)
         if (cfg.wifi == WIFI_WFC)
         {
             printf("Verbinde mit den WFC-\nEinstellungen des DS...\n");
             Wifi_AutoConnect();
-            if (wait_assoc())
+            if (wait_assoc(false))
                 return true;
             printf("\nKein WFC-Netz erreichbar.\nIm WFC-Menue eines DS-Spiels\neinrichten oder wifi=auto.\n"
                    "A: nochmal  START: beenden\n");
@@ -314,7 +341,9 @@ static bool wifi_connect(void)
                 if (pick == -1)
                     continue;
             }
-            if (start_connect(&aps[pick]) && wait_assoc())
+            // the hotspot of hotspot.sh: fixed address when its DHCP doesn't answer
+            bool fallback = cfg.ip_mode == IP_AUTO && !strcmp(aps[pick].ssid, "DsRunner-Stream");
+            if (start_connect(&aps[pick]) && wait_assoc(fallback))
                 return true;
             printf("\nA: nochmal  START: beenden\n");
         }
