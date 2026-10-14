@@ -13,6 +13,9 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ### Geändert
 - „Zurück zu DsRunner“ (L + R + Unten + B) ist jetzt auf DS Lite + M3 DS Real getestet und funktioniert.
 
+### Behoben
+- DsRunner Stream: Wird die Seite geschlossen oder stürzt sie ab (z. B. durch ein Werbe-Pop-up), öffnet der Host sie von selbst neu. Pop-ups werden automatisch geschlossen (`--allow-popups` streamt sie stattdessen).
+
 ## [0.3.1](https://github.com/HolziDape/DsRunner/releases/tag/v0.3.1) - 2026-10-14
 
 ### Hinzugefügt

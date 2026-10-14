@@ -244,6 +244,8 @@ WEP statt offen ist auf dem Pi meist nicht möglich (der WLAN-Treiber des Pi unt
 | „Keine Bilder vom Host“ | Seite lädt noch oder hängt; Ausgabe im Terminal ansehen. Mit `--url test` prüfen. |
 | Bild ruckelt stark | `--mode 128x96`, `--fps 15`, DS näher an den Pi, anderer Kanal. Bei 3D-Spielen: `--headful --gpu`. |
 | Tasten wirken nicht | Erst einmal ins Spiel tippen (Fokus). Passt die Belegung? Manche Spiele wollen WASD (`--mapping wasd.json`). |
+| Bild friert ein, im Terminal „Target page, context or browser has been closed“ | Die Seite wurde geschlossen oder ist abgestürzt (z. B. durch ein Werbe-Pop-up). dsstream öffnet sie jetzt von selbst neu („oeffne sie neu“ im Terminal). Pop-ups werden automatisch geschlossen; braucht ein Spiel ein neues Fenster, mit `--allow-popups` starten. Das Chromium-Fenster auf dem Pi nicht von Hand schließen. |
+| Ruckelt erst stark, wird dann flüssig | Viele Spiele laden am Anfang. Das Bild wird nur geschickt, wenn sich etwas ändert; ein Ladebildschirm ergibt daher kaum Bilder pro Sekunde. |
 | Farben sehen streifig aus | 256 Farben sind die Grenze des DS-Bildes. `--palette adaptive` (Standard) wählt sie passend zum Bild. |
 
 ## Für Entwickler
