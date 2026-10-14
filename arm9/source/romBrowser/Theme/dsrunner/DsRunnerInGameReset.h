@@ -19,14 +19,17 @@ namespace DsRunnerInGameReset
     inline constexpr const char* kKeysFilePath = "/_pico/igr.keys";
 
     /// Launchers used when argv[0] is missing, in this order. The first is the file the
-    /// M3 DS Real autoboot chain starts (tools/make-sd-package.sh), the others are copies
-    /// to start by hand. The loader has a similar list (sFallbackLauncherPaths in
-    /// loader/patches) for when its saved launcher path is missing.
+    /// TWiLight Menu++ autoboot files start (M3 DS Real: tools/make-sd-package.sh, other
+    /// cards: docs/FLASHCARDS.md), /BOOT.NDS is what some cards start by themselves or a copy
+    /// to start by hand, /DsRunner.nds a copy to start by hand, /_picoboot.nds the file the
+    /// DSpico starts. The loader has a similar list (sFallbackLauncherPaths in loader/patches)
+    /// for when its saved launcher path is missing.
     inline constexpr const char* kFallbackLauncherPaths[] =
     {
         "/_nds/TWiLightMenu/main.srldr",
         "/BOOT.NDS",
         "/DsRunner.nds",
+        "/_picoboot.nds",
     };
 
     /// @brief Picks the path Pico Loader returns to: argv[0] when it is set and exists on the
