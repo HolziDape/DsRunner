@@ -33,6 +33,19 @@ Statt eines eigenen GitHub-Forks liegt der Loader als **Patch-Serie im DsRunner-
 - Das unveränderte v1.7.1 aus demselben Image gebaut ist **nicht** byte-gleich mit dem offiziellen Release-Zip (andere Codeanordnung, vermutlich ein anderer Stand des Images oder der Toolchain beim Release). Heißt: Auch ohne Hotkey ist unser Build ein anderer Build als der bisher getestete. Der erste Hardwaretest prüft deshalb zuerst normales Spielen.
 - DsRunner baut ohne Warnungen. In DeSmuME (Loader-Plattform R4) startet DsRunner über den gepatchten Loader ein Homebrew. Retail-Spiele und der Hotkey lassen sich im Emulator nicht prüfen.
 
+**Erster Hardwaretest (14.10.2026):** L+R+Unten+B 2 s im Spiel führte **nicht** zu DsRunner. Welche Spiele und ob überhaupt der DsRunner-Loader auf der Karte lag, ist noch offen. Daraufhin:
+
+- **Diagnose (Patch 0015):** `/_pico/igr-log.txt` (Build-Kennung, Spiel, SDK, Plattform, DLDI-Cache, Launcher-Pfad, `igr.off`, Ergebnis jeder Dispatcher-Suche, Grund für „nicht eingebaut“, Hook-Adresse, Patchplatz) und ein halb weißer Hauptbildschirm, sobald der Hotkey erkannt ist. Lesen: [loader/README.md](../loader/README.md#diagnose-_picoigr-logtxt).
+- **Durchsicht der Kette für M3DS**, ohne echten Fehler zu finden:
+  - Der Patch kommt auf M3DS dazu: M3DS hat `HasRomReads() == false`, genau wie die DSpico, auf der danyocom getestet hat. Der Reboot nutzt den SD-Lesecode, den die ROM-Lesepatches ohnehin anlegen.
+  - Tastencheck (0012): Maske 0x382 = L+R+Unten+B, 120 VBlanks; im ARM-Emulator mit dem assemblierten Code geprüft (`loader/test/`).
+  - Die Signatur des SDK-Dispatchers (`ldr r1,=table; ldr r0,[r1,r0,lsl#2]; ldr lr,=return; bx r0` und Anfang `push {lr}; mov r12,#0x04000000; add r12,r12,#0x210`) ist dieselbe, mit der nds-bootstrap `OS_IrqHandler` findet. Unterschied: danyocom sucht den Anfang höchstens 32 Wörter vor dem Sprung, nds-bootstrap erlaubt 50. Bei einem längeren Dispatcher stünde im Log `dispatcher start not found`.
+  - Flag `igr.off` (0014): Bit 2 im `SET_ROM_FILE_INFO`-Befehl, nur gesetzt, wenn die Datei existiert; die ARM9 legt den Patch nur ohne das Bit an. Werte im Disassembly geprüft (der Parameter liegt im DTCM-Stack, keine 8-Bit-Schreibzugriffe in VRAM).
+  - DsRunner legt `/_pico/igr.off` nur bei `"inGameReset": false` an; fehlt der Schlüssel, gilt `true`.
+  - Die DMA-Patches für M3DS hängen sich nicht in den IRQ-Dispatcher, kein Konflikt mit dem Hook.
+  - Der Reset-Parameter `PIGR` und die Slot-1-Sperre liegen im gemeinsamen Speicher bei 0x027FFxxx, den das SDK nach unserem Wissen ungecacht betreibt (sonst würde auch der normale Soft-Reset von Pico nicht funktionieren), und sind über die 4-MB-Spiegelung derselbe Speicher wie 0x02FFFxxx, wo der neue Pico-ARM7 nachsieht.
+- **Wahrscheinlichste Ursachen**, die das Log unterscheidet: (1) auf der Karte liegt noch der offizielle Loader v1.7.1 (z. B. nur `main.srldr` ersetzt) → keine `igr-log.txt`; (2) kein Patchplatz mehr: Wenn das Spiel kein `OS_ResetSystem` hat, braucht der Hotkey etwa 0x20C Byte (Loader-Info 0x70, Reboot 0x6C + 0x68, Reset 0x64, Tastencheck 0x40, Dispatch 0x24) in den Lücken der Secure Area, die schon die M3DS-ROM- und DMA-Patches belegen → `not enough patch space`; (3) unbekannter Dispatcher → `no known irq dispatcher found`.
+
 **Unverifiziert (braucht den DS Lite + M3 DS Real):** ob der Hotkey auf M3DS auslöst, ob DsRunner danach mit SD-Zugriff startet (DLDI aus dem Cache), Verhalten beim Speichern, mit Cheats, mit DMA-Patches, und die Spielkompatibilität allgemein. Testplan: [compat/pico-vs-ysmenu.md](compat/pico-vs-ysmenu.md#testplan-hotkey--launcher).
 
 ---

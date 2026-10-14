@@ -68,13 +68,13 @@ git -C "$SRC" -c user.name="DsRunner loader build" -c user.email="dsrunner@inval
 DOCKER_ARGS="--rm --user $(id -u):$(id -g) -e HOME=/work/.home -v $WORK:/work -w /work/pico-loader"
 mkdir -p "$WORK/.home"
 
-# 3. build
+# 3. build (DSRUNNER_BUILD_ID ends up in /_pico/igr-log.txt, patch 0015)
 if [ -n "$BLOCKSDS" ]; then
-	make -C "$SRC" -j"$(nproc)" PICO_PLATFORM="$PICO_PLATFORM" checklibtwl loader9 loader7
+	make -C "$SRC" -j"$(nproc)" PICO_PLATFORM="$PICO_PLATFORM" DSRUNNER_BUILD_ID="$BUILD_ID" checklibtwl loader9 loader7
 else
 	# shellcheck disable=SC2086
 	docker run $DOCKER_ARGS "$BLOCKSDS_IMAGE" \
-		sh -c "make -j\$(nproc) PICO_PLATFORM=$PICO_PLATFORM checklibtwl loader9 loader7"
+		sh -c "make -j\$(nproc) PICO_PLATFORM=$PICO_PLATFORM DSRUNNER_BUILD_ID=$BUILD_ID checklibtwl loader9 loader7"
 fi
 
 if command -v dotnet > /dev/null 2>&1; then

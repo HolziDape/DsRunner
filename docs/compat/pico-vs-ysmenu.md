@@ -6,7 +6,7 @@ Pico-Version: DsRunner-Build (v1.7.1 + develop `b9f923e` + Patches, steht in `_p
 
 Status: ✅ läuft · ⚠️ läuft mit Fehlern · ❌ startet nicht / hängt · – nicht getestet
 
-Hotkey → Launcher: ✅ DsRunner startet mit SD-Zugriff · ❌ reagiert nicht (Spiel läuft weiter) · ⚠️ hängt / schwarzer Bildschirm · 💾 Problem mit dem Spielstand
+Hotkey → Launcher: ✅ DsRunner startet mit SD-Zugriff · ❌ reagiert nicht (Spiel läuft weiter) · ⚠️ hängt / schwarzer Bildschirm · 💾 Problem mit dem Spielstand. Dazu die Zeile `in-game reset:` aus `/_pico/igr-log.txt` in die Notiz.
 
 | Spiel (No-Intro-Name) | Game-Code | Region | Pico | YSMenu | Hotkey → Launcher | Fehler bei Pico (wo genau?) | Immer? | Save-Typ | Cheats an? | Upstream-Issue | Notiz |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -22,6 +22,16 @@ Hotkey → Launcher: ✅ DsRunner startet mit SD-Zugriff · ❌ reagiert nicht (
 ## Testplan „Hotkey → Launcher“
 
 Für den ersten Test des DsRunner-Loaders auf dem DS Lite + M3 DS Real. Vorher **alle `.sav` sichern**. Ergebnisse in die Tabelle oben.
+
+### 0. Diagnose lesen: `/_pico/igr-log.txt`
+
+Ab Patch 0015 schreibt der Loader bei jedem Spielstart `/_pico/igr-log.txt` und hängt nach einem Hotkey-Neustart einen Abschnitt an. **Nach jedem Versuch gleich am PC öffnen** (vor dem nächsten Spielstart) und bei Problemen den Inhalt mitschicken. Was die Zeilen bedeuten: [loader/README.md](../../loader/README.md#diagnose-_picoigr-logtxt). Kurz:
+
+- **Datei fehlt** → auf der Karte liegt nicht der DsRunner-Loader. Alle `_pico/*.bin` aus dem Paket kopieren.
+- `in-game reset: applied` → Hotkey eingebaut. `NOT applied: …` nennt den Grund (abgeschaltet, kein Dispatcher gefunden, kein Patchplatz).
+- Abschnitt `[start after the in-game reset (PIGR)…]` vorhanden → der Hotkey hat ausgelöst. Fehlt er nach dem Halten, kam der Reset nie an.
+
+Am Bildschirm: Nach 2 s Halten wird der Hauptbildschirm **halb weiß**. Hell, aber das Spiel läuft weiter → wartet auf den Slot-1-Lock. Gar nicht hell → nicht eingebaut. Hell und dann eingefroren/schwarz → Neustart von Pico hängt. Bitte genau notieren, was passiert.
 
 ### 1. Grundfunktion (ein Abend)
 

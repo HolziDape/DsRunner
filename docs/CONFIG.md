@@ -73,6 +73,8 @@ DsRunner startet Spiele anderer Konsolen über Emulatoren für den DS (Homebrew)
 
 Gibt es für eine Endung nichts davon, zeigt DsRunner die Dateien nicht an (der Ordner bleibt leer, „0 Spiele“).
 
+**Mitgeliefert:** `DsRunner_M3DSReal.zip` und `DsRunner.zip` enthalten in `/_dsrunner/emulators/` schon GBARunner2, nesDS, GameYob und SNEmulDS-legacy (dazu `/snemul.cfg`), mit festen Versionen und Lizenzen (`LIZENZEN.txt` im selben Ordner). Nicht dabei sind das GBA-BIOS (Nintendo) sowie S8DS, NitroGrafx und jEnesisDS (keine Lizenz, die die Weitergabe erlaubt). Die holt man selbst, siehe Tabelle.
+
 **Gefundene Emulatoren** (pro Konsole gilt der erste gefundene, von oben nach unten):
 
 | Konsole | Endungen | Emulator | Dateiname | Spiel per argv | Download |
@@ -95,11 +97,11 @@ Gibt es für eine Endung nichts davon, zeigt DsRunner die Dateien nicht an (der 
 5. `/_nds/TWiLightMenu/emulators/` (dort legt [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases) seine Emulatoren ab, z. B. `nesds.nds`, `gameyob.nds`, `S8DS.nds`, `jEnesisDS.nds`, `SNEmulDS-legacy.nds`, `NitroGrafx.nds`)
 6. `/Emulators/`
 
-Jeder Ordner wird beim Start einmal gelesen. Andere Dateinamen (z. B. `nesDS_1.3.nds`) findet DsRunner nicht, dafür die Datei umbenennen oder den Pfad in `systems.json` bzw. `fileAssociations` eintragen. Gefundene Emulatoren schreibt DsRunner nicht in die `settings.json`. Eine dort schon stehende `gba`-Zuordnung (frühere Versionen haben GBARunner2 dort eingetragen) gilt weiter und hat Vorrang.
+Jeder Ordner wird beim Start einmal gelesen. Liegt ein Emulator in mehreren Ordnern (z. B. der mitgelieferte in `/_dsrunner/emulators/` und der von TWiLight Menu++), gilt der aus dem Ordner weiter oben. Andere Dateinamen (z. B. `nesDS_1.3.nds`) findet DsRunner nicht, dafür die Datei umbenennen oder den Pfad in `systems.json` bzw. `fileAssociations` eintragen. Gefundene Emulatoren schreibt DsRunner nicht in die `settings.json`. Eine dort schon stehende `gba`-Zuordnung (frühere Versionen haben GBARunner2 dort eingetragen) gilt weiter und hat Vorrang.
 
 **Hinweise zu den Emulatoren:**
 
-- **GBARunner2** braucht das GBA-BIOS (`bios.bin`) neben GBARunner2 bzw. unter `/_gba/bios.bin`, wie in seiner Anleitung.
+- **GBARunner2** bringt ein freies Ersatz-BIOS mit. Mit dem originalen GBA-BIOS laufen mehr Spiele: als `/_gba/bios.bin` (oder `/bios.bin`, `/gba/bios.bin`) ablegen, wie in seiner Anleitung. Mitgeliefert wird es nicht.
 - **nesDS:** `.fds`-Spiele (Famicom Disk System) brauchen zusätzlich das FDS-BIOS, siehe Anleitung von nesDS.
 - **jEnesisDS** spielt Mega-Drive-Spiele bis 3 MB. TWiLight Menu++ startet es nur mit `.gen`-Dateien. Lädt ein `.md`-Spiel nicht, die Datei in `.gen` umbenennen.
 - **lameboy** und andere Emulatoren ohne argv starten mit ihrer eigenen Dateiauswahl, das Spiel muss man dann dort noch einmal wählen.

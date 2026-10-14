@@ -8,6 +8,9 @@
 #                        firmware -> SYSTEM/g6dsload.eng -> r4i.sys (TWiLight booter with
 #                        the M3 DLDI driver) -> /_nds/TWiLightMenu/main.srldr
 #   BOOT.NDS             DsRunner again, to start it manually from other menus
+#   _dsrunner/emulators/, snemul.cfg
+#                        emulators for GBA, NES, GB/GBC and SNES with their licenses
+#                        (tools/fetch-emulators.sh, pinned versions + sha256, no GBA BIOS)
 #   LIESMICH.txt         short German installation and update guide with the version
 #                        (from VERSION, marked as development state unless DSRUNNER_RELEASE=1)
 # Usage: tools/make-sd-package.sh [output dir]   (run after make, needs curl, unzip, 7z)
@@ -20,6 +23,7 @@ set -e
 
 PICO_LOADER_VERSION="v1.7.1"
 PICO_PLATFORM="M3DS"
+# keep TWILIGHT_VERSION the same as in fetch-emulators.sh
 TWILIGHT_VERSION="v27.25.1"
 AUTOBOOT_DIR="Autoboot/M3 DS Real, M3i Zero (non-GMP-Z003), iTouchDS, R4(i) SDHC (r4rts.com)"
 AUTOBOOT_FILES="SYSTEM/g6dsload.1 SYSTEM/g6dsload.eng boot.eng boot.gb boot.jp loader.eng _system_/_sys_data/r4i.sys SRESET.dat"
@@ -117,6 +121,8 @@ for f in $AUTOBOOT_FILES; do
 	verify_sha256 "$OUT/$f" "$(echo "$SHA256_AUTOBOOT" | grep "  $f\$" | cut -d' ' -f1)"
 done
 
+sh "$ROOT/tools/fetch-emulators.sh" "$OUT"
+
 # short German guide; plain ASCII with CRLF so it opens anywhere on Windows
 VERSION_TEXT="$(tr -d ' \t\r\n' < "$ROOT/VERSION")"
 [ "$DSRUNNER_RELEASE" = "1" ] || VERSION_TEXT="$VERSION_TEXT (Entwicklungsstand)"
@@ -132,9 +138,20 @@ Installation
    und vorhandene Dateien ersetzen.
 3. Spiele in Ordner pro Konsole legen, zum Beispiel:
      Games\NDS   fuer .nds Spiele
-     Games\GBA   fuer .gba Spiele (dazu GBARunner2_arm7dldi_ds.nds ins
-                 Hauptverzeichnis und das GBA-BIOS als _gba\bios.bin)
+     Games\GBA   fuer .gba Spiele
+     Games\NES, Games\GB, Games\GBC, Games\SNES   fuer NES, Game Boy, SNES
 4. DS einschalten: DsRunner startet automatisch.
+
+Emulatoren
+----------
+Die Emulatoren fuer GBA (GBARunner2), NES (nesDS), Game Boy (GameYob) und
+SNES (SNEmulDS) sind schon dabei, im Ordner _dsrunner\emulators.
+- GBA: Mit dem GBA-BIOS laufen mehr Spiele. Es darf nicht mitgeliefert werden:
+  selbst als _gba\bios.bin auf die Karte legen.
+- Master System, Game Gear, Mega Drive und PC Engine: Diese Emulatoren duerfen
+  nicht mitgeliefert werden. S8DS.nds, jEnesisDS.nds und NitroGrafx.nds selbst
+  herunterladen und nach _dsrunner\emulators kopieren (Links im README).
+- Herkunft und Lizenzen: _dsrunner\emulators\LIZENZEN.txt
 
 Update auf eine neue Version
 ----------------------------
@@ -145,6 +162,8 @@ Menue "Anzeige" (Zahnrad oben rechts).
 Steht im CHANGELOG "Pico Loader geaendert", auch die Dateien picoLoader7.bin,
 picoLoader9.bin, aplist.bin, patchlist.bin und savelist.bin im Ordner _pico
 ersetzen.
+Die Emulatoren kommen nur mit dem kompletten Paket. Fehlen sie auf deiner Karte
+noch, einmal den Ordner _dsrunner\emulators und die Datei snemul.cfg kopieren.
 
 EOF
 if [ "$DSRUNNER_LOADER" = "custom" ]; then
@@ -178,6 +197,7 @@ https://github.com/HolziDape/DsRunner
 DsRunner basiert auf Pico Launcher und Pico Loader (LNH team, Zlib-Lizenz).
 Die Rueckkehr aus Spielen stammt von danyocom (Pico-Loader-Fork, Zlib-Lizenz).
 Die Autostart-Dateien stammen aus TWiLight Menu++ (DS-Homebrew).
+Die Emulatoren stammen von ihren Autoren, siehe _dsrunner\emulators\LIZENZEN.txt.
 EOF
 sed -i "s/@VERSION@/$VERSION_TEXT/; s/\$/\r/" "$OUT/LIESMICH.txt"
 
