@@ -228,9 +228,13 @@ static bool wait_assoc(bool dhcp_fallback)
 }
 
 // Picks an access point from a list. Returns its index, -1 = rescan, -2 = exit.
+// The list is scanned again every second; the cursor stays on the network it was on
+// (the order changes with the signal strength). In auto mode the network from stream.ini
+// (default "DsRunner-Stream") is taken as soon as it shows up.
 static int choose_ap(Wifi_AccessPoint *aps, int *n)
 {
     int sel = 0;
+    char sel_ssid[33] = "";
     uint32_t last_scan = vbl;
     for (;;)
     {
@@ -238,9 +242,18 @@ static int choose_ap(Wifi_AccessPoint *aps, int *n)
         {
             *n = scan_aps(aps, MAX_APS);
             last_scan = vbl;
+            for (int i = 0; i < *n; i++)
+            {
+                if (cfg.wifi == WIFI_AUTO && cfg.ssid[0] && !strcmp(aps[i].ssid, cfg.ssid))
+                    return i;
+                if (sel_ssid[0] && !strcmp(aps[i].ssid, sel_ssid))
+                    sel = i;
+            }
         }
         if (sel >= *n)
             sel = *n ? *n - 1 : 0;
+        if (*n)
+            snprintf(sel_ssid, sizeof(sel_ssid), "%s", aps[sel].ssid);
         consoleClear();
         printf("WLAN waehlen (%d gefunden)\n", *n);
         printf("A: verbinden B: neu suchen\nSTART: beenden\n\n");
@@ -265,6 +278,7 @@ static int choose_ap(Wifi_AccessPoint *aps, int *n)
                 return -2;
             else
                 continue;
+            snprintf(sel_ssid, sizeof(sel_ssid), "%s", aps[sel].ssid);
             break;
         }
     }
