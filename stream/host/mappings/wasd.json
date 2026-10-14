@@ -1,0 +1,18 @@
+{
+  "name": "WASD",
+  "keys": {
+    "UP": "KeyW",
+    "DOWN": "KeyS",
+    "LEFT": "KeyA",
+    "RIGHT": "KeyD",
+    "A": "Space",
+    "B": "Shift",
+    "X": "KeyE",
+    "Y": "KeyQ",
+    "L": "KeyR",
+    "R": "KeyF",
+    "START": "Enter",
+    "SELECT": "Escape"
+  },
+  "touch": "click"
+}
