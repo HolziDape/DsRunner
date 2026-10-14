@@ -47,8 +47,8 @@ Alles läuft über **UDP, ein Port am Host (Standard 7770)**. Alle Zahlen sind *
 | 1 | u8 | Version |
 | 2 | u16 | Laufende Nummer (ältere/doppelte werden verworfen) |
 | 4 | u16 | Tasten, Bits wie libnds `keysHeld()`: A=0, B=1, SELECT=2, START=3, RECHTS=4, LINKS=5, OBEN=6, UNTEN=7, R=8, L=9, X=10, Y=11, TOUCH=12 |
-| 6 | u8 | Touch x (0–255), gültig wenn Bit TOUCH gesetzt |
-| 7 | u8 | Touch y (0–191) |
+| 6 | u8 | Touch x (0-255), gültig wenn Bit TOUCH gesetzt |
+| 7 | u8 | Touch y (0-191) |
 | 8 | u16 | `cur_frame`: Nummer des Bildes, das der DS gerade zeigt (0 = keins) |
 | 10 | u8 | Flags: 0x01 `NEED_REF` (der DS hat ein Delta-Bild verworfen oder seit 1 s nichts bekommen), 0x02 `HELLO` (noch kein Bild) |
 | 11 | u8 | 0 |
@@ -92,7 +92,7 @@ Der DS sammelt **ein Bild gleichzeitig**. Kommt ein Stück eines neueren Bildes,
 
 Rumpf (entpackt), jeder Abschnitt auf 4 Byte aufgefüllt:
 
-1. Palette (nur mit `PALETTE`): `n × u16` RGB555 im DS-Format (Rot in Bit 0–4, Grün 5–9, Blau 10–14).
+1. Palette (nur mit `PALETTE`): `n × u16` RGB555 im DS-Format (Rot in Bit 0-4, Grün 5-9, Blau 10-14).
 2. Bitmaske (nur ohne `KEY`): ein Bit pro Kachel, Kachel `i` = Byte `i/8`, Bit `i%8` (LSB zuerst). Kacheln zählen zeilenweise: 32×24 (256×192), 16×12 (128×96) oder 32×48 (256×384).
 3. Kacheldaten: pro geänderter Kachel (aufsteigende Nummer) 64 Byte Palettenindizes, 8 Zeilen à 8 Pixel.
 
@@ -119,4 +119,4 @@ Ist `LZ4` gesetzt, ist der Rumpf ein einzelner [LZ4-Block](https://github.com/lz
 - **8×8-Kacheln** erlauben billige Deltas (nur geänderte Kacheln) und werden mit ausgerichteten 32-Bit-Speicherzugriffen in den VRAM geschrieben (der VRAM verträgt keine 8-Bit-Schreibzugriffe). Eine Kachel kostet etwa 100 CPU-Takte.
 - **LZ4** entpackt mit Byte-Kopien ohne Bit-Operationen, schneller als zlib/LZ77-Bitströme. Der Dekoder liegt als ARM-Code im ITCM.
 - **Bild-Quittungen statt Wiederholungen:** UDP-Verluste kosten ein Bild; repariert wird mit einem Delta gegen das Bild, das der DS wirklich hat, ohne festen Keyframe-Takt.
-- Gemessen in DeSmuME (grob, siehe README): Delta 2–9 ms, Keyframe etwa 11 ms pro Bild.
+- Gemessen in DeSmuME (grob, siehe README): Delta 2-9 ms, Keyframe etwa 11 ms pro Bild.

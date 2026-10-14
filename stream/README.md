@@ -8,8 +8,8 @@ Der DS selbst könnte solche Spiele nie ausführen (67 MHz, 4 MB RAM, WLAN nur 8
 
 Was du erwarten kannst:
 
-- Bild: 256×192 Pixel mit 256 Farben, je nach Spiel etwa 10–20 Bilder pro Sekunde. Bei viel Bewegung (Scrollen, 3D) weniger; dann hilft der Modus `128x96`.
-- Verzögerung: etwa 100–200 ms. Für Rätsel-, Klick-, Karten- und Strategiespiele gut, für schnelle Reaktionsspiele eher nicht.
+- Bild: 256×192 Pixel mit 256 Farben, je nach Spiel etwa 10-20 Bilder pro Sekunde. Bei viel Bewegung (Scrollen, 3D) weniger; dann hilft der Modus `128x96`.
+- Verzögerung: etwa 100-200 ms. Für Rätsel-, Klick-, Karten- und Strategiespiele gut, für schnelle Reaktionsspiele eher nicht.
 - **Kein Ton auf dem DS.** Der Ton kommt am Pi raus (HDMI oder Klinke), falls du dort Lautsprecher anschließt.
 - Es funktioniert mit jeder Webseite, die in Chromium läuft. Spiele, die nur mit Maus und Tastatur gehen, brauchen eine passende [Tastenbelegung](#tastenbelegung).
 
@@ -188,10 +188,10 @@ Eigene Belegung: eine der Dateien kopieren und ändern, dann `--mapping meine.js
 
 ## Leistung auf dem Raspberry Pi
 
-- Der Host selbst ist sparsam: Bild verkleinern, Farben wählen und packen dauert am PC 1–2 ms pro Bild, auf dem Pi 5 grob geschätzt 3–8 ms.
+- Der Host selbst ist sparsam: Bild verkleinern, Farben wählen und packen dauert am PC 1-2 ms pro Bild, auf dem Pi 5 grob geschätzt 3-8 ms.
 - Die meiste Arbeit hat **Chromium mit dem Spiel**. 2D-Spiele laufen auf dem Pi 5 meist gut. **3D/WebGL-Spiele können ruckeln.** Mit `--headful --gpu` rechnet die GPU des Pi 5 (VideoCore VII). Ob das klappt, zeigt `--url chrome://gpu` (direkt auf dem DS oder im Fenster): bei „WebGL“ sollte „Hardware accelerated“ stehen.
 - Ohne Fenster (Standard ohne `--headful`, z. B. als Dienst ohne Desktop) rechnet Chromium meist ohne GPU (Software). Für 2D reicht das oft, für 3D kaum.
-- Der Engpass ist meist das WLAN des DS: 802.11b mit 1–2 Mbit/s, real etwa 100–180 KB/s. Ruhige Spiele brauchen 30–60 KB/s, viel Bewegung 100 KB/s und mehr. Dann `--mode 128x96` oder `--fps 15` probieren.
+- Der Engpass ist meist das WLAN des DS: 802.11b mit 1-2 Mbit/s, real etwa 100-180 KB/s. Ruhige Spiele brauchen 30-60 KB/s, viel Bewegung 100 KB/s und mehr. Dann `--mode 128x96` oder `--fps 15` probieren.
 - Gemessen am PC mit der Testseite und dem Schein-DS: 256×192 normal 20 fps bei ~50 KB/s, viel Bewegung 20 fps bei ~100 KB/s, 128×96 viel Bewegung 20 fps bei ~40 KB/s, beide Bildschirme 20 fps bei ~70 KB/s.
 
 ## Automatisch starten

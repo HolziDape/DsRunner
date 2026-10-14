@@ -19,6 +19,7 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 - **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet. Die Emulatoren für GBA, NES, Game Boy und SNES sind im Paket enthalten; eigene Konsolen über `systems.json`
 - **Cheats** über `usrcheat.dat`
 - **Zurück zu DsRunner aus dem Spiel:** L+R+Unten+B 2 Sekunden halten, Tasten einstellbar (M3-Paket, [Hinweise](#zurück-zu-dsrunner-aus-einem-spiel))
+- **Experimentell: DsRunner Stream:** Browser-Spiele vom Raspberry Pi oder PC per WLAN auf dem DS spielen ([mehr](#dsrunner-stream-experimentell))
 
 ## Download
 
@@ -157,6 +158,12 @@ DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 
 3. `DsRunner.nds` aus dem Menü deiner Flashkarte starten. Ein Autostart ist für andere Karten nicht vorbereitet.
 
 Mit dem offiziellen Pico Loader gibt es keine Rückkehr aus Spielen. Wer sie ausprobieren will, baut den Loader aus [loader/](loader/README.md) für seine Karte (`PICO_PLATFORM=R4 loader/build.sh`, Plattformnamen wie bei Pico Loader). Getestet ist das nicht.
+
+## DsRunner Stream (experimentell)
+
+Mit **DsRunner Stream** spielst du Browser-Spiele auf dem DS: Ein Raspberry Pi 5 (oder PC) öffnet das Spiel in Chromium und schickt das Bild per WLAN an den DS, die Tasten und der Touchscreen des DS steuern das Spiel. Der DS startet dafür das Programm `DsRunnerStream.nds` aus dem Ordner `Games/Apps`; der Pi stellt ein eigenes offenes WLAN nur für den DS bereit und hängt selbst per Kabel am Router. Kein Ton auf dem DS, etwa 10-20 Bilder pro Sekunde in 256 Farben.
+
+Noch nicht auf echter Hardware getestet. Einrichtung, Tastenbelegung und Sicherheitshinweise: **[stream/README.md](stream/README.md)**.
 
 ## Stand
 
