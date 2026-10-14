@@ -59,7 +59,7 @@ jobs:
           {
             sh tools/version.sh notes "$VERSION" || true
             echo
-            echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). **Update:** nur `_nds/TWiLightMenu/main.srldr` ersetzen. Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
+            echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). Die Emulatoren für GBA, NES, Game Boy und SNES sind dabei (`_dsrunner/emulators`). **Update:** nur `_nds/TWiLightMenu/main.srldr` ersetzen. Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
             echo
             echo "$marker"
             if [ -n "$existing" ]; then
@@ -150,6 +150,8 @@ jobs:
         run: |
           mkdir DsRunner
           cp -r _pico/ DsRunner.nds DsRunner
+          # same emulators and licenses as in DsRunner_M3DSReal.zip
+          sh tools/fetch-emulators.sh DsRunner
           cd DsRunner && zip -r $PWD.zip *
       - name: Package for M3 DS Real (autoboot)
         env:

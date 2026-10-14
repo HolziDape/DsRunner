@@ -1,0 +1,54 @@
+Emulatoren im DsRunner-Paket
+============================
+
+Diese Emulatoren liegen dem Paket unveraendert bei, damit DsRunner Spiele
+anderer Konsolen ohne weitere Downloads startet. Sie stammen nicht von
+DsRunner, sondern von den unten genannten Autoren. Die Lizenztexte liegen im
+Ordner licenses neben dieser Datei.
+
+GBARunner2_arm7dldi_ds.nds  (Game Boy Advance)
+  GBARunner2 von Gericom, Release v20200812-131430_6e4ce45
+  Download:  https://github.com/Gericom/GBARunner2/releases/tag/v20200812-131430_6e4ce45
+  Quellcode: https://github.com/Gericom/GBARunner2/tree/6e4ce456597cabaaa45aac83bbd2f4c90580dca8
+  Lizenz:    Das Projekt nennt keine eigene Lizenzdatei ("GBARunner2 will always
+             be free software"). Es enthaelt das freie GBA-BIOS von Normmatt
+             (VBA/VBA-M Development Team) unter der GPL-2.0 oder neuer,
+             siehe licenses/GPL-2.0.txt.
+  Das originale GBA-BIOS von Nintendo ist NICHT enthalten. Mit ihm laufen mehr
+  Spiele: selbst als /_gba/bios.bin auf die Karte legen.
+
+nesDS.nds  (NES / Famicom)
+  nesDS 2.1 (loopy, FluBBa, Hao Huiming, Coto und andere, gepflegt von DS-Homebrew)
+  Download:  https://github.com/DS-Homebrew/NesDS/releases/tag/v2.1
+  Quellcode: https://github.com/DS-Homebrew/NesDS/tree/v2.1
+  Lizenz:    Public Domain, enthaelt zlib (inflate, zlib-Lizenz),
+             siehe licenses/nesDS-PublicDomain.txt
+
+GameYob.nds  (Game Boy / Game Boy Color)
+  GameYob von Drenn (Stewmath) und Mitwirkenden, Build von DS-Homebrew
+  (in TWiLight Menu++ als gameyob.nds)
+  Quellcode: https://github.com/DS-Homebrew/GameYob
+             (urspruenglich https://github.com/Drenn1/GameYob)
+  Lizenz:    MIT, siehe licenses/GameYob-MIT.txt
+
+SNEmulDS-legacy.nds und /snemul.cfg  (Super Nintendo)
+  SNEmulDS 0.6 von archeide, "legacy"-Build aus TWiLight Menu++.
+  snemul.cfg ist die Einstellungsdatei von SNEmulDS (Hauptverzeichnis der Karte).
+  Quellcode: SNEmulDS 0.6a von archeide:
+               https://github.com/cotodevel/snemulds/tree/SnemulDS-0.6a
+             Weiterentwicklung: https://github.com/cotodevel/snemulds
+  Lizenz:    GPL-2.0 oder neuer, siehe licenses/GPL-2.0.txt
+
+Herkunft
+  GameYob, nesDS, SNEmulDS-legacy und snemul.cfg stammen aus
+  AddOn-VirtualConsole-DSi-or-Flashcard.7z von TWiLight Menu++ v27.25.1
+  (DS-Homebrew): https://github.com/DS-Homebrew/TWiLightMenu/releases/tag/v27.25.1
+  Die Dateien im Quellcode von TWiLight Menu++:
+  https://github.com/DS-Homebrew/TWiLightMenu/tree/v27.25.1/7zfile
+  GBARunner2 kommt direkt vom Release des Autors (Link oben).
+
+Nicht enthalten
+  S8DS (Master System, Game Gear) und NitroGrafx (PC Engine) von FluBBaOfWard
+  sowie jEnesisDS (Mega Drive) von Lordus: Ihre Autoren nennen keine Lizenz,
+  die die Weitergabe erlaubt. Wer sie nutzen will, laedt sie selbst herunter
+  (Links im README von DsRunner) und legt sie in diesen Ordner.
