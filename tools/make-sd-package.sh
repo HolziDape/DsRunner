@@ -175,6 +175,9 @@ Im Spiel L + R + Unten + B zwei Sekunden lang halten: der DS startet DsRunner ne
   wie beim Ausschalten. Ein laufender Speichervorgang wird nicht abgebrochen.
 - Klappt nicht in jedem Spiel. Reagiert ein Spiel nicht, wie gewohnt ausschalten.
 - Abschalten: in der Datei _pico\settings.json "inGameReset": false eintragen.
+- Andere Tasten, z. B. wenn L/R ausgeleiert sind: in _pico\settings.json
+  "inGameResetKeys": "SELECT+START+DOWN" eintragen (oder "SELECT+DOWN+B").
+  Erlaubt: A B SELECT START UP DOWN LEFT RIGHT L R, mindestens 3, nicht X/Y.
 
 EOF
 fi

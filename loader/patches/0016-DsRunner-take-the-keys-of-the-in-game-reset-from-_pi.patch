@@ -1,0 +1,425 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 15:30:33 +0000
+Subject: [PATCH] DsRunner: take the keys of the in-game reset from
+ /_pico/igr.keys
+
+L+R+Down+B is fixed in the key check, but L and R are the first buttons
+to wear out on a DS Lite: on the first hardware test they registered
+only when pressed hard, so the hotkey looked broken.
+
+The key check now loads its mask from a literal that the patcher fills
+in, instead of building the constant with three instructions, so the
+section keeps its size (0x40). The arm7 reads the mask from the first
+line of /_pico/igr.keys ("0x08C"), before the rom is opened like
+igr.off, and passes it in bits 16-25 of the IPC_COMMAND_ARM9_SET_ROM_FILE_INFO
+flags word; 0 means the default L+R+Down+B (0x382). A missing file, a
+value of 0 or bits above the 10 keys the arm9 can read (A, B, Select,
+Start, Right, Left, Up, Down, R, L) give the default. DsRunner writes
+the file from its setting "inGameResetKeys" and deletes it for the
+default.
+
+igr-log.txt names the active keys and where they came from, and the
+mask that was patched in.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018ba2i77rK9QaTUSsETPJXV
+---
+ arm7/source/fat/igrLog.cpp                    | 77 +++++++++++++++++++
+ arm7/source/fat/igrLog.h                      |  9 +++
+ arm7/source/loader/NdsLoader.cpp              |  6 +-
+ arm9/source/Arm9Patcher.cpp                   |  7 +-
+ arm9/source/Arm9Patcher.h                     |  4 +-
+ arm9/source/main.cpp                          | 10 ++-
+ .../arm9/InGameReset/InGameResetPatch.cpp     |  4 +-
+ .../arm9/InGameReset/InGameResetPatch.h       |  6 +-
+ .../arm9/InGameReset/InGameResetPatchCode.h   |  5 +-
+ .../arm9/InGameReset/InGameResetPatchCode.s   | 19 ++---
+ common/dsrunnerIgrDiag.h                      |  1 +
+ common/inGameReset.h                          | 14 ++++
+ 12 files changed, 144 insertions(+), 18 deletions(-)
+
+diff --git a/arm7/source/fat/igrLog.cpp b/arm7/source/fat/igrLog.cpp
+index 4aeefaa..fb600b5 100644
+--- a/arm7/source/fat/igrLog.cpp
++++ b/arm7/source/fat/igrLog.cpp
+@@ -16,6 +16,77 @@
+ 
+ igr_log_state_t gIgrLog;
+ 
++/// @brief Names of the REG_KEYINPUT bits 0-9, as DsRunner writes them in "inGameResetKeys".
++static const char* const sKeyNames[] =
++{
++    "A", "B", "SELECT", "START", "RIGHT", "LEFT", "UP", "DOWN", "R", "L"
++};
++
++u32 igrKeys_read()
++{
++    auto file = std::make_unique<FIL>();
++    if (f_open(file.get(), IN_GAME_RESET_KEYS_PATH, FA_READ) != FR_OK)
++    {
++        return 0;
++    }
++    char text[16];
++    UINT bytesRead = 0;
++    FRESULT result = f_read(file.get(), text, sizeof(text) - 1, &bytesRead);
++    f_close(file.get());
++    if (result != FR_OK)
++    {
++        return 0;
++    }
++    text[bytesRead] = 0;
++
++    // "0x" followed by hexadecimal digits, up to the first character that is not one
++    const char* digit = text;
++    if (digit[0] == '0' && (digit[1] == 'x' || digit[1] == 'X'))
++    {
++        digit += 2;
++    }
++    u32 keyMask = 0;
++    u32 digits = 0;
++    for (; *digit != 0 && digits < 8; digit++, digits++)
++    {
++        char c = *digit;
++        u32 value;
++        if (c >= '0' && c <= '9')
++            value = c - '0';
++        else if (c >= 'a' && c <= 'f')
++            value = c - 'a' + 10;
++        else if (c >= 'A' && c <= 'F')
++            value = c - 'A' + 10;
++        else
++            break;
++        keyMask = (keyMask << 4) | value;
++    }
++    if (digits == 0 || keyMask == 0 || (keyMask & ~IN_GAME_RESET_KEY_MASK_VALID_BITS) != 0)
++    {
++        LOG_ERROR("Invalid %s, using the default keys\n", IN_GAME_RESET_KEYS_PATH);
++        return 0;
++    }
++    return keyMask;
++}
++
++void igrKeys_format(u32 keyMask, char* buffer, u32 bufferSize)
++{
++    // same order as DsRunner writes them: L, R, SELECT, START, UP, DOWN, LEFT, RIGHT, A, B
++    static const u8 sOrder[] = { 9, 8, 2, 3, 6, 7, 5, 4, 0, 1 };
++    u32 length = 0;
++    buffer[0] = 0;
++    for (u32 i : sOrder)
++    {
++        if (keyMask & (1u << i))
++        {
++            length += mini_snprintf(buffer + length, bufferSize - length, "%s%s",
++                length == 0 ? "" : "+", sKeyNames[i]);
++            if (length >= bufferSize - 1)
++                break;
++        }
++    }
++}
++
+ static const char* const sBootModeTexts[] =
+ {
+     "normal start",
+@@ -165,6 +236,7 @@ static void addPatchInfo(IgrLogText& text, const dsrunner_igr_diag_t* diag)
+     {
+         text.Add("  dispatch code at 0x%X, reboot %s\r\n", diag->dispatchAddress,
+             diag->rebootCreated ? "created for the hotkey" : "shared with OS_ResetSystem");
++        text.Add("  key mask patched in: 0x%X\r\n", diag->keyMask);
+     }
+     if (diag->status == DSRUNNER_IGR_STATUS_NO_PATCH_SPACE)
+     {
+@@ -198,6 +270,11 @@ void igrLog_write(const char* romPath, const nds_header_ntr_t* romHeader, bool i
+         gIgrLog.launcherPath && gIgrLog.launcherPath[0] ? gIgrLog.launcherPath : "(none)",
+         textOf(sLauncherTexts, gIgrLog.launcherState));
+     text->Add("%s: %s\r\n", IN_GAME_RESET_DISABLE_PATH, gIgrLog.igrOffSeen ? "present (hotkey off)" : "absent");
++    char keyNames[64];
++    u32 keyMask = gIgrLog.keyMask ? gIgrLog.keyMask : IN_GAME_RESET_DEFAULT_KEY_MASK;
++    igrKeys_format(keyMask, keyNames, sizeof(keyNames));
++    text->Add("keys: %s (0x%X, %s), hold 2 s\r\n", keyNames, keyMask,
++        gIgrLog.keyMask ? "from " IN_GAME_RESET_KEYS_PATH : "default");
+     if (diag)
+     {
+         addPatchInfo(*text, diag);
+diff --git a/arm7/source/fat/igrLog.h b/arm7/source/fat/igrLog.h
+index a0ef7a3..1139557 100644
+--- a/arm7/source/fat/igrLog.h
++++ b/arm7/source/fat/igrLog.h
+@@ -54,10 +54,19 @@ struct igr_log_state_t
+     u32 launcherState;    // IgrLogLauncherState
+     const char* launcherPath;
+     u32 igrOffSeen;
++    u32 keyMask;          // keys read from /_pico/igr.keys, 0 = file missing or invalid (default)
+ };
+ 
+ extern igr_log_state_t gIgrLog;
+ 
++/// @brief Reads the keys of the in-game reset from /_pico/igr.keys.
++/// @return The REG_KEYINPUT bits that read 0 while held, or 0 for the default keys (no file,
++///         or a value that is not a mask of at least one of the keys the arm9 can read).
++u32 igrKeys_read();
++
++/// @brief Writes the names of the keys of a mask ("L+R+DOWN+B") to buffer.
++void igrKeys_format(u32 keyMask, char* buffer, u32 bufferSize);
++
+ /// @brief Writes /_pico/igr-log.txt: rewrites it on a normal start, appends after a reset.
+ /// @param romPath The path of the rom being started, or \c nullptr when not known.
+ /// @param romHeader The header of the rom being started.
+diff --git a/arm7/source/loader/NdsLoader.cpp b/arm7/source/loader/NdsLoader.cpp
+index 34399ab..5270df5 100644
+--- a/arm7/source/loader/NdsLoader.cpp
++++ b/arm7/source/loader/NdsLoader.cpp
+@@ -48,6 +48,9 @@ void NdsLoader::Load(BootMode bootMode)
+     bool inGameResetDisabled = f_stat(IN_GAME_RESET_DISABLE_PATH, fileInfo.get()) == FR_OK;
+     fileInfo.reset();
+     gIgrLog.igrOffSeen = inGameResetDisabled;
++    // DsRunner: keys of the in-game reset from /_pico/igr.keys, also before the rom is opened
++    u32 inGameResetKeyMask = igrKeys_read();
++    gIgrLog.keyMask = inGameResetKeyMask;
+     if (inGameResetDisabled)
+     {
+         LOG_DEBUG("In-game reset disabled by %s\n", IN_GAME_RESET_DISABLE_PATH);
+@@ -210,7 +213,8 @@ void NdsLoader::Load(BootMode bootMode)
+     sendToArm9(isHomebrew ? 0 : _romFile.dir_sect);
+     sendToArm9(isHomebrew ? 0 : (u32)(_romFile.dir_ptr - _romFile.obj.fs->win));
+     sendToArm9((isCloneBootRom ? 1 : 0) | (_runInDSiMode ? 2 : 0)
+-        | (inGameResetDisabled ? IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED : 0)); // DsRunner
++        | (inGameResetDisabled ? IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED : 0) // DsRunner
++        | (inGameResetKeyMask << IN_GAME_RESET_ROM_FILE_INFO_KEY_MASK_SHIFT)); // DsRunner
+ 
+     if (!isHomebrew)
+     {
+diff --git a/arm9/source/Arm9Patcher.cpp b/arm9/source/Arm9Patcher.cpp
+index 2fccb06..821f4fb 100644
+--- a/arm9/source/Arm9Patcher.cpp
++++ b/arm9/source/Arm9Patcher.cpp
+@@ -50,7 +50,8 @@ static const u32 sMiiUncompressBackwardPattern[] = { 0xE3500000, 0x0A000027, 0xE
+ static const u32 sMiiUncompressBackwardPatternHybrid[] = { 0xE3500000, 0x0A000029, 0xE92D01F0, 0xE9100006 };
+ 
+ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, const ApListEntry* apListEntry,
+-    bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo, bool inGameResetEnabled) const
++    bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo, bool inGameResetEnabled,
++    u32 inGameResetKeyMask) const
+ {
+     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
+     auto twlRomHeader = (const nds_header_twl_t*)TWL_SHARED_MEMORY->twlRomHeader;
+@@ -165,6 +166,7 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+     gDsRunnerIgrDiag.osResetSystem = 0;
+     gDsRunnerIgrDiag.rebootCreated = 0;
+     gDsRunnerIgrDiag.spaceNeeded = 0;
++    gDsRunnerIgrDiag.keyMask = 0;
+     PatchContext patchContext
+     {
+         (void*)romHeader->arm9LoadAddress,
+@@ -251,7 +253,8 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+         {
+             patchCollection.AddPatch(new InGameResetPatch(osResetSystemPatch, loaderInfo,
+                 sdkVersion.IsTwlSdk() && isHybridRom && runInDSiMode,
+-                hasRomReadPatches && !loaderPlatform->HasRomReads()));
++                hasRomReadPatches && !loaderPlatform->HasRomReads(),
++                inGameResetKeyMask)); // DsRunner
+         }
+ 
+         if (moduleParams && compressedEnd != 0)
+diff --git a/arm9/source/Arm9Patcher.h b/arm9/source/Arm9Patcher.h
+index 0676317..927f59b 100644
+--- a/arm9/source/Arm9Patcher.h
++++ b/arm9/source/Arm9Patcher.h
+@@ -26,9 +26,11 @@ public:
+     /// @param runInDSiMode \c true if the rom should be loaded in DSi mode, or \c false otherwise.
+     /// @param loaderInfo The loader info to use.
+     /// @param inGameResetEnabled DsRunner: \c false to leave out the in-game reset patch.
++    /// @param inGameResetKeyMask DsRunner: keys of the in-game reset (REG_KEYINPUT bits).
+     /// @return Some information resulting from the patching.
+     PatchResult ApplyPatches(const LoaderPlatform* loaderPlatform, const ApListEntry* apListEntry,
+-        bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo, bool inGameResetEnabled) const;
++        bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo, bool inGameResetEnabled,
++        u32 inGameResetKeyMask) const;
+ 
+ private:
+     const u32* FindMIiUncompressBackward(u32 arm9LoadAddress, SdkVersion sdkVersion) const;
+diff --git a/arm9/source/main.cpp b/arm9/source/main.cpp
+index 3702c3d..a8c1579 100644
+--- a/arm9/source/main.cpp
++++ b/arm9/source/main.cpp
+@@ -50,6 +50,7 @@ static u32 sRomDirSectorOffset;
+ static u16 sIsCloneBootRom;
+ static u16 sRunInDSiMode;
+ static u16 sInGameResetDisabled; // DsRunner
++static u32 sInGameResetKeyMask = IN_GAME_RESET_DEFAULT_KEY_MASK; // DsRunner
+ static loader_info_t sLoaderInfo;
+ static void** sSoftResetCheatsPointer = nullptr;
+ 
+@@ -158,7 +159,8 @@ static void handleApplyArm9PatchesCommand()
+         sIsCloneBootRom,
+         sRunInDSiMode,
+         &sLoaderInfo,
+-        !sInGameResetDisabled); // DsRunner
++        !sInGameResetDisabled, // DsRunner
++        sInGameResetKeyMask); // DsRunner
+     sSoftResetCheatsPointer = result.softResetCheatsPointer;
+     ipc_sendWordDirect(1);
+ }
+@@ -193,6 +195,12 @@ static void handleSetRomFileInfoCommand()
+     sIsCloneBootRom = (flags & 1) != 0;
+     sRunInDSiMode = (flags & 2) != 0;
+     sInGameResetDisabled = (flags & IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED) != 0; // DsRunner
++    // DsRunner: keys of the in-game reset, 0 = default
++    sInGameResetKeyMask = (flags >> IN_GAME_RESET_ROM_FILE_INFO_KEY_MASK_SHIFT) & IN_GAME_RESET_KEY_MASK_VALID_BITS;
++    if (sInGameResetKeyMask == 0)
++    {
++        sInGameResetKeyMask = IN_GAME_RESET_DEFAULT_KEY_MASK;
++    }
+ }
+ 
+ static void handleInitializeLoaderInfoCommand()
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+index f0823ef..0468c97 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+@@ -164,7 +164,8 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+     auto keyCheckPatchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetKeyCheckPatchCode>
+     (
+         patchContext.GetPatchHeap(),
+-        resetPatchCode
++        resetPatchCode,
++        _keyMask // DsRunner
+     );
+     auto dispatchPatchCode = CreateDispatchPatchCode(patchContext, keyCheckPatchCode);
+ 
+@@ -177,4 +178,5 @@ void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
+     gDsRunnerIgrDiag.status = DSRUNNER_IGR_STATUS_APPLIED;
+     gDsRunnerIgrDiag.dispatchAddress = (u32)dispatchPatchCode->GetDispatchFunction();
+     gDsRunnerIgrDiag.rebootCreated = createsReboot ? 1 : 0;
++    gDsRunnerIgrDiag.keyMask = _keyMask;
+ }
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.h b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.h
+index 9b4e729..1bfe254 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.h
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.h
+@@ -26,10 +26,11 @@ public:
+     /// @param twlArm7Sync \c true when the rom is a hybrid rom running in DSi mode, or \c false otherwise.
+     /// @param hasSdReadPatchCode \c true when the rom read patches create the platform sd read code,
+     ///                           or \c false otherwise.
++    /// @param keyMask DsRunner: the keys, as the REG_KEYINPUT bits that read 0 while held.
+     InGameResetPatch(const OSResetSystemPatch* osResetSystemPatch, const loader_info_t* loaderInfo,
+-        bool twlArm7Sync, bool hasSdReadPatchCode)
++        bool twlArm7Sync, bool hasSdReadPatchCode, u32 keyMask)
+         : _osResetSystemPatch(osResetSystemPatch), _loaderInfo(loaderInfo)
+-        , _twlArm7Sync(twlArm7Sync), _hasSdReadPatchCode(hasSdReadPatchCode) { }
++        , _twlArm7Sync(twlArm7Sync), _hasSdReadPatchCode(hasSdReadPatchCode), _keyMask(keyMask) { }
+ 
+     bool FindPatchTarget(PatchContext& patchContext) override;
+     void ApplyPatch(PatchContext& patchContext) override;
+@@ -41,6 +42,7 @@ private:
+     // not bool.
+     u16 _twlArm7Sync;
+     u16 _hasSdReadPatchCode;
++    u32 _keyMask; // DsRunner
+     IrqDispatcherVariant _irqDispatcherVariant = IrqDispatcherVariant::None;
+     IrqDispatcherMatch _irqDispatcherMatch = { };
+ 
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+index fed5340..9e7e478 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+@@ -19,6 +19,7 @@ extern "C" void patch_ingamereset_condReturnResume(void);
+ extern "C" void patch_ingamereset_resetEntry(void);
+ 
+ extern u32 patch_ingamereset_resetAddress;
++extern u32 patch_ingamereset_keyMask; // DsRunner
+ extern u32 patch_ingamereset_sdkIrqTable;
+ extern u32 patch_ingamereset_sdkIrqReturn;
+ extern u32 patch_ingamereset_sdkKeyCheck;
+@@ -67,10 +68,12 @@ public:
+ class InGameResetKeyCheckPatchCode : public PatchCode
+ {
+ public:
+-    InGameResetKeyCheckPatchCode(PatchHeap& patchHeap, const InGameResetResetPatchCode* resetPatchCode)
++    InGameResetKeyCheckPatchCode(PatchHeap& patchHeap, const InGameResetResetPatchCode* resetPatchCode,
++        u32 keyMask) // DsRunner: keyMask
+         : PatchCode(SECTION_START(patch_ingamereset_keycheck), SECTION_SIZE(patch_ingamereset_keycheck), patchHeap)
+     {
+         patch_ingamereset_resetAddress = (u32)resetPatchCode->GetResetFunction();
++        patch_ingamereset_keyMask = keyMask; // DsRunner
+     }
+ 
+     /// @brief Returns the patch heap space this part needs, so callers can check it fits.
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+index afe80e7..3281adb 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+@@ -1,10 +1,9 @@
+ .cpu arm946e-s
+ .syntax unified
+ 
+-// DsRunner: L + R + Down + B held for two seconds, as documented in the DsRunner README.
+-// L + R + Down + B, as the bits that read 0 in REG_KEYINPUT while held.
+-// Bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B, giving 0x382.
+-.equ IN_GAME_RESET_KEY_MASK, (1 << 9) | (1 << 8) | (1 << 7) | (1 << 1)
++// DsRunner: the keys come from patch_ingamereset_keyMask, which Pico Loader fills in (default
++// L + R + Down + B = 0x382, or the keys of /_pico/igr.keys). Held for two seconds, as documented
++// in the DsRunner README.
+ 
+ // Number of consecutive vblanks the keys must be held before the reset is performed.
+ // The DS draws 60 frames per second, so 120 is two seconds.
+@@ -51,11 +50,8 @@
+ patch_ingamereset_keyCheck:
+     ldr r0, regKeyInput
+     ldrh r0, [r0]
+-    // Thumb can only load an 8-bit constant, so the 10-bit key mask is built in two steps:
+-    // 0x38 << 4 = 0x380, then + 0x2 = 0x382.
+-    movs r1, #(IN_GAME_RESET_KEY_MASK >> 4)
+-    lsls r1, r1, #4
+-    adds r1, #(IN_GAME_RESET_KEY_MASK & 0xF)
++    // DsRunner: the key mask, the bits of REG_KEYINPUT that read 0 while held
++    ldr r1, patch_ingamereset_keyMask
+     adr r3, heldFrames
+     tst r0, r1 // keys read 0 while pressed, so any 1 bit means a key is released
+     bne keysReleased
+@@ -105,6 +101,11 @@ regKeyInput:
+ patch_ingamereset_resetAddress:
+     .word 0
+ 
++// DsRunner: keys of the reset, filled in by InGameResetKeyCheckPatchCode
++.global patch_ingamereset_keyMask
++patch_ingamereset_keyMask:
++    .word 0x382
++
+ .pool
+ 
+ .section "patch_ingamereset_dispatch_sdk", "ax"
+diff --git a/common/dsrunnerIgrDiag.h b/common/dsrunnerIgrDiag.h
+index ac5326e..9458c1d 100644
+--- a/common/dsrunnerIgrDiag.h
++++ b/common/dsrunnerIgrDiag.h
+@@ -67,6 +67,7 @@ typedef struct
+     u32 osResetSystem;     // end of OS_ResetSystem found in the game, or 0
+     u32 rebootCreated;     // 1 when the reboot was created for the in-game reset
+     u32 spaceNeeded;       // bytes the in-game reset needed when it did not fit, otherwise 0
++    u32 keyMask;           // keys patched into the key check (REG_KEYINPUT bits), 0 when not applied
+     u32 platform[4];       // PICO_PLATFORM name, NUL padded
+ } dsrunner_igr_diag_t;
+ 
+diff --git a/common/inGameReset.h b/common/inGameReset.h
+index 7b3a6b2..afd5bbc 100644
+--- a/common/inGameReset.h
++++ b/common/inGameReset.h
+@@ -19,3 +19,17 @@
+ 
+ /// @brief DsRunner: flag in the flags word of IPC_COMMAND_ARM9_SET_ROM_FILE_INFO.
+ #define IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED   4
++
++/// @brief DsRunner: keys of the in-game reset, as the bits of REG_KEYINPUT that read 0 while
++///        held. The default is L + R + Down + B: bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B.
++///        The arm9 can only read A, B, Select, Start, Right, Left, Up, Down, R and L (bits 0-9).
++#define IN_GAME_RESET_DEFAULT_KEY_MASK              0x382
++#define IN_GAME_RESET_KEY_MASK_VALID_BITS           0x3FF
++
++/// @brief DsRunner: when this file exists, its first line holds the key mask as a hexadecimal
++///        number ("0x08C" = SELECT + START + DOWN, etc.), which replaces IN_GAME_RESET_DEFAULT_KEY_MASK. DsRunner writes
++///        it from its setting "inGameResetKeys" and deletes it for the default keys.
++#define IN_GAME_RESET_KEYS_PATH                     "/_pico/igr.keys"
++
++/// @brief DsRunner: the key mask travels in bits 16-25 of the same flags word; 0 = default.
++#define IN_GAME_RESET_ROM_FILE_INFO_KEY_MASK_SHIFT  16

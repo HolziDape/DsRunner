@@ -45,7 +45,8 @@ REG_EXMEMCNT = 0x04000204
 DMA_CNT = [0x040000B8, 0x040000C4, 0x040000D0, 0x040000DC]
 PIGR = 0x52474950
 
-KEY_A, KEY_B, KEY_DOWN, KEY_R, KEY_L = 1 << 0, 1 << 1, 1 << 7, 1 << 8, 1 << 9
+KEY_A, KEY_B, KEY_SELECT, KEY_START = 1 << 0, 1 << 1, 1 << 2, 1 << 3
+KEY_DOWN, KEY_R, KEY_L = 1 << 7, 1 << 8, 1 << 9
 COMBO = KEY_L | KEY_R | KEY_DOWN | KEY_B
 
 
@@ -67,7 +68,7 @@ def load_elf(path):
 
 
 class Machine:
-    def __init__(self, sections, symbols):
+    def __init__(self, sections, symbols, key_mask=None):
         self.uc = Uc(UC_ARCH_ARM, UC_MODE_ARM)
         self.uc.ctl_set_cpu_model(UC_CPU_ARM_926)  # ARMv5TE like the ARM946E-S (has swp)
         self.uc.mem_map(MAIN_RAM, 0x800000)
@@ -89,6 +90,9 @@ class Machine:
         self.set_literal('patch_ingamereset_resetParamAddress', RESET_PARAM)
         self.set_literal('patch_ingamereset_resetParam', PIGR)
         self.set_literal('patch_ingamereset_resetSystemEntry', RESET_SYSTEM)
+        if key_mask is not None:
+            # patch 0016: Pico Loader fills in the keys from /_pico/igr.keys
+            self.set_literal('patch_ingamereset_keyMask', key_mask)
         for i in range(32):
             self.w32(IRQ_TABLE + 4 * i, HANDLERS + 0x10 * i)
             # mov r4, #i ; bx lr  (r4 tells which handler ran)
@@ -242,6 +246,29 @@ def main():
     m.w16(SLOT1_LOCK + 4, 0)
     m.w32(SLOT1_LOCK, 0)
     check(m.dispatch(0) == ('reset', None), 'lock released: reset on the next vblank')
+
+    # 7. the default mask in the section is L+R+Down+B (0x382), patch 0016
+    m = Machine(sections, symbols)
+    check(m.r32(m.target('patch_ingamereset_keyMask') & ~1) == 0x382, 'built-in key mask is 0x382 (L+R+Down+B)')
+
+    # 8. custom keys (settings.json "inGameResetKeys"): only that combo resets
+    for name, mask, partials in (
+            ('SELECT+START+DOWN', KEY_SELECT | KEY_START | KEY_DOWN,
+             (('SELECT+START', KEY_SELECT | KEY_START), ('START+DOWN', KEY_START | KEY_DOWN),
+              ('L+R+DOWN+B (default)', COMBO))),
+            ('SELECT+DOWN+B', KEY_SELECT | KEY_DOWN | KEY_B,
+             (('DOWN+B', KEY_DOWN | KEY_B), ('L+R+DOWN+B (default)', COMBO)))):
+        m = Machine(sections, symbols, mask)
+        m.press(mask)
+        r = [m.dispatch(0) for _ in range(121)]
+        check(all(x == ('handler', 0) for x in r[:120]) and r[-1] == ('reset', None),
+              f'custom keys {name}: resets after 120 vblanks')
+        for partial_name, keys in partials:
+            m = Machine(sections, symbols, mask)
+            m.press(keys)
+            r = [m.dispatch(0) for _ in range(200)]
+            check(all(x == ('handler', 0) for x in r) and m.r32(RESET_PARAM) == 0,
+                  f'custom keys {name}: {partial_name} never resets')
 
     print()
     if FAILURES:
