@@ -54,6 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--mute", action="store_true", help="Ton der Seite stummschalten")
     ap.add_argument("--broadcast", action="store_true",
                     help="Bilder als Broadcast senden (hilft, wenn der DS im WLAN ist, aber kaum Bilder ankommen)")
+    ap.add_argument("--packet-size", type=int, default=1400,
+                    help="groesste UDP-Paketgroesse in Bytes (Standard 1400; bei Empfangsproblemen 1000 oder 600 probieren)")
     ap.add_argument("--allow-popups", action="store_true",
                     help="neue Fenster/Pop-ups streamen statt sie zu schliessen (Standard: schliessen)")
     ap.add_argument("--chromium-arg", action="append", default=[], help="zusaetzliches Chromium-Argument")
@@ -77,7 +79,8 @@ async def amain(args) -> None:
     server = StreamServer(browser, mapping, mode, port=args.port, name=args.name,
                           palette=args.palette, use_lz4=not args.no_lz4, max_fps=args.fps,
                           rate_kbs=args.rate, min_rate_kbs=args.min_rate, max_rate_kbs=args.max_rate,
-                          stats_every=args.stats, broadcast=args.broadcast)
+                          stats_every=args.stats, broadcast=args.broadcast,
+                          packet_size=args.packet_size)
     try:
         await serve(server, args.bind)
     finally:
