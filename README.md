@@ -16,7 +16,7 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 - **Favoriten** mit X, gesammelt in der Kachel „★ Favoriten“
 - **Weiterspielen** mit START: das zuletzt gespielte Spiel direkt von der Konsolen-Ebene starten
 - Uhr (abschaltbar) und Akkuanzeige, Oberfläche auf Deutsch
-- **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet; eigene Konsolen über `systems.json`
+- **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet. Die Emulatoren für GBA, NES, Game Boy und SNES sind im Paket enthalten; eigene Konsolen über `systems.json`
 - **Cheats** über `usrcheat.dat`
 - **Zurück zu DsRunner aus dem Spiel:** L+R+Unten+B 2 Sekunden halten (M3-Paket, [Hinweise](#zurück-zu-dsrunner-aus-einem-spiel))
 
@@ -28,8 +28,8 @@ Dort gibt es diese Dateien:
 
 | Datei | Für wen |
 |---|---|
-| **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart und Pico Loader (mit Rückkehr aus Spielen) |
-| `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
+| **`DsRunner_M3DSReal.zip`** | **M3 DS Real**: fertiges Paket für die SD-Karte, inklusive Autostart, Pico Loader (mit Rückkehr aus Spielen) und den [Emulatoren](#emulatoren-für-andere-konsolen) für GBA, NES, Game Boy und SNES |
+| `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) (mit denselben Emulatoren) |
 | `DsRunnerArt.exe` | PC-Programm für Windows, lädt die [Artworks](#artworks) auf die Karte |
 
 Was sich in welcher Version geändert hat, steht im **[CHANGELOG](CHANGELOG.md)**. Welche Version auf deiner Karte läuft, siehst du unten rechts im Menü „Anzeige“ (Zahnrad oben rechts).
@@ -50,10 +50,11 @@ DsRunner zeigt die Unterordner von `/Games` als Konsolen an:
 SD-Karte
 ├── Games
 │   ├── NDS      ← .nds-Spiele
-│   ├── GBA      ← .gba-Spiele (brauchen GBARunner2, siehe unten)
-│   ├── NES, GB, GBC, SNES, SMS, GG, MD, PCE  ← Spiele anderer Konsolen (brauchen einen Emulator)
+│   ├── GBA      ← .gba-Spiele
+│   ├── NES, GB, GBC, SNES  ← Spiele anderer Konsolen (Emulatoren sind dabei)
+│   ├── SMS, GG, MD, PCE    ← brauchen einen Emulator, den du selbst herunterlädst (siehe unten)
 │   └── Apps     ← Homebrew-Programme (eigene .nds-Programme, keine Spiele)
-├── _dsrunner    ← Artworks, Spielverlauf und Favoriten (legt DsRunner selbst an)
+├── _dsrunner    ← Emulatoren (aus dem Paket), Artworks, Spielverlauf und Favoriten
 ├── _nds
 ├── _pico
 └── ...
@@ -66,17 +67,23 @@ SD-Karte
 
 DS-Spiele startet DsRunner selbst. Für alle anderen Konsolen braucht es einen Emulator (ein DS-Programm). DsRunner findet ihn automatisch, wenn er unter dem richtigen Namen auf der Karte liegt, am besten in **`/_dsrunner/emulators/`** (oder im Hauptverzeichnis). Ohne Emulator bleibt der Ordner der Konsole leer („Keine Spiele“).
 
-| Konsole | Ordner | Dateien | Emulator | Dateiname auf der Karte |
-|---|---|---|---|---|
-| Game Boy Advance | `GBA` | `.gba` | [GBARunner2](https://github.com/Gericom/GBARunner2/releases) | `GBARunner2_arm7dldi_ds.nds`, dazu das GBA-BIOS als `/_gba/bios.bin` |
-| NES / Famicom | `NES` | `.nes`, `.fds` | [nesDS](https://github.com/DS-Homebrew/NesDS/releases) | `nesDS.nds` |
-| Game Boy / Game Boy Color | `GB`, `GBC` | `.gb`, `.gbc`, `.sgb` | [GameYob](https://github.com/Drenn1/GameYob/releases) | `GameYob.nds` |
-| Master System / Game Gear | `SMS`, `GG` | `.sms`, `.gg` | [S8DS](https://github.com/FluBBaOfWard/S8DS/releases) | `S8DS.nds` |
-| Mega Drive | `MD` | `.gen`, `.md`, `.smd` | jEnesisDS (aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases)) | `jEnesisDS.nds` |
-| Super Nintendo | `SNES` | `.sfc`, `.smc` | SNEmulDS (aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases)) | `SNEmulDS-legacy.nds` |
-| PC Engine | `PCE` | `.pce`, `.sgx` | [NitroGrafx](https://github.com/FluBBaOfWard/NitroGrafx/releases) | `NitroGrafx.nds` |
+**Schon im Paket enthalten** (in `/_dsrunner/emulators/`, in `DsRunner_M3DSReal.zip` und `DsRunner.zip`): die Emulatoren für **GBA, NES, Game Boy / Game Boy Color und SNES**. Du musst dafür nichts herunterladen.
 
-- **Einfachster Weg:** Hast du TWiLight Menu++ schon einmal installiert, liegen die meisten Emulatoren bereits unter `/_nds/TWiLightMenu/emulators/`. Dort findet DsRunner sie auch.
+- **GBA-BIOS:** GBARunner2 läuft auch ohne, mit dem originalen BIOS laufen aber mehr Spiele. Das BIOS gehört Nintendo und darf nicht mitgeliefert werden. Wer es hat, legt es selbst als **`/_gba/bios.bin`** auf die Karte.
+- **Master System, Game Gear, Mega Drive, PC Engine:** Diese Emulatoren dürfen wir nicht mitliefern (ihre Autoren nennen keine Lizenz, die das erlaubt). Einmal selbst herunterladen (Links in der Tabelle) und nach `/_dsrunner/emulators/` kopieren.
+- Herkunft, Versionen und Lizenzen der mitgelieferten Emulatoren: `/_dsrunner/emulators/LIZENZEN.txt` im Paket bzw. [licenses/emulators](licenses/emulators/LIZENZEN.txt).
+
+| Konsole | Ordner | Dateien | Emulator | Dateiname auf der Karte | Im Paket |
+|---|---|---|---|---|---|
+| Game Boy Advance | `GBA` | `.gba` | [GBARunner2](https://github.com/Gericom/GBARunner2/releases) | `GBARunner2_arm7dldi_ds.nds`, BIOS optional als `/_gba/bios.bin` | ja (Release v20200812), ohne BIOS |
+| NES / Famicom | `NES` | `.nes`, `.fds` | [nesDS](https://github.com/DS-Homebrew/NesDS/releases) | `nesDS.nds` | ja (2.1) |
+| Game Boy / Game Boy Color | `GB`, `GBC` | `.gb`, `.gbc`, `.sgb` | [GameYob](https://github.com/DS-Homebrew/GameYob) | `GameYob.nds` | ja (aus TWiLight Menu++ v27.25.1) |
+| Master System / Game Gear | `SMS`, `GG` | `.sms`, `.gg` | [S8DS](https://github.com/FluBBaOfWard/S8DS/releases) | `S8DS.nds` (aus der ZIP-Datei) | nein, selbst herunterladen |
+| Mega Drive | `MD` | `.gen`, `.md`, `.smd` | jEnesisDS (aus dem [Virtual-Console-Add-on von TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases), `AddOn-VirtualConsole-DSi-or-Flashcard.7z`) | `jEnesisDS.nds` | nein, selbst herunterladen |
+| Super Nintendo | `SNES` | `.sfc`, `.smc` | SNEmulDS 0.6 | `SNEmulDS-legacy.nds` (dazu `/snemul.cfg`) | ja (aus TWiLight Menu++ v27.25.1) |
+| PC Engine | `PCE` | `.pce`, `.sgx` | [NitroGrafx](https://github.com/FluBBaOfWard/NitroGrafx/releases) | `NitroGrafx.nds` (aus der ZIP-Datei) | nein, selbst herunterladen |
+
+- **TWiLight Menu++ schon installiert?** Dann liegen weitere Emulatoren unter `/_nds/TWiLightMenu/emulators/`. Dort findet DsRunner sie auch. Gibt es einen Emulator an beiden Stellen, nimmt DsRunner den aus `/_dsrunner/emulators/`.
 - Getestet auf dem DS ist bisher nur GBARunner2. Die anderen starten genauso wie in TWiLight Menu++, sind mit DsRunner aber noch nicht ausprobiert. Mega Drive: lädt ein `.md`-Spiel nicht, die Datei in `.gen` umbenennen.
 - Andere Dateinamen, eigene Konsolen und alle Details: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).
 
@@ -85,6 +92,8 @@ DS-Spiele startet DsRunner selbst. Für alle anderen Konsolen braucht es einen E
 Nur eine Datei ersetzen: `DsRunner.nds` aus dem neuen Download in **`/_nds/TWiLightMenu/main.srldr`** umbenennen und die alte Datei damit überschreiben (optional zusätzlich als `/BOOT.NDS`). Spiele, Spielstände und Einstellungen bleiben erhalten.
 
 Steht im [CHANGELOG](CHANGELOG.md) „Pico Loader geändert“, zusätzlich aus `DsRunner_M3DSReal.zip` die Dateien `picoLoader7.bin`, `picoLoader9.bin`, `aplist.bin`, `patchlist.bin` und `savelist.bin` nach `/_pico` kopieren.
+
+Die Emulatoren kommen mit dem kompletten Paket. Fehlen sie auf deiner Karte noch (Installation mit Version 0.2.0 oder älter), einmal den Ordner `_dsrunner/emulators` und die Datei `snemul.cfg` aus dem Paket kopieren. Deine Artworks, Favoriten und der Spielverlauf in `/_dsrunner` bleiben dabei erhalten.
 
 ### Zurück zu YSMenu
 
@@ -137,7 +146,7 @@ Alle Einstellungen und Dateiformate stehen in **[docs/CONFIG.md](docs/CONFIG.md)
 
 DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 DS Real.
 
-1. `DsRunner.zip` entpacken und den Inhalt (`DsRunner.nds`, `_pico`) ins Hauptverzeichnis der SD-Karte kopieren.
+1. `DsRunner.zip` entpacken und den Inhalt (`DsRunner.nds`, `_pico`, `_dsrunner` mit den Emulatoren, `snemul.cfg`) ins Hauptverzeichnis der SD-Karte kopieren.
 2. Bei [Pico Loader](https://github.com/LNH-team/pico-loader/releases) die Dateien für deine Flashkarte herunterladen und `aplist.bin`, `savelist.bin`, `patchlist.bin`, `picoLoader7.bin` und `picoLoader9.bin` nach `/_pico` kopieren.
 3. `DsRunner.nds` aus dem Menü deiner Flashkarte starten. Ein Autostart ist für andere Karten nicht vorbereitet.
 
@@ -165,6 +174,6 @@ Details, Test im Emulator und Pico-Updates: **[docs/DEVELOPMENT.md](docs/DEVELOP
 
 DsRunner ist ein Fork von **[Pico Launcher](https://github.com/LNH-team/pico-launcher)** und nutzt **[Pico Loader](https://github.com/LNH-team/pico-loader)**, beide vom [LNH team](https://github.com/LNH-team): [@Gericom](https://github.com/Gericom), [@XLuma](https://github.com/XLuma), [@Dartz150](https://github.com/Dartz150), [@lifehackerhansol](https://github.com/lifehackerhansol). Die Rückkehr aus Spielen und der DLDI-Cache im Pico Loader stammen von [@danyocom](https://github.com/danyocom/pico-loader) (Branches `igr-hooks`, `dldi-cache`). Die Autostart-Dateien für die M3 DS Real stammen aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu). Icons von [icons8](https://icons8.com/).
 
-Lizenz: Zlib, siehe `LICENSE.txt`. Weitere Lizenzen im Ordner `licenses`.
+Lizenz: Zlib, siehe `LICENSE.txt`. Weitere Lizenzen im Ordner `licenses`, die der mitgelieferten Emulatoren in `licenses/emulators`.
 
 Die englische Dokumentation von Pico Launcher (Themes, Cheats, eigene Icons) liegt weiterhin unter [docs/](docs/Usage.md). Sie gilt größtenteils auch für DsRunner.

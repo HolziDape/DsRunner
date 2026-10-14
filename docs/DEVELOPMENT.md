@@ -19,7 +19,8 @@ Das SD-Paket (`tools/make-sd-package.sh`) enthält:
 | `BOOT.NDS` | DsRunner, zum manuellen Starten aus anderen Menüs |
 | `_pico/` | Themes aus diesem Repo + Pico Loader `M3DS`: standardmäßig der eigene Build aus `loader/out/` (mit Rückkehr aus Spielen, Infodatei `_pico/picoLoader-DsRunner.txt`), mit `DSRUNNER_LOADER=upstream` das unveränderte Release (Version und SHA-256 im Skript) |
 | `SYSTEM/g6dsload.*`, `boot.*`, `loader.eng`, `_system_/_sys_data/r4i.sys`, `SRESET.dat` | Autostart-Dateien der M3 DS Real aus dem TWiLight-Menu++-Release (Version und SHA-256 im Skript festgelegt) |
-| `LIESMICH.txt` | kurze Anleitung (Installation, Update, Zurück zu YSMenu) mit der Version |
+| `_dsrunner/emulators/`, `snemul.cfg` | `tools/fetch-emulators.sh`: GBARunner2 (Release des Autors), nesDS, GameYob, SNEmulDS-legacy und `snemul.cfg` (Virtual-Console-Add-on von TWiLight Menu++), Versionen und SHA-256 im Skript; dazu `LIZENZEN.txt` und Lizenztexte aus `licenses/emulators/`. Kein GBA-BIOS. Dasselbe kommt auch in `DsRunner.zip` |
+| `LIESMICH.txt` | kurze Anleitung (Installation, Emulatoren, Update, Zurück zu YSMenu) mit der Version |
 
 Autostart-Kette der M3 DS Real: Firmware → `SYSTEM/g6dsload.eng` → `_system_/_sys_data/r4i.sys` (Startprogramm von TWiLight mit M3-DLDI-Treiber) → `/_nds/TWiLightMenu/main.srldr`. Der Pfad ist im TWiLight-Startprogramm fest eingebaut. Später können wir ein eigenes Startprogramm bauen, das direkt `/DsRunner.nds` lädt.
 
