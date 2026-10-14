@@ -12,6 +12,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
   "libraryPath": "/Games",
   "showClock": true,
   "inGameReset": true,
+  "inGameResetKeys": "L+R+DOWN+B",
   "fileAssociations": {
     "gba": { "appPath": "/GBARunner2_arm7dldi_ds.nds" }
   }
@@ -27,6 +28,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | `lastUsedFilePath` | Zuletzt gestartetes Spiel, wird automatisch gesetzt. |
 | `showClock` | `true` (Standard): Uhrzeit oben rechts in der Statusleiste. `false`: nur die Akkuanzeige. Umschalten im Menü (Zahnrad → Uhr). Gilt nur im DsRunner-Theme. |
 | `inGameReset` | `true` (Standard): im Spiel L+R+Unten+B 2 s halten führt zurück zu DsRunner (nur mit dem Pico Loader aus dem M3-Paket, siehe [LOADER.md](LOADER.md)). `false`: DsRunner legt vor jedem Spielstart `/_pico/igr.off` an, Pico Loader baut den Hotkey dann nicht ein. |
+| `inGameResetKeys` | Tasten für „zurück zu DsRunner“, Standard `"L+R+DOWN+B"`. Mit `+`, Komma oder Leerzeichen getrennt, Groß-/Kleinschreibung egal: `A`, `B`, `SELECT`, `START`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `L`, `R` (auch `OBEN`, `UNTEN`, `LINKS`, `RECHTS`). Mindestens 3 Tasten, **X und Y gehen nicht**. Ungültig → Standard (steht im Log von DsRunner). Gut ohne L/R, z. B. bei ausgeleierten Schultertasten: `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`. Nicht `L+R+START+SELECT`, das ist in vielen Spielen der eigene Soft-Reset. Weicht die Angabe vom Standard ab, schreibt DsRunner vor jedem Spielstart `/_pico/igr.keys` (sonst wird die Datei gelöscht); welche Tasten Pico Loader benutzt hat, steht in `/_pico/igr-log.txt`. |
 | `language` | Stammt von Pico Launcher und wird nicht ausgewertet. Die Oberfläche von DsRunner ist immer deutsch (siehe [Sprache](#sprache)). |
 | `fileAssociations` | Programm, das Dateien mit einer Endung öffnet (z.B. `gba`, `nes`). Der Dateipfad wird per argv übergeben. Hat Vorrang vor `systems.json` und den Emulatoren, die DsRunner selbst findet (siehe [Emulatoren](#emulatoren)). |
 
