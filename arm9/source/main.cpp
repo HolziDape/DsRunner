@@ -29,6 +29,7 @@
 #include "gui/font/nitroFont2.h"
 #include "picoLoaderBootstrap.h"
 #include "rtcIpc.h"
+#include "romBrowser/Theme/dsrunner/DsRunnerInGameReset.h"
 
 ProcessManager gProcessManager;
 ILogger* gLogger;
@@ -167,11 +168,6 @@ int main(int argc, char* argv[])
 
     rtc_init();
 
-    if (argc >= 1)
-    {
-        pload_setLauncherPath(argv[0]);
-    }
-
     memset(&gFatFs, 0, sizeof(gFatFs));
     if (dldi_init())
     {
@@ -207,6 +203,17 @@ int main(int argc, char* argv[])
     else if (Environment::SupportsJtagSemihosting())
     {
         mountSemihosting();
+    }
+
+    // DsRunner: the path Pico Loader returns to (homebrew exit and in-game reset), with a
+    // fallback when argv[0] is missing; needs the mounted card, so after the mounts above
+    if (auto launcherPath = DsRunnerInGameReset::ChooseLauncherPath(argc, argv))
+    {
+        pload_setLauncherPath(launcherPath);
+    }
+    if (DsRunnerInGameReset::IsInGameResetBoot(argc, argv))
+    {
+        LOG_DEBUG("Started by an in-game reset\n");
     }
 
     initRandomGenerator();
