@@ -54,8 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--mute", action="store_true", help="Ton der Seite stummschalten")
     ap.add_argument("--broadcast", action="store_true",
                     help="Bilder als Broadcast senden (hilft, wenn der DS im WLAN ist, aber kaum Bilder ankommen)")
-    ap.add_argument("--packet-size", type=int, default=1400,
-                    help="groesste UDP-Paketgroesse in Bytes (Standard 1400; bei Empfangsproblemen 1000 oder 600 probieren)")
+    ap.add_argument("--packet-size", type=int, default=P.MAX_CHUNK,
+                    help="groesste UDP-Paketgroesse in Bytes (Standard 1200, hoechstens 1272: der DS nimmt nur "
+                         "IP-Pakete bis 1300 Byte an; bei Empfangsproblemen 1000 oder 600 probieren)")
     ap.add_argument("--allow-popups", action="store_true",
                     help="neue Fenster/Pop-ups streamen statt sie zu schliessen (Standard: schliessen)")
     ap.add_argument("--chromium-arg", action="append", default=[], help="zusaetzliches Chromium-Argument")

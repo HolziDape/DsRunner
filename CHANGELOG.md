@@ -17,6 +17,7 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 - Fehlt beim Start der eigene Pfad, merkt sich DsRunner als Rückkehrziel jetzt auch `/_picoboot.nds` (so startet die DSpico DsRunner).
 
 ### Behoben
+- DsRunner Stream: Auf dem DS kamen keine Bilder an, weil die Bildpakete größer waren, als der DS annimmt (1300 Byte). Die Pakete sind jetzt standardmäßig 1200 Byte groß, einstellbar mit `--packet-size`. Auf dem DS Lite getestet: etwa 18 Bilder pro Sekunde.
 - DsRunner Stream: Die WLAN-Liste auf dem DS springt beim Neu-Sortieren nicht mehr auf ein anderes Netz, und „DsRunner-Stream“ wird automatisch gewählt, sobald es auftaucht. Der Pi beantwortet die Suche des DS zusätzlich per Broadcast; neue Option `--broadcast` sendet auch die Bilder so, für WLAN-Chips, deren Datenrate der DS Lite nicht versteht.
 - DsRunner Stream: Bekommt der DS im Netz „DsRunner-Stream“ keine Adresse per DHCP (Anzeige „hole IP-Adresse (DHCP)“, dann „Zeitueberschreitung“), nimmt die App nach 8 Sekunden die feste Adresse 192.168.4.5. Neue Einstellung `ip=` in `stream.ini`.
 - DsRunner Stream: Wird die Seite geschlossen oder stürzt sie ab (z. B. durch ein Werbe-Pop-up), öffnet der Host sie von selbst neu. Pop-ups werden automatisch geschlossen (`--allow-popups` streamt sie stattdessen).

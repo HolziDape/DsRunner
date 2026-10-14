@@ -125,7 +125,7 @@ class StreamServer(asyncio.DatagramProtocol):
         # device understands, which helps when the access point picks a rate the DS can't
         # receive (the DS Lite only knows 1 and 2 Mbit/s). No retries, so a bit more loss.
         self.broadcast = broadcast
-        self.chunk = max(200, min(P.MAX_CHUNK, packet_size)) - P.PKT_HDR.size
+        self.chunk = max(200, min(P.MAX_CHUNK_LIMIT, packet_size)) - P.PKT_HDR.size
         self.session: Session | None = None
         self.transport = None
         self.events: asyncio.Queue = asyncio.Queue()
