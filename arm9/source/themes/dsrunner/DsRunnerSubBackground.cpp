@@ -44,7 +44,8 @@ void DsRunnerSubBackground::Update()
 {
     if (_heroState->ConsumeArtDirty())
     {
-        _art->Request(_heroState->GetArtPath(), _heroState->GetIoTaskQueue());
+        _art->Request(_heroState->GetArtPath(), _heroState->GetArtFallbackPath(), _heroState->GetArtTint(),
+            _heroState->GetIoTaskQueue());
     }
     _art->Update();
 }

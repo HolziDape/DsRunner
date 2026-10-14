@@ -8,6 +8,10 @@
 #include "gui/font/nitroFont2.h"
 #include "core/StringUtil.h"
 #include "gui/palette/GradientPalette.h"
+#include "gui/palette/DirectPalette.h"
+#include "fat/File.h"
+#include "romBrowser/FileType/BmpHeader.h"
+#include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "themes/IFontRepository.h"
 #include "themes/dsrunner/DsRunnerConsoles.h"
 #include "themes/dsrunner/DsRunnerColorScheme.h"
@@ -65,6 +69,11 @@ DsRunnerFolderIcon::DsRunnerFolderIcon(const TCHAR* name, const IFontRepository*
         _badgeColor = console->tile;
     }
     SetLabel(label);
+    if (!gDsRunnerConsoleArt.IsAvailable() ||
+        !gDsRunnerConsoleArt.GetImagePath(name, DsRunnerConsoleArt::ImageType::Icon, _iconPath, sizeof(_iconPath)))
+    {
+        _iconPath[0] = 0;
+    }
 }
 
 DsRunnerFolderIcon::DsRunnerFolderIcon(const char* label, const Rgb<8, 8, 8>& color, const IFontRepository* fontRepository)
@@ -79,10 +88,47 @@ void DsRunnerFolderIcon::SetLabel(const char* label)
     StringUtil::Copy(_label, label, 5);
 }
 
+bool DsRunnerFolderIcon::UploadConsoleIcon()
+{
+    auto file = std::make_unique<File>();
+    if (file->Open(_iconPath, FA_READ | FA_OPEN_EXISTING) != FR_OK)
+        return false;
+
+    // 32x32, 4 bpp, 16 colors (like Pico's icons), the colors are tinted in the console color
+    alignas(4) u8 header[118];
+    if (!file->ReadExact(header, sizeof(header)) || !BmpHeader::Validate(header, 32, 32, 4))
+        return false;
+    u32 dataOffset = header[0xA] | (header[0xB] << 8) | (header[0xC] << 16) | (header[0xD] << 24);
+    alignas(4) u8 pixels[32 * 32 / 2];
+    if (dataOffset < sizeof(header) || file->Seek(dataOffset) != FR_OK || !file->ReadExact(pixels, sizeof(pixels)))
+        return false;
+    DsRunnerConsoleArt::ConvertPalette(&header[0x36], 16, &_badgeColor, _iconPalette);
+
+    // BMP rows (high nibble first) -> 8x8 tiles (low nibble first), written to vram 32 bits at a time
+    bool topDown = BmpHeader::IsTopDown(header);
+    vu32* vram = (vu32*)_vramAddress;
+    for (int y = 0; y < 32; y++)
+    {
+        const u32* row = (const u32*)&pixels[(topDown ? y : 31 - y) * 16];
+        for (int tileX = 0; tileX < 4; tileX++)
+        {
+            u32 value = row[tileX];
+            vram[((y >> 3) * 4 + tileX) * 8 + (y & 7)] = ((value >> 4) & 0x0F0F0F0F) | ((value & 0x0F0F0F0F) << 4);
+        }
+    }
+    return true;
+}
+
 void DsRunnerFolderIcon::UploadGraphics()
 {
     if (_vramAddress == nullptr)
     {
+        return;
+    }
+
+    if (_iconPath[0] != 0 && UploadConsoleIcon())
+    {
+        _hasConsoleIcon = true;
         return;
     }
 
@@ -113,6 +159,19 @@ void DsRunnerFolderIcon::UploadGraphics()
 
 void DsRunnerFolderIcon::Draw(GraphicsContext& graphicsContext, const Rgb<8, 8, 8>& backgroundColor)
 {
+    if (_hasConsoleIcon)
+    {
+        if (!graphicsContext.IsVisible(Rectangle(_position, 32, 32)))
+            return;
+        u32 paletteRow = graphicsContext.GetPaletteManager().AllocRow(
+            DirectPalette(_iconPalette), _position.y, _position.y + 32);
+        OamBuilder::OamWithSize<32, 32>(_position.x, _position.y, _vramOffset >> 7)
+            .WithPalette16(paletteRow)
+            .WithPriority(graphicsContext.GetPriority())
+            .Build(graphicsContext.GetOamManager().AllocOams(1)[0]);
+        return;
+    }
+
     auto oams = graphicsContext.GetOamManager().AllocOams(2);
 
     u32 badgePaletteRow = graphicsContext.GetPaletteManager().AllocRow(
