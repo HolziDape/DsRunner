@@ -6,6 +6,8 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 
 ## Unveröffentlicht
 
+## [0.2.0](https://github.com/HolziDape/DsRunner/releases/tag/v0.2.0) - 2026-10-14
+
 ### Hinzugefügt
 - **Jede Ansicht mit eigenem Bildstil:** 3×2 zeigt vereinfachte Kachel-Bilder, 4×3 klare kleine Icons in Originalgröße, Coverflow die echten Cover. DsRunner Art legt dafür zusätzlich Cover (`/_pico/covers/user`) und Icons (`/_pico/icons/user`) an; abschaltbar mit „Cover“ und „Icons“ bzw. `--no-covers` und `--no-icons`.
 - **Weitere Konsolen:** DsRunner findet die Emulatoren nesDS (NES), GameYob oder lameboy (GB/GBC), S8DS (Master System, Game Gear), jEnesisDS (Mega Drive), SNEmulDS (SNES) und NitroGrafx (PC Engine) selbst, wie bisher GBARunner2. Anleitung: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).

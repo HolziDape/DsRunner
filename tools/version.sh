@@ -8,6 +8,9 @@
 #   tools/version.sh check [vX.Y.Z] check that VERSION, DsRunner Art and CHANGELOG.md agree,
 #                                   and with a tag also that the tag is vX.Y.Z (release workflow)
 #   tools/version.sh notes [X.Y.Z]  print the CHANGELOG.md section of the version (release notes)
+#   tools/version.sh release <tag>  release workflow: the tag (vX.Y.Z or VX.Y.Z) decides the version.
+#                                   Whatever doesn't match yet is set like "set" does (only in the
+#                                   checkout of the workflow), with a warning instead of an error
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,6 +27,14 @@ fail() {
 		echo "Fehler: $1" >&2
 	fi
 	exit 1
+}
+
+warn() {
+	if [ "$GITHUB_ACTIONS" = "true" ]; then
+		echo "::warning::$1"
+	else
+		echo "Warnung: $1" >&2
+	fi
 }
 
 read_version() {
@@ -65,15 +76,10 @@ section() {
 	' "$CHANGELOG"
 }
 
-cmd="${1:-}"
-case "$cmd" in
-"")
-	read_version
-	echo
-	;;
-set)
-	new="$2"
-	is_version "$new" || fail "Version im Format X.Y.Z angeben, ohne v (z. B. 0.2.0)"
+# set_version <X.Y.Z>: VERSION, DsRunner Art and, when there is no section for the version yet,
+# "Unveröffentlicht" becomes its section (a new empty one goes on top)
+set_version() {
+	new="$1"
 	printf '%s\n' "$new" > "$VERSION_FILE"
 	sed -i "s/^__version__ = \".*\"$/__version__ = \"$new\"/" "$ART_INIT"
 	if has_section "$new"; then
@@ -87,9 +93,22 @@ set)
 		' "$CHANGELOG" > "$tmp"
 		mv "$tmp" "$CHANGELOG"
 		echo "CHANGELOG.md: \"Unveröffentlicht\" ist jetzt $new, bitte die Einträge prüfen."
-	else
+	fi
+}
+
+cmd="${1:-}"
+case "$cmd" in
+"")
+	read_version
+	echo
+	;;
+set)
+	new="$2"
+	is_version "$new" || fail "Version im Format X.Y.Z angeben, ohne v (z. B. 0.2.0)"
+	if ! has_section "$new" && ! grep -Fxq "$UNRELEASED" "$CHANGELOG"; then
 		fail "CHANGELOG.md hat weder \"$UNRELEASED\" noch einen Abschnitt für $new"
 	fi
+	set_version "$new"
 	echo "Version $new gesetzt (VERSION, DsRunner Art)."
 	;;
 check)
@@ -103,13 +122,30 @@ check)
 	fi
 	echo "Version $version: VERSION, DsRunner Art und CHANGELOG.md passen${2:+ zum Tag $2}."
 	;;
+release)
+	tag="$2"
+	version="${tag#[vV]}"
+	is_version "$version" || fail "Der Tag \"$tag\" ist keine Version. Er muss vX.Y.Z heißen (z. B. v0.2.0)."
+	current="$(read_version)"
+	[ "$current" = "$version" ] || warn "VERSION enthält $current, der Tag $tag: gebaut wird $version. Nach dem Release tools/version.sh set $version ausführen und committen."
+	[ "$(art_version)" = "$version" ] || warn "DsRunner Art hat Version $(art_version), gebaut wird $version."
+	if ! has_section "$version"; then
+		if grep -Fxq "$UNRELEASED" "$CHANGELOG"; then
+			warn "CHANGELOG.md hat keinen Abschnitt [$version], die Release-Notizen kommen aus \"Unveröffentlicht\"."
+		else
+			warn "CHANGELOG.md hat weder einen Abschnitt [$version] noch \"Unveröffentlicht\", das Release bekommt keine Notizen aus dem Changelog."
+		fi
+	fi
+	set_version "$version"
+	echo "Release $version (Tag $tag)."
+	;;
 notes)
 	version="${2:-$(read_version)}"
 	has_section "$version" || fail "CHANGELOG.md hat keinen Abschnitt \"## [$version]\""
 	notes "$version"
 	;;
 *)
-	echo "Aufruf: tools/version.sh [set X.Y.Z | check [vX.Y.Z] | notes [X.Y.Z]]" >&2
+	echo "Aufruf: tools/version.sh [set X.Y.Z | check [vX.Y.Z] | notes [X.Y.Z] | release <tag>]" >&2
 	exit 2
 	;;
 esac

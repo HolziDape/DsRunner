@@ -1,7 +1,8 @@
 name: Build DsRunner release
 
 # Runs when a release is published on GitHub (tag vX.Y.Z, see docs/RELEASE.md).
-# The tag must match the VERSION file, otherwise nothing is built.
+# The tag decides the version. When VERSION, DsRunner Art or CHANGELOG.md don't match it yet,
+# every job sets them in its checkout (tools/version.sh release) and the run shows a warning.
 
 on:
   release:
@@ -16,12 +17,12 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-      - name: Tag, VERSION, DsRunner Art and CHANGELOG.md must match
+      - name: Version from the tag
         id: check
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          sh tools/version.sh check "$TAG"
+          sh tools/version.sh release "$TAG"
           echo "version=$(sh tools/version.sh)" >> "$GITHUB_OUTPUT"
 
   release_notes:
@@ -36,6 +37,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+      - name: Version from the tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: sh tools/version.sh release "$TAG" > /dev/null
       - name: Put the changelog section on top of the release description
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,7 +57,7 @@ jobs:
           # without leading blank lines
           existing="${existing#"${existing%%[![:space:]]*}"}"
           {
-            sh tools/version.sh notes "$VERSION"
+            sh tools/version.sh notes "$VERSION" || true
             echo
             echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). **Update:** nur `_nds/TWiLightMenu/main.srldr` ersetzen. Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
             echo
@@ -84,6 +89,10 @@ jobs:
       - name: Install zip
         run:
           apt-get update && apt-get -y install zip unzip curl p7zip-full
+      - name: Version from the tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: sh tools/version.sh release "$TAG" > /dev/null
       - name: Run build script
         run: |
           make
@@ -122,6 +131,12 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+      - name: Version from the tag
+        working-directory: .
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: sh tools/version.sh release "$TAG" > /dev/null
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
