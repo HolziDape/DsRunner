@@ -72,7 +72,7 @@ class Browser:
     def __init__(self, url: str, viewport: tuple[int, int], out_size: tuple[int, int], *,
                  headless: bool = True, gpu: bool = False, executable: str = "auto",
                  capture: str = "screencast", max_fps: float = 30.0, mute: bool = False,
-                 extra_args: list[str] | None = None):
+                 extra_args: list[str] | None = None, allow_popups: bool = False):
         self.url = resolve_url(url)
         self.viewport = viewport
         self.out_size = out_size
@@ -88,11 +88,19 @@ class Browser:
         self._latest_rgb: np.ndarray | None = None
         self._rgb_seq = -1
         self.captured = 0
-        self._pw = self._browser = self.page = self.cdp = None
+        self._pw = self._browser = self._ctx = self.page = self.cdp = None
         self._shot_task = None
+        self.allow_popups = allow_popups
+        self._closing = False
+        self._opening = False
+        self._reopen_task = None
 
     async def start(self) -> None:
         from playwright.async_api import async_playwright
+        self._pw = await async_playwright().start()
+        await self._launch()
+
+    async def _launch(self) -> None:
         args = list(BASE_ARGS)
         if self.gpu:
             args += GPU_ARGS
@@ -101,24 +109,92 @@ class Browser:
         if self.mute:
             args.append("--mute-audio")
         args += self.extra_args
-        self._pw = await async_playwright().start()
         log.info("Chromium: %s, %s, args %s", self.executable or "Playwright",
                  "headless" if self.headless else "mit Fenster", " ".join(args))
         self._browser = await self._pw.chromium.launch(
             headless=self.headless, executable_path=self.executable, args=args)
-        ctx = await self._browser.new_context(
+        self._browser.on("disconnected", lambda _b: self._schedule_reopen("Chromium wurde beendet", relaunch=True))
+        self._ctx = await self._browser.new_context(
             viewport={"width": self.viewport[0], "height": self.viewport[1]}, device_scale_factor=1)
-        self.page = await ctx.new_page()
+        self._ctx.on("page", self._on_new_page)
+        await self._open_page()
+
+    async def _open_page(self) -> None:
+        """Opens the game page and starts capturing it (again after a close or crash)."""
+        self._opening = True     # the "page" event of the context also fires for this page
+        try:
+            page = await self._ctx.new_page()
+        finally:
+            self._opening = False
+        self.page = page
+        page.on("close", lambda _p: self._page_closed(page))
+        page.on("crash", lambda _p: self._schedule_reopen("Seite abgestuerzt", crashed=True))
         log.info("Lade %s", self.url)
-        await self.page.goto(self.url, wait_until="load", timeout=60000)
-        self.cdp = await ctx.new_cdp_session(self.page)
+        try:
+            await page.goto(self.url, wait_until="load", timeout=60000)
+        except Exception as e:  # slow pages: keep streaming what is there
+            log.warning("Seite nicht vollstaendig geladen: %s", e)
+        self.cdp = await self._ctx.new_cdp_session(page)
         if self.capture == "screencast":
             self.cdp.on("Page.screencastFrame", self._on_frame)
             await self.cdp.send("Page.startScreencast", {
                 "format": "png", "maxWidth": self.out_size[0], "maxHeight": self.out_size[1],
                 "everyNthFrame": 1})
-        else:
+        elif self._shot_task is None:
             self._shot_task = asyncio.create_task(self._screenshot_loop())
+
+    def _on_new_page(self, page) -> None:
+        """Pop-ups and new tabs (often ads) would take the focus from the game: closed,
+        or with --allow-popups streamed instead of the game page."""
+        if self._opening or page is self.page:
+            return
+        if self.allow_popups:
+            log.info("Neues Fenster geoeffnet, streame jetzt dieses: %s", page.url)
+            asyncio.ensure_future(self._follow(page))
+        else:
+            log.info("Pop-up geschlossen: %s", page.url or "(leer)")
+            asyncio.ensure_future(page.close())
+
+    async def _follow(self, page) -> None:
+        old = self.page
+        self.page = page
+        page.on("close", lambda _p: self._page_closed(page))
+        self.cdp = await self._ctx.new_cdp_session(page)
+        if self.capture == "screencast":
+            self.cdp.on("Page.screencastFrame", self._on_frame)
+            await self.cdp.send("Page.startScreencast", {
+                "format": "png", "maxWidth": self.out_size[0], "maxHeight": self.out_size[1],
+                "everyNthFrame": 1})
+        del old
+
+    def _page_closed(self, page) -> None:
+        if page is self.page:
+            self._schedule_reopen("Seite wurde geschlossen")
+
+    def _schedule_reopen(self, reason: str, relaunch: bool = False, crashed: bool = False) -> None:
+        if self._closing or (self._reopen_task and not self._reopen_task.done()):
+            return
+        log.warning("%s, oeffne sie neu", reason)
+        self._reopen_task = asyncio.ensure_future(self._reopen(relaunch, crashed))
+
+    async def _reopen(self, relaunch: bool, crashed: bool = False) -> None:
+        await asyncio.sleep(1.0)
+        for attempt in range(5):
+            try:
+                if relaunch or not self._browser or not self._browser.is_connected():
+                    await self._launch()
+                else:
+                    old = self.page
+                    if crashed and old and not old.is_closed():
+                        self.page = None          # its close event must not start another reopen
+                        await old.close()
+                    await self._open_page()
+                return
+            except Exception as e:
+                log.warning("Neu oeffnen fehlgeschlagen (%d/5): %s", attempt + 1, e)
+                relaunch = True
+                await asyncio.sleep(3.0)
+        log.error("Seite liess sich nicht wieder oeffnen")
 
     def _on_frame(self, params: dict) -> None:
         self._latest = base64.b64decode(params["data"])
@@ -160,6 +236,8 @@ class Browser:
         return self._latest_rgb
 
     async def inject(self, ev: Event) -> None:
+        if self.page is None or self.page.is_closed():
+            return  # being reopened
         kb, mouse = self.page.keyboard, self.page.mouse
         try:
             if ev.kind == "keydown":
@@ -177,6 +255,7 @@ class Browser:
             log.warning("Eingabe %s %s fehlgeschlagen: %s", ev.kind, ev.key, e)
 
     async def close(self) -> None:
+        self._closing = True
         try:
             if self._shot_task:
                 self._shot_task.cancel()

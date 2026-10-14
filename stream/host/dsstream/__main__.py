@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--capture", default="screencast", choices=["screencast", "screenshot"],
                     help="Aufnahme per CDP-Screencast (Standard) oder einzelnen Screenshots")
     ap.add_argument("--mute", action="store_true", help="Ton der Seite stummschalten")
+    ap.add_argument("--allow-popups", action="store_true",
+                    help="neue Fenster/Pop-ups streamen statt sie zu schliessen (Standard: schliessen)")
     ap.add_argument("--chromium-arg", action="append", default=[], help="zusaetzliches Chromium-Argument")
     ap.add_argument("--stats", type=float, default=5.0, help="Statistik alle N Sekunden ausgeben")
     ap.add_argument("-v", "--verbose", action="store_true")
@@ -65,7 +67,8 @@ async def amain(args) -> None:
     out_size = P.MODE_SIZE[mode]
     browser = Browser(args.url, viewport, out_size, headless=not args.headful, gpu=args.gpu,
                       executable=args.browser, capture=args.capture, max_fps=args.fps,
-                      mute=args.mute, extra_args=args.chromium_arg)
+                      mute=args.mute, extra_args=args.chromium_arg,
+                      allow_popups=args.allow_popups)
     await browser.start()
     logging.getLogger("dsstream").info("Modus %s, Seite %dx%d, Belegung \"%s\"", args.mode,
                                        viewport[0], viewport[1], mapping.name)
