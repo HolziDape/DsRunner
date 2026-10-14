@@ -2,7 +2,7 @@
 # Assembles a ready-to-copy SD card package for the M3 DS Real:
 #   _nds/TWiLightMenu/main.srldr
 #                        DsRunner; this is the file the autoboot chain starts
-#   _pico/               themes + Pico Loader for the M3DS platform
+#   _pico/               themes + Pico Loader for the M3DS platform (see DSRUNNER_LOADER below)
 #   SYSTEM/, boot.*, loader.eng, _system_/_sys_data/r4i.sys, SRESET.dat
 #                        M3 DS Real autoboot files from the TWiLight Menu++ release:
 #                        firmware -> SYSTEM/g6dsload.eng -> r4i.sys (TWiLight booter with
@@ -11,6 +11,11 @@
 #   LIESMICH.txt         short German installation and update guide with the version
 #                        (from VERSION, marked as development state unless DSRUNNER_RELEASE=1)
 # Usage: tools/make-sd-package.sh [output dir]   (run after make, needs curl, unzip, 7z)
+# Pico Loader, chosen with DSRUNNER_LOADER:
+#   custom   (default) the DsRunner build from loader/ with "zurueck zu DsRunner" from games
+#            (L+R+Down+B). Taken from DSRUNNER_LOADER_DIR (default loader/out); loader/build.sh
+#            runs first when the files are missing or were built from other sources.
+#   upstream the unmodified Pico Loader release below, without returning from games
 set -e
 
 PICO_LOADER_VERSION="v1.7.1"
@@ -52,6 +57,12 @@ download() {
 
 OUT="${1:-sd-package}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DSRUNNER_LOADER="${DSRUNNER_LOADER:-custom}"
+DSRUNNER_LOADER_DIR="${DSRUNNER_LOADER_DIR:-$ROOT/loader/out}"
+case "$DSRUNNER_LOADER" in
+	custom|upstream) ;;
+	*) echo "DSRUNNER_LOADER must be custom or upstream (is: $DSRUNNER_LOADER)"; exit 1 ;;
+esac
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -64,15 +75,38 @@ cp "$ROOT/DsRunner.nds" "$OUT/$BOOT_TARGET"
 cp "$ROOT/DsRunner.nds" "$OUT/BOOT.NDS"
 cp -r "$ROOT/_pico/." "$OUT/_pico/"
 
-echo "Pico Loader $PICO_LOADER_VERSION ($PICO_PLATFORM)"
-download "https://github.com/LNH-team/pico-loader/releases/download/$PICO_LOADER_VERSION/Pico_Loader_$PICO_PLATFORM.zip" "$TMP/loader.zip"
-verify_sha256 "$TMP/loader.zip" "$SHA256_LOADER_ZIP"
-# extract only the known file names into a scratch dir, then copy them over
-mkdir "$TMP/loader"
-for f in $LOADER_FILES; do
-	unzip -q -j "$TMP/loader.zip" "$f" -d "$TMP/loader"
-	cp "$TMP/loader/$f" "$OUT/_pico/$f"
-done
+if [ "$DSRUNNER_LOADER" = "custom" ]; then
+	# rebuild when a file is missing or the build is from other sources (upstream commit, patches)
+	LOADER_ID="$(sh "$ROOT/loader/build.sh" --id)"
+	BUILT_ID="$(sed -n 's/^id: //p' "$DSRUNNER_LOADER_DIR/BUILDINFO.txt" 2>/dev/null || true)"
+	for f in $LOADER_FILES; do
+		[ -f "$DSRUNNER_LOADER_DIR/$f" ] || BUILT_ID=""
+	done
+	if [ "$BUILT_ID" != "$LOADER_ID" ]; then
+		echo "Building Pico Loader for DsRunner (loader/build.sh)"
+		if ! PICO_PLATFORM="$PICO_PLATFORM" sh "$ROOT/loader/build.sh" "$DSRUNNER_LOADER_DIR"; then
+			echo "Pico Loader build failed. DSRUNNER_LOADER=upstream packs the unmodified release instead"
+			echo "(then there is no way back to DsRunner from games)."
+			exit 1
+		fi
+	fi
+	echo "Pico Loader for DsRunner ($PICO_PLATFORM, $LOADER_ID)"
+	for f in $LOADER_FILES; do
+		cp "$DSRUNNER_LOADER_DIR/$f" "$OUT/_pico/$f"
+	done
+	# which loader build is on the card, for bug reports
+	cp "$DSRUNNER_LOADER_DIR/BUILDINFO.txt" "$OUT/_pico/picoLoader-DsRunner.txt"
+else
+	echo "Pico Loader $PICO_LOADER_VERSION ($PICO_PLATFORM, unmodified release)"
+	download "https://github.com/LNH-team/pico-loader/releases/download/$PICO_LOADER_VERSION/Pico_Loader_$PICO_PLATFORM.zip" "$TMP/loader.zip"
+	verify_sha256 "$TMP/loader.zip" "$SHA256_LOADER_ZIP"
+	# extract only the known file names into a scratch dir, then copy them over
+	mkdir "$TMP/loader"
+	for f in $LOADER_FILES; do
+		unzip -q -j "$TMP/loader.zip" "$f" -d "$TMP/loader"
+		cp "$TMP/loader/$f" "$OUT/_pico/$f"
+	done
+fi
 
 echo "Autoboot files (TWiLight Menu++ $TWILIGHT_VERSION)"
 download "https://github.com/DS-Homebrew/TWiLightMenu/releases/download/$TWILIGHT_VERSION/TWiLightMenu-Flashcard.7z" "$TMP/twilight.7z"
@@ -108,7 +142,24 @@ Nur die Datei _nds\TWiLightMenu\main.srldr aus dem neuen Paket auf die Karte
 kopieren und die alte ersetzen (optional auch BOOT.NDS). Spiele, Spielstaende und
 Einstellungen bleiben erhalten. Welche Version laeuft, steht unten rechts im
 Menue "Anzeige" (Zahnrad oben rechts).
+Steht im CHANGELOG "Pico Loader geaendert", auch die Dateien picoLoader7.bin,
+picoLoader9.bin, aplist.bin, patchlist.bin und savelist.bin im Ordner _pico
+ersetzen.
 
+EOF
+if [ "$DSRUNNER_LOADER" = "custom" ]; then
+	cat >> "$OUT/LIESMICH.txt" <<'EOF'
+Zurueck zu DsRunner aus einem Spiel
+-----------------------------------
+Im Spiel L + R + Unten + B zwei Sekunden lang halten: der DS startet DsRunner neu.
+- Vorher im Spiel speichern. Nicht gespeicherter Fortschritt geht verloren,
+  wie beim Ausschalten. Ein laufender Speichervorgang wird nicht abgebrochen.
+- Klappt nicht in jedem Spiel. Reagiert ein Spiel nicht, wie gewohnt ausschalten.
+- Abschalten: in der Datei _pico\settings.json "inGameReset": false eintragen.
+
+EOF
+fi
+cat >> "$OUT/LIESMICH.txt" <<'EOF'
 Bilder fuer den oberen Bildschirm und die Kacheln
 -------------------------------------------------
 Das PC-Programm DsRunnerArt.exe (beim selben Release) laedt sie auf die Karte:
@@ -125,6 +176,7 @@ Anleitung, Bedienung und Aenderungen (README.md, CHANGELOG.md):
 https://github.com/HolziDape/DsRunner
 
 DsRunner basiert auf Pico Launcher und Pico Loader (LNH team, Zlib-Lizenz).
+Die Rueckkehr aus Spielen stammt von danyocom (Pico-Loader-Fork, Zlib-Lizenz).
 Die Autostart-Dateien stammen aus TWiLight Menu++ (DS-Homebrew).
 EOF
 sed -i "s/@VERSION@/$VERSION_TEXT/; s/\$/\r/" "$OUT/LIESMICH.txt"
