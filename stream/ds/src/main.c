@@ -490,7 +490,7 @@ static int stream(void)
     uint8_t layout = MODE_NONE;
     bool need = true;
     uint32_t frames_ok = 0, frames_bad = 0, bytes_rx = 0;
-    uint16_t seq = 0;
+    static uint16_t seq;    // keeps counting across sessions (the host drops old numbers)
     uint32_t last_vbl = vbl, last_frame_vbl = vbl, combo = 0;
     uint32_t stat_vbl = vbl, stat_frames = 0, stat_bytes = 0;
     uint8_t in[INPUT_SIZE];

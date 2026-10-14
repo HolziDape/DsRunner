@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import bisect
+import collections
 import logging
 import socket
 import time
@@ -16,40 +18,55 @@ log = logging.getLogger("dsstream.server")
 SESSION_TIMEOUT = 3.0     # seconds without input -> DS gone
 RECOVER_RETRY = 0.3       # resend a recovery frame for the same reference after this
 CATCHUP_AFTER = 0.5       # DS still behind the last sent frame (lost, nothing new came)
+RX_LAG = 0.1              # bytes sent this long ago should have reached the DS
 
 
 @dataclass
 class RateControl:
-    """Send rate in bytes/s (AIMD). Once per second the bytes the DS says it got are
-    compared with the bytes sent: more than 4 % missing means the DS (or the WiFi)
-    can't keep up -> down to 90 % of what arrived (at most -20 %). Under 1.5 %
-    missing and the rate was the limit -> +step. A little random loss (busy
-    channel) doesn't slow the stream down."""
+    """Send rate in bytes/s (AIMD). Every 2 seconds the bytes the DS says it got
+    are compared with the bytes sent (RX_LAG earlier, so bytes in flight don't
+    count as lost):
+      - more than 15 % missing (and the DS lost frames): the DS or the WiFi can't
+        keep up -> down to 90 % of what arrived (at most -20 %),
+      - more than 6 % missing while the rate was the limit -> -15 %,
+      - under 2 % missing while the rate was the limit -> +step.
+    A little random loss (busy channel) doesn't slow the stream down."""
     rate: float
     min_rate: float
     max_rate: float
-    step: float = 8000.0
+    step: float = 12000.0
+    window: float = 2.0
     last_rx: int | None = None
+    last_bad: int = 0
     last_sent: int = 0
     last_check: float = 0.0
     loss: float = 0.0
 
-    def update(self, bytes_rx: int, bytes_sent: int, now: float) -> None:
+    def update(self, bytes_rx: int, frames_bad: int, bytes_sent: int, now: float) -> None:
         if self.last_rx is None:
-            self.last_rx, self.last_sent, self.last_check = bytes_rx, bytes_sent, now
+            self.last_rx, self.last_bad, self.last_sent, self.last_check = bytes_rx, frames_bad, bytes_sent, now
             return
         dt = now - self.last_check
-        if dt < 1.0:
+        if dt < self.window:
             return
         rx = (bytes_rx - self.last_rx) & 0xFFFFFFFF
         sent = bytes_sent - self.last_sent
-        if sent > 2000:
+        bad = (frames_bad - self.last_bad) & 0xFFFF
+        if sent > 4000:
             self.loss = max(0.0, 1.0 - rx / sent)
-            if self.loss > 0.04:
-                self.rate = max(self.min_rate, min(self.rate * 0.8, 0.9 * rx / dt))
-            elif self.loss < 0.015 and sent / dt > 0.8 * self.rate:
-                self.rate = min(self.max_rate, self.rate + self.step)
-        self.last_rx, self.last_sent, self.last_check = bytes_rx, bytes_sent, now
+            limiting = sent / dt > 0.8 * self.rate
+            old = self.rate
+            if self.loss > 0.15 and bad:
+                self.rate = min(self.rate * 0.8, max(0.9 * rx / dt, self.rate * 0.5))
+            elif self.loss > 0.06 and bad and limiting:
+                self.rate *= 0.85
+            elif self.loss < 0.02 and limiting:
+                self.rate += self.step
+            self.rate = min(self.max_rate, max(self.min_rate, self.rate))
+            if self.rate != old:
+                log.debug("rate %.0f -> %.0f B/s (sent %d, rx %d, %.1f s, %d frames lost)",
+                          old, self.rate, sent, rx, dt, bad)
+        self.last_rx, self.last_bad, self.last_sent, self.last_check = bytes_rx, frames_bad, bytes_sent, now
 
 
 @dataclass
@@ -104,6 +121,7 @@ class StreamServer(asyncio.DatagramProtocol):
         self.last_img_seq = -1
         self.wake = asyncio.Event()
         self.bytes_sent = 0
+        self.sent_hist: collections.deque = collections.deque(maxlen=4096)  # (time, bytes_sent)
 
     # ---------------------------------------------------------------- network in
     def connection_made(self, transport) -> None:
@@ -140,15 +158,16 @@ class StreamServer(asyncio.DatagramProtocol):
                 self.rc.last_rx = None
                 self.stats = Stats()
                 self.wake.set()
-            elif inp.seq == s.seq or ((inp.seq - s.seq) & 0xFFFF) >= 0x8000:
-                return  # duplicate or reordered old input
+            elif (inp.seq == s.seq or ((inp.seq - s.seq) & 0xFFFF) >= 0x8000) \
+                    and not inp.flags & P.IN_HELLO:
+                return  # duplicate or reordered old input (HELLO: the DS started anew)
             s.seq = inp.seq
             s.last_seen = now
             s.cur = inp.cur_frame
             was_need = s.need
             s.need = bool(inp.flags & P.IN_NEED_REF) or inp.cur_frame == 0
             s.frames_ok, s.frames_bad, s.bytes_rx = inp.frames_ok, inp.frames_bad, inp.bytes_rx
-            self.rc.update(inp.bytes_rx, self.bytes_sent, now)
+            self.rc.update(inp.bytes_rx, inp.frames_bad, self._sent_before(now - RX_LAG), now)
             for ev in s.translator.update(inp.keys, inp.touch_x, inp.touch_y):
                 self.events.put_nowait(ev)
             if s.need and not was_need:
@@ -156,6 +175,16 @@ class StreamServer(asyncio.DatagramProtocol):
         elif t == P.PKT_BYE:
             if self.session and self.session.addr == addr:
                 self._end_session("DS hat beendet")
+
+    def _sent_before(self, t: float) -> int:
+        """Bytes sent up to time t (to compare with what the DS reports)."""
+        h = self.sent_hist
+        if not h:
+            return self.bytes_sent
+        if h[0][0] > t:
+            return h[0][1]
+        i = bisect.bisect_right(h, (t, float("inf"))) - 1
+        return h[i][1]
 
     def _end_session(self, why: str) -> None:
         s = self.session
@@ -179,6 +208,7 @@ class StreamServer(asyncio.DatagramProtocol):
                 await asyncio.sleep(self.next_send - now)
             self.transport.sendto(pkt, addr)
             self.bytes_sent += len(pkt)
+            self.sent_hist.append((time.monotonic(), self.bytes_sent))
             self.next_send = max(self.next_send, time.monotonic() - 0.02) + (len(pkt) + 28) / self.rc.rate
             self.stats.packets += 1
 

@@ -10,7 +10,7 @@ import numpy as np
 from dsstream import fakeclient
 from dsstream import protocol as P
 from dsstream.mapping import Mapping
-from dsstream.server import StreamServer
+from dsstream.server import RateControl, StreamServer
 
 from helpers import scene
 
@@ -83,6 +83,30 @@ class ServerTest(unittest.TestCase):
         res, _ = self.run_session(0.10, seconds=4.0)
         self.assertGreater(res["rejected"] + res["incomplete"], 0)
         self.assertGreater(res["fps"], 5)
+
+
+class RateControlTest(unittest.TestCase):
+    def feed(self, rc, rx_share, bad_per_step, rate_bytes, steps=10):
+        sent = rx = bad = 0
+        rc.update(0, 0, 0, 0.0)
+        for i in range(1, steps + 1):
+            sent += int(rate_bytes * 2)
+            rx += int(rate_bytes * 2 * rx_share)
+            bad += bad_per_step
+            rc.update(rx, bad, sent, i * 2.0)
+        return rc.rate
+
+    def test_random_loss_keeps_rate(self):
+        rc = RateControl(120000, 40000, 200000)
+        self.assertGreaterEqual(self.feed(rc, 0.97, 3, 50000), 120000)
+
+    def test_congestion_lowers_rate(self):
+        rc = RateControl(120000, 40000, 200000)
+        self.assertLess(self.feed(rc, 0.7, 10, 120000, steps=3), 90000)
+
+    def test_no_loss_raises_rate_when_limiting(self):
+        rc = RateControl(100000, 40000, 200000)
+        self.assertGreater(self.feed(rc, 1.0, 0, 100000, steps=3), 120000)
 
 
 if __name__ == "__main__":

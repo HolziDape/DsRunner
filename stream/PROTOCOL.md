@@ -111,7 +111,7 @@ Ist `LZ4` gesetzt, ist der Rumpf ein einzelner [LZ4-Block](https://github.com/lz
 - Meldet der DS `NEED_REF` mit `cur_frame = R`: das nächste Bild baut auf `R` auf, wenn der Host `R` noch kennt (die letzten 64 Bilder) und dieselbe Palette gilt, sonst Keyframe. Für dasselbe `R` frühestens nach 0,3 s nochmal.
 - Ist der DS 0,5 s nach dem letzten Senden noch nicht beim letzten Bild (verlorenes letztes Bild auf einer stillen Seite), ebenso.
 - Keyframes mit neuer Palette: beim Start, bei Szenenwechseln (≥ 60 % der Kacheln geändert) und wenn die Farben zu weit von der Palette abweichen, höchstens einmal pro Sekunde.
-- Senderate: Pakete werden gleichmäßig verteilt (Token-Bucket). Fehlen in einer Sekunde mehr als 4 % der gesendeten Bytes beim DS, sinkt die Rate auf 90 % des Angekommenen (höchstens −20 %); unter 1,5 % Verlust steigt sie um 8 KB/s, wenn sie gerade begrenzt hat. Kein Bild-Puffer: kodiert wird immer das neueste Bild, wenn das vorige gesendet ist.
+- Senderate: Pakete werden gleichmäßig verteilt (Token-Bucket). Alle 2 s vergleicht der Host die gesendeten Bytes (0,1 s zeitversetzt, damit Pakete unterwegs nicht als verloren zählen) mit den Bytes, die der DS meldet: über 15 % Verlust mit verlorenen Bildern → Rate auf 90 % des Angekommenen (höchstens -20 %); über 6 % Verlust, während die Rate begrenzt hat → -15 %; unter 2 % Verlust, während die Rate begrenzt hat → +12 KB/s. Leichter zufälliger Verlust bremst also nicht. Kein Bild-Puffer: kodiert wird immer das neueste Bild, wenn das vorige gesendet ist.
 
 ## Warum so
 
