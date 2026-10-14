@@ -119,13 +119,16 @@ class EncodeInfo:
 
 class Encoder:
     def __init__(self, mode: int = P.MODE_256x192, palette: str = "adaptive", use_lz4: bool = True,
-                 scene_change: float = 0.6, min_palette_interval: float = 1.0):
+                 scene_change: float = 0.6, min_palette_interval: float = 1.0, noise: int = 0):
         self.mode = mode
         self.w, self.h = P.MODE_SIZE[mode]
         self.ntotal = (self.w // TILE) * (self.h // TILE)
         self.palette_mode = palette
         self.use_lz4 = use_lz4 and _lz4 is not None
         self.scene_change = scene_change
+        # tiles whose colours differ by at most this much (per channel, 0..31) count as
+        # unchanged: JPEG pictures from the browser flicker slightly in every frame
+        self.noise = noise
         self.min_palette_interval = min_palette_interval
         self.mapper = PaletteMapper(fixed_palette()) if palette == "fixed" else None
         self.epoch = 0
@@ -169,7 +172,16 @@ class Encoder:
 
         if not key:
             ref_tiles = to_tiles(self.history[ref][0])
-            changed = (tiles != ref_tiles).any(axis=1)
+            if self.noise:
+                pal = self.mapper.pal555.astype(np.int32)
+                comp = np.stack([pal & 31, (pal >> 5) & 31, (pal >> 10) & 31], axis=-1)
+                diff = np.abs(comp[tiles] - comp[ref_tiles]).max(axis=-1)
+                changed = (diff > self.noise).any(axis=1)
+                # what the DS shows: unchanged tiles keep the reference content
+                tiles = np.where(changed[:, None], tiles, ref_tiles)
+                idx = from_tiles(tiles, self.w, self.h)
+            else:
+                changed = (tiles != ref_tiles).any(axis=1)
             ratio = changed.mean()
             drift = self.palette_mode != "fixed" and err > max(2 * self.err0, self.err0 + 40)
             if (ratio >= self.scene_change or drift) and self.palette_mode != "fixed" \

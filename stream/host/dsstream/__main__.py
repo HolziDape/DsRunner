@@ -57,6 +57,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--packet-size", type=int, default=P.MAX_CHUNK,
                     help="groesste UDP-Paketgroesse in Bytes (Standard 1200, hoechstens 1272: der DS nimmt nur "
                          "IP-Pakete bis 1300 Byte an; bei Empfangsproblemen 1000 oder 600 probieren)")
+    ap.add_argument("--jpeg", action="store_true",
+                    help="Chromium liefert die Bilder als JPEG statt PNG (auf dem Pi oft mehr Bilder pro Sekunde)")
     ap.add_argument("--allow-popups", action="store_true",
                     help="neue Fenster/Pop-ups streamen statt sie zu schliessen (Standard: schliessen)")
     ap.add_argument("--chromium-arg", action="append", default=[], help="zusaetzliches Chromium-Argument")
@@ -73,7 +75,8 @@ async def amain(args) -> None:
     browser = Browser(args.url, viewport, out_size, headless=not args.headful, gpu=args.gpu,
                       executable=args.browser, capture=args.capture, max_fps=args.fps,
                       mute=args.mute, extra_args=args.chromium_arg,
-                      allow_popups=args.allow_popups)
+                      allow_popups=args.allow_popups,
+                      image_format="jpeg" if args.jpeg else "png")
     await browser.start()
     logging.getLogger("dsstream").info("Modus %s, Seite %dx%d, Belegung \"%s\"", args.mode,
                                        viewport[0], viewport[1], mapping.name)
@@ -81,7 +84,8 @@ async def amain(args) -> None:
                           palette=args.palette, use_lz4=not args.no_lz4, max_fps=args.fps,
                           rate_kbs=args.rate, min_rate_kbs=args.min_rate, max_rate_kbs=args.max_rate,
                           stats_every=args.stats, broadcast=args.broadcast,
-                          packet_size=args.packet_size)
+                          packet_size=args.packet_size,
+                          noise=3 if args.jpeg else 0)
     try:
         await serve(server, args.bind)
     finally:
