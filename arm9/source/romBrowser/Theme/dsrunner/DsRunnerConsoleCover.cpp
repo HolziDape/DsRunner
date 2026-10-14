@@ -5,11 +5,19 @@
 #include <libtwl/dma/dmaNitro.h>
 #include "fat/File.h"
 #include "romBrowser/FileType/BmpHeader.h"
+#include "services/settings/AppSettings.h"
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
+#include "DsRunnerLibrary.h"
 #include "DsRunnerConsoleCover.h"
 
 DsRunnerConsoleCover* DsRunnerConsoleCover::Create(const char* folderName)
 {
+    // Pico loads the covers in every view. Only the cover flow shows them, and loading a 12 KB cover
+    // for every folder slows down the tile grids (the first tile didn't even get the focus anymore).
+    const auto* appSettings = gDsRunnerLibrary.appSettings;
+    if (!appSettings || appSettings->romBrowserDisplaySettings.layout != RomBrowserLayout::CoverFlow)
+        return nullptr;
+
     char path[128];
     if (!gDsRunnerConsoleArt.IsAvailable() ||
         !gDsRunnerConsoleArt.GetImagePath(folderName, DsRunnerConsoleArt::ImageType::Cover, path, sizeof(path)))

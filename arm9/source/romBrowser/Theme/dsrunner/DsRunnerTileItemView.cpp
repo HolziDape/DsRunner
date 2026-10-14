@@ -433,7 +433,13 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
     {
         // console tiles: the console badge (icon) sits on a frame that is lighter than the badge
         // when selected and sunk into the background otherwise
-        if (isSelected)
+        if (isSelected && gDsRunnerConsoleArt.IsAvailable())
+        {
+            // the light console images need a body that stays close to the console color
+            top = RgbMixer::Lerp(_tint, DsRunnerColors::White, 1, 8);
+            bottom = RgbMixer::Lerp(_tint, DsRunnerColors::BgTop, 1, 8);
+        }
+        else if (isSelected)
         {
             top = RgbMixer::Lerp(_tint, DsRunnerColors::White, 3, 8);
             bottom = RgbMixer::Lerp(_tint, DsRunnerColors::White, 2, 8);
