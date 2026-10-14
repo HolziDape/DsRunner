@@ -7,13 +7,24 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ## Unveröffentlicht
 
 ### Hinzugefügt
+- **Tasten für „zurück zu DsRunner“ einstellbar** (Pico Loader geändert): `"inGameResetKeys"` in `/_pico/settings.json`, z. B. `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`, wenn L oder R ausgeleiert sind. Erlaubt sind A, B, SELECT, START, Steuerkreuz, L und R (nicht X/Y), mindestens 3 Tasten. Standard bleibt L + R + Unten + B. Details: [README](README.md#zurück-zu-dsrunner-aus-einem-spiel), [docs/CONFIG.md](docs/CONFIG.md).
+
+### Geändert
+- „Zurück zu DsRunner“ (L + R + Unten + B) ist jetzt auf DS Lite + M3 DS Real getestet und funktioniert.
+
+## [0.3.1](https://github.com/HolziDape/DsRunner/releases/tag/v0.3.1) - 2026-10-14
+
+### Hinzugefügt
+- **Emulatoren im Paket:** `DsRunner_M3DSReal.zip` und `DsRunner.zip` bringen in `/_dsrunner/emulators/` die Emulatoren für GBA (GBARunner2), NES (nesDS 2.1), Game Boy / Game Boy Color (GameYob) und SNES (SNEmulDS 0.6, dazu `/snemul.cfg`) mit, samt Lizenzen in `LIZENZEN.txt`. Diese Konsolen funktionieren damit ohne weitere Downloads. Das GBA-BIOS ist nicht dabei (optional selbst als `/_gba/bios.bin` ablegen), ebenso wenig S8DS, NitroGrafx und jEnesisDS: Ihre Autoren nennen keine Lizenz, die die Weitergabe erlaubt. Wer schon installiert hat, kopiert einmal den Ordner `_dsrunner/emulators` und `snemul.cfg` aus dem Paket, siehe [README](README.md#emulatoren-für-andere-konsolen).
+- **Diagnose für die Rückkehr aus Spielen** (Pico Loader geändert): Pico Loader schreibt bei jedem Spielstart `/_pico/igr-log.txt`. Darin steht, ob der Hotkey ins Spiel eingebaut wurde und wenn nicht, warum, und ob die Rückkehr danach geklappt hat. Hält man L + R + Unten + B lange genug, wird der Bildschirm kurz hell, bevor DsRunner startet. Anleitung: [loader/README.md](loader/README.md#diagnose-_picoigr-logtxt).
+
+## [0.3.0](https://github.com/HolziDape/DsRunner/releases/tag/v0.3.0) - 2026-10-14
+
+### Hinzugefügt
 - **Eigene Bilder für die Konsolen-Ordner, schon eingebaut:** Jeder Ordner auf der Konsolen-Ebene (NDS, GBA, GB, GBC, NES, SNES, Master System, Game Gear, Mega Drive, PC Engine, Apps) und die Kachel ★ Favoriten zeigen eine gezeichnete Konsole bzw. einen Stern in der Konsolenfarbe, mit dem Kürzel darunter. Oben gibt es dazu ein passendes Hintergrundbild, im Coverflow ein passendes Cover. Eigene Konsolen aus `systems.json` bekommen ein Modul, andere Ordner einen Ordner, jeweils in ihrer Farbe. Die Bilder liegen im Theme (`/_pico/themes/dsrunner/consoles`) und funktionieren ohne DsRunner Art. Eigene Bilder in `/_dsrunner/art` und `/_dsrunner/tiles` haben weiter Vorrang, siehe [docs/CONFIG.md](docs/CONFIG.md#eingebaute-konsolen-bilder).
-- **Zurück zu DsRunner aus dem Spiel:** im laufenden DS-Spiel **L + R + Unten + B zwei Sekunden halten**, dann startet der DS neu in DsRunner. Vorher speichern, nicht Gespeichertes geht verloren; ein laufender Speichervorgang wird nicht abgebrochen. Klappt nicht in jedem Spiel (dann läuft das Spiel normal weiter, nur ohne Hotkey). Auf DS Lite + M3 DS Real getestet.
+- **Zurück zu DsRunner aus dem Spiel:** im laufenden DS-Spiel **L + R + Unten + B zwei Sekunden halten**, dann startet der DS neu in DsRunner. Vorher speichern, nicht Gespeichertes geht verloren; ein laufender Speichervorgang wird nicht abgebrochen. Klappt nicht in jedem Spiel (dann läuft das Spiel normal weiter, nur ohne Hotkey). Noch nicht auf der echten M3 DS Real getestet.
 - Einstellung `inGameReset` in `/_pico/settings.json` (Standard `true`): mit `false` baut Pico Loader den Hotkey nicht ein.
 - Das Paket für die M3 DS Real enthält in `_pico/picoLoader-DsRunner.txt`, welcher Pico-Loader-Build drin ist.
-- **Tasten für „zurück zu DsRunner“ einstellbar** (Pico Loader geändert): `"inGameResetKeys"` in `/_pico/settings.json`, z. B. `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`, wenn L oder R ausgeleiert sind. Erlaubt sind A, B, SELECT, START, Steuerkreuz, L und R (nicht X/Y), mindestens 3 Tasten. Standard bleibt L + R + Unten + B. Details: [README](README.md#zurück-zu-dsrunner-aus-einem-spiel), [docs/CONFIG.md](docs/CONFIG.md).
-- **Diagnose für die Rückkehr aus Spielen** (Pico Loader geändert): Pico Loader schreibt bei jedem Spielstart `/_pico/igr-log.txt`. Darin steht, ob der Hotkey ins Spiel eingebaut wurde und wenn nicht, warum, und ob die Rückkehr danach geklappt hat. Hält man L + R + Unten + B lange genug, wird der Bildschirm kurz hell, bevor DsRunner startet. Anleitung: [loader/README.md](loader/README.md#diagnose-_picoigr-logtxt).
-- **Emulatoren im Paket:** `DsRunner_M3DSReal.zip` und `DsRunner.zip` bringen in `/_dsrunner/emulators/` die Emulatoren für GBA (GBARunner2), NES (nesDS 2.1), Game Boy / Game Boy Color (GameYob) und SNES (SNEmulDS 0.6, dazu `/snemul.cfg`) mit, samt Lizenzen in `LIZENZEN.txt`. Diese Konsolen funktionieren damit ohne weitere Downloads. Das GBA-BIOS ist nicht dabei (optional selbst als `/_gba/bios.bin` ablegen), ebenso wenig S8DS, NitroGrafx und jEnesisDS: Ihre Autoren nennen keine Lizenz, die die Weitergabe erlaubt. Wer schon installiert hat, kopiert einmal den Ordner `_dsrunner/emulators` und `snemul.cfg` aus dem Paket, siehe [README](README.md#emulatoren-für-andere-konsolen).
 
 ### Geändert
 - **Pico Loader geändert:** Das M3-Paket bringt jetzt einen eigenen Build von Pico Loader mit (Stand v1.7.1 plus aktuelle Fixes aus der Entwicklung von Pico, dazu die Rückkehr aus Spielen von danyocom und kleine DsRunner-Patches, siehe [loader/README.md](loader/README.md)). Beim Update deshalb auch `picoLoader7.bin`, `picoLoader9.bin`, `aplist.bin`, `patchlist.bin` und `savelist.bin` nach `/_pico` kopieren. Pico legt neu `/_pico/dldi.bin` und `/_pico/launcher.txt` an.

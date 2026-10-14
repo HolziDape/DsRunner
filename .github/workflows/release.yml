@@ -59,7 +59,7 @@ jobs:
           {
             sh tools/version.sh notes "$VERSION" || true
             echo
-            echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). Die Emulatoren für GBA, NES, Game Boy und SNES sind dabei (`_dsrunner/emulators`). **Update:** nur `_nds/TWiLightMenu/main.srldr` ersetzen. Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
+            echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). Die Emulatoren für GBA, NES, Game Boy und SNES sind dabei (`_dsrunner/emulators`). **Update:** `_nds/TWiLightMenu/main.srldr` ersetzen; ändert sich Pico Loader (steht dann oben), auch die fünf `.bin`-Dateien in `_pico`. Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
             echo
             echo "$marker"
             if [ -n "$existing" ]; then

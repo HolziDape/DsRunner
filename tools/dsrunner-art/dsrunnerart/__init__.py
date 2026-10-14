@@ -4,4 +4,4 @@ See docs/ART-TOOL.md for the user documentation and docs/CONFIG.md ("Artworks") 
 file format the launcher expects.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.1"
