@@ -1,0 +1,225 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 10:19:13 +0000
+Subject: [PATCH 13/14] DsRunner: remember the launcher path for the in-game
+ reset
+
+After an in-game reset Pico Loader is reloaded from the card, and the
+reloaded header has no launcher path. The igr branch then boots
+/_picoboot.nds, which only exists on the DSpico.
+
+Save the launcher path handed down on a normal boot to
+/_pico/launcher.txt, like the DLDI driver cache: only when the saved copy
+is missing or different, through a temporary file and a rename. After an
+in-game reset the saved path is used when that file exists. Otherwise the
+first existing file of /_nds/TWiLightMenu/main.srldr (the M3 DS Real
+autoboot target of DsRunner), /BOOT.NDS and /_picoboot.nds is booted.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018ba2i77rK9QaTUSsETPJXV
+---
+ arm7/source/fat/launcherPathCache.cpp | 124 ++++++++++++++++++++++++++
+ arm7/source/fat/launcherPathCache.h   |  18 ++++
+ arm7/source/main.cpp                  |  10 +--
+ 3 files changed, 147 insertions(+), 5 deletions(-)
+ create mode 100644 arm7/source/fat/launcherPathCache.cpp
+ create mode 100644 arm7/source/fat/launcherPathCache.h
+
+diff --git a/arm7/source/fat/launcherPathCache.cpp b/arm7/source/fat/launcherPathCache.cpp
+new file mode 100644
+index 0000000..b2acd43
+--- /dev/null
++++ b/arm7/source/fat/launcherPathCache.cpp
+@@ -0,0 +1,124 @@
++#include "common.h"
++#include <memory>
++#include <string.h>
++#include "launcherPathCache.h"
++
++// DsRunner: see launcherPathCache.h
++
++#define LAUNCHER_PATH_CACHE_PATH        "/_pico/launcher.txt"
++#define LAUNCHER_PATH_CACHE_TEMP_PATH   "/_pico/launcher.tmp"
++
++/// @brief Launchers tried in this order when no saved launcher path exists, for example
++///        when the card was never used to start a game before or the file was deleted.
++///        The first is the file the M3 DS Real autoboot chain of DsRunner starts, the
++///        second the copy to start by hand, the last the file the DSpico bootloader boots.
++static const char* const sFallbackLauncherPaths[] =
++{
++    "/_nds/TWiLightMenu/main.srldr",
++    "/BOOT.NDS",
++    "/_picoboot.nds"
++};
++
++static char sLauncherPath[256];
++
++static bool fileExists(const char* path)
++{
++    auto fileInfo = std::make_unique<FILINFO>();
++    return f_stat(path, fileInfo.get()) == FR_OK && !(fileInfo->fattrib & AM_DIR);
++}
++
++/// @brief Reads the saved launcher path into sLauncherPath, without line endings.
++/// @return \c true when a non-empty path was read, or \c false otherwise.
++static bool readSavedPath()
++{
++    auto file = std::make_unique<FIL>();
++    if (f_open(file.get(), LAUNCHER_PATH_CACHE_PATH, FA_READ) != FR_OK)
++    {
++        return false;
++    }
++
++    UINT bytesRead = 0;
++    FRESULT result = f_read(file.get(), sLauncherPath, sizeof(sLauncherPath) - 1, &bytesRead);
++    f_close(file.get());
++    if (result != FR_OK)
++    {
++        return false;
++    }
++
++    sLauncherPath[bytesRead] = 0;
++    // The file may have been edited on a pc, so the path ends at the first line ending.
++    sLauncherPath[strcspn(sLauncherPath, "\r\n")] = 0;
++    return sLauncherPath[0] != 0;
++}
++
++void launcherPathCache_save(const char* launcherPath)
++{
++    u32 length = strnlen(launcherPath, sizeof(sLauncherPath));
++    if (length == 0 || length >= sizeof(sLauncherPath))
++    {
++        return;
++    }
++
++    // Skip the write when the saved copy already holds this path, which is the usual case.
++    if (readSavedPath() && strcmp(sLauncherPath, launcherPath) == 0)
++    {
++        LOG_DEBUG("Saved launcher path is up to date\n");
++        return;
++    }
++
++    // Write to a temporary file first, so an interrupted write can never
++    // leave a truncated path under LAUNCHER_PATH_CACHE_PATH.
++    LOG_DEBUG("Saving launcher path %s\n", launcherPath);
++    auto file = std::make_unique<FIL>();
++    if (f_open(file.get(), LAUNCHER_PATH_CACHE_TEMP_PATH, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
++    {
++        LOG_ERROR("Failed to create launcher path file\n");
++        return;
++    }
++    UINT bytesWritten = 0;
++    bool written = f_write(file.get(), launcherPath, length, &bytesWritten) == FR_OK &&
++        bytesWritten == length;
++    if (f_close(file.get()) != FR_OK || !written)
++    {
++        LOG_ERROR("Failed to write launcher path file\n");
++        f_unlink(LAUNCHER_PATH_CACHE_TEMP_PATH);
++        return;
++    }
++
++    // f_rename() fails with FR_EXIST instead of replacing a file. A missing old copy is not an error.
++    FRESULT result = f_unlink(LAUNCHER_PATH_CACHE_PATH);
++    if ((result != FR_OK && result != FR_NO_FILE) ||
++        f_rename(LAUNCHER_PATH_CACHE_TEMP_PATH, LAUNCHER_PATH_CACHE_PATH) != FR_OK)
++    {
++        LOG_ERROR("Failed to replace launcher path file\n");
++    }
++}
++
++const char* launcherPathCache_load()
++{
++    if (readSavedPath())
++    {
++        if (fileExists(sLauncherPath))
++        {
++            LOG_DEBUG("Using saved launcher path %s\n", sLauncherPath);
++            return sLauncherPath;
++        }
++        LOG_ERROR("Saved launcher %s does not exist\n", sLauncherPath);
++    }
++    else
++    {
++        LOG_DEBUG("No saved launcher path\n");
++    }
++
++    for (auto fallbackPath : sFallbackLauncherPaths)
++    {
++        if (fileExists(fallbackPath))
++        {
++            LOG_DEBUG("Using fallback launcher %s\n", fallbackPath);
++            return fallbackPath;
++        }
++    }
++
++    LOG_ERROR("No launcher found\n");
++    return sFallbackLauncherPaths[sizeof(sFallbackLauncherPaths) / sizeof(sFallbackLauncherPaths[0]) - 1];
++}
+diff --git a/arm7/source/fat/launcherPathCache.h b/arm7/source/fat/launcherPathCache.h
+new file mode 100644
+index 0000000..bc94189
+--- /dev/null
++++ b/arm7/source/fat/launcherPathCache.h
+@@ -0,0 +1,18 @@
++#pragma once
++
++// DsRunner: keeps the launcher path on the card. After an in-game reset Pico Loader is
++// reloaded from the card, so its header no longer holds the launcher path that the
++// launcher handed down when it started the game.
++
++/// @brief Saves the launcher path handed down through gLoaderHeader.v2.launcherPath when
++///        the saved copy is missing or holds a different path.
++/// @param launcherPath The launcher path. Nothing is saved when it is empty.
++/// @note Requires the card to be mounted.
++void launcherPathCache_save(const char* launcherPath);
++
++/// @brief Returns the launcher to boot after an in-game reset: the saved launcher path when
++///        that file exists, otherwise the first known launcher file that exists on the card.
++/// @return The launcher path. When no launcher was found this is the last fallback path,
++///         so that the error shown by the loader names a file.
++/// @note Requires the card to be mounted.
++const char* launcherPathCache_load();
+diff --git a/arm7/source/main.cpp b/arm7/source/main.cpp
+index 5c6d6b3..394e8cc 100644
+--- a/arm7/source/main.cpp
++++ b/arm7/source/main.cpp
+@@ -15,6 +15,7 @@
+ #include "logger/NullLogger.h"
+ #include "logger/PlainLogger.h"
+ #include "fat/dldi.h"
++#include "fat/launcherPathCache.h" // DsRunner
+ #include "loader/NdsLoader.h"
+ #include "sharedMemory.h"
+ #include "inGameReset.h"
+@@ -27,10 +28,6 @@
+ #define HANDSHAKE_PART2     0xC
+ #define HANDSHAKE_PART3     0xD
+ 
+-/// @brief Launcher booted by an in-game reset when the reloaded header has no launcher path.
+-///        This is the file the DSpico bootloader boots.
+-#define DEFAULT_LAUNCHER_PATH   "/_picoboot.nds"
+-
+ ILogger* gLogger;
+ FATFS gFatFs;
+ 
+@@ -238,9 +235,10 @@ extern "C" void loaderMain()
+         // launcherPath is only set when the reloaded binary itself carries one.
+         // Cleared so a later reset from the launcher is not mistaken for another in-game reset.
+         TWL_SHARED_MEMORY->ntrSharedMem.resetParam = 0;
++        // DsRunner: otherwise the launcher path saved on the last normal boot, or a known launcher file
+         const char* launcherPath = gLoaderHeader.v2.launcherPath[0] != 0
+             ? gLoaderHeader.v2.launcherPath
+-            : DEFAULT_LAUNCHER_PATH;
++            : launcherPathCache_load();
+         LOG_DEBUG("In-game reset, returning to launcher %s\n", launcherPath);
+         sLoader.SetRomPath(launcherPath);
+         sLoader.SetLauncherPath(launcherPath);
+@@ -262,6 +260,8 @@ extern "C" void loaderMain()
+         handleSavePath();
+         sLoader.SetArguments(gLoaderHeader.loadParams.arguments, gLoaderHeader.loadParams.argumentsLength);
+         sLoader.SetLauncherPath(gLoaderHeader.v2.launcherPath);
++        // DsRunner: remember the launcher for a later in-game reset
++        launcherPathCache_save(gLoaderHeader.v2.launcherPath);
+         sLoader.Load(BootMode::Normal);
+     }
+ 

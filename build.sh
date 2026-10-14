@@ -2,6 +2,7 @@
 # Builds DsRunner inside the pinned BlocksDS docker image (same as CI).
 # Usage: ./build.sh [make args]      e.g. ./build.sh clean
 #        ./build.sh package          build + SD package for the M3 DS Real in sd-package/
+#                                    (builds the Pico Loader from loader/ when needed, see loader/README.md)
 set -e
 
 BLOCKSDS_IMAGE="${BLOCKSDS_IMAGE:-skylyrac/blocksds:slim-v1.16.0}"

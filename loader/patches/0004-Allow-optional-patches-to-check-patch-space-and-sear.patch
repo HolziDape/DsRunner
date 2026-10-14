@@ -1,0 +1,137 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Mon, 14 Sep 2026 18:44:00 -0400
+Subject: [PATCH 04/14] Allow optional patches to check patch space and search
+ from an address
+
+PatchHeap::Alloc never returns when it runs out of space, so a patch that
+is not required for a game to run needs a way to find out beforehand.
+CanAllocAll replays the best fit search of Alloc for a sequence of sizes,
+so the answer is exact even when the allocations land in different blocks.
+
+FindPattern32 gains an overload that starts at a given address, which
+allows checking that a signature occurs only once.
+---
+ arm9/source/patches/PatchContext.cpp | 18 +++++++++++++
+ arm9/source/patches/PatchContext.h   |  8 ++++++
+ arm9/source/patches/PatchHeap.cpp    | 39 ++++++++++++++++++++++++++++
+ arm9/source/patches/PatchHeap.h      |  8 ++++++
+ 4 files changed, 73 insertions(+)
+
+diff --git a/arm9/source/patches/PatchContext.cpp b/arm9/source/patches/PatchContext.cpp
+index 7f7d906..08fdcab 100644
+--- a/arm9/source/patches/PatchContext.cpp
++++ b/arm9/source/patches/PatchContext.cpp
+@@ -14,6 +14,24 @@ u32* PatchContext::FindPattern32(const u32* pattern, u32 byteLength) const
+     return nullptr;
+ }
+ 
++u32* PatchContext::FindPattern32(const u32* pattern, u32 byteLength, const u32* searchStart) const
++{
++    // A start outside the ntr region would make the search length below wrap around.
++    const u32* dataEnd = (const u32*)((u8*)_data + _dataSize);
++    if (searchStart < (const u32*)_data || searchStart >= dataEnd)
++    {
++        return nullptr;
++    }
++
++#ifdef LIBTWL_ARM9
++    if (byteLength == 16)
++    {
++        return (u32*)fastSearch16(searchStart, (u8*)dataEnd - (u8*)searchStart, pattern);
++    }
++#endif
++    return nullptr;
++}
++
+ u32* PatchContext::FindPattern32Twl(const u32* pattern, u32 byteLength) const
+ {
+     if (!_twlData || _twlDataSize == 0)
+diff --git a/arm9/source/patches/PatchContext.h b/arm9/source/patches/PatchContext.h
+index 1e5e156..3fa8d85 100644
+--- a/arm9/source/patches/PatchContext.h
++++ b/arm9/source/patches/PatchContext.h
+@@ -24,6 +24,14 @@ public:
+     /// @return A pointer to the first location where the pattern was found, or \c nullptr if the pattern was not found.
+     u32* FindPattern32(const u32* pattern, u32 byteLength) const;
+ 
++    /// @brief Tries to find the given \p pattern of the given \p byteLength in the ntr region,
++    ///        starting at \p searchStart.
++    /// @param pattern The pattern to find.
++    /// @param byteLength The length of the pattern.
++    /// @param searchStart The address in the ntr region to start searching from.
++    /// @return A pointer to the first location where the pattern was found, or \c nullptr if the pattern was not found.
++    u32* FindPattern32(const u32* pattern, u32 byteLength, const u32* searchStart) const;
++
+     /// @brief Tries to find the given \p pattern of the given \p byteLength in the twl region.
+     /// @param pattern The pattern to find.
+     /// @param byteLength The length of the pattern.
+diff --git a/arm9/source/patches/PatchHeap.cpp b/arm9/source/patches/PatchHeap.cpp
+index 44e7b8f..ff656fe 100644
+--- a/arm9/source/patches/PatchHeap.cpp
++++ b/arm9/source/patches/PatchHeap.cpp
+@@ -46,6 +46,45 @@ void PatchHeap::AddFreeSpace(void* block, u32 size)
+     _freeBlocks = heapBlock;
+ }
+ 
++bool PatchHeap::CanAllocAll(const u32* sizes, u32 count) const
++{
++    // Replays the best fit search of Alloc on a copy of the free block sizes.
++    // There can never be more free blocks than entries in _blocks, so the copy always fits.
++    std::array<u32, std::tuple_size_v<decltype(_blocks)>> freeSizes;
++    u32 freeBlockCount = 0;
++    for (auto cur = _freeBlocks; cur; cur = cur->next)
++    {
++        freeSizes[freeBlockCount++] = cur->size;
++    }
++
++    for (u32 i = 0; i < count; i++)
++    {
++        u32 size = sizes[i];
++        // Pick the smallest free block that is large enough, stopping early on an exact fit.
++        int bestBlock = -1;
++        for (u32 j = 0; j < freeBlockCount; j++)
++        {
++            if (freeSizes[j] >= size && (bestBlock < 0 || freeSizes[j] < freeSizes[bestBlock]))
++            {
++                bestBlock = j;
++                if (freeSizes[j] == size)
++                {
++                    break;
++                }
++            }
++        }
++
++        if (bestBlock < 0)
++        {
++            return false;
++        }
++
++        // Alloc takes the space from that block, so later sizes see only what is left of it.
++        freeSizes[bestBlock] -= size;
++    }
++    return true;
++}
++
+ void* PatchHeap::Alloc(u32 size)
+ {
+     PatchHeapBlock* prev = nullptr;
+diff --git a/arm9/source/patches/PatchHeap.h b/arm9/source/patches/PatchHeap.h
+index 9049bda..00d501e 100644
+--- a/arm9/source/patches/PatchHeap.h
++++ b/arm9/source/patches/PatchHeap.h
+@@ -19,6 +19,14 @@ public:
+     /// @return A pointer to the allocated block if successful, or nullptr otherwise.
+     void* Alloc(u32 size);
+ 
++    /// @brief Checks whether blocks of the given sizes can all be allocated when
++    ///        \see Alloc is called for them in the given order. Unlike \see Alloc
++    ///        this never fails fatally.
++    /// @param sizes The sizes to check, in allocation order.
++    /// @param count The number of sizes.
++    /// @return True if all blocks can be allocated, or false otherwise.
++    bool CanAllocAll(const u32* sizes, u32 count) const;
++
+ private:
+     struct PatchHeapBlock
+     {

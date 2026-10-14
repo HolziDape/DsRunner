@@ -1,0 +1,170 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 14 Oct 2026 10:20:03 +0000
+Subject: [PATCH 14/14] DsRunner: switch the in-game reset off with
+ /_pico/igr.off
+
+A game that misbehaves with the in-game reset hook, or a player who
+does not want the hotkey, needs a way to leave the patch out without
+another loader build.
+
+When /_pico/igr.off exists, the arm7 sets a new flag in the flags word
+of IPC_COMMAND_ARM9_SET_ROM_FILE_INFO and the arm9 patcher skips the
+in-game reset patch. The OS_ResetSystem patch is not affected. The file
+is checked before the rom is opened, so the directory sector of the rom
+is still in the fat window when its location is taken from it. DsRunner
+creates or deletes the file according to its setting "inGameReset".
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_018ba2i77rK9QaTUSsETPJXV
+---
+ arm7/source/loader/NdsLoader.cpp | 14 +++++++++++++-
+ arm9/source/Arm9Patcher.cpp      | 12 ++++++++----
+ arm9/source/Arm9Patcher.h        |  3 ++-
+ arm9/source/main.cpp             |  6 +++++-
+ common/inGameReset.h             |  7 +++++++
+ 5 files changed, 35 insertions(+), 7 deletions(-)
+
+diff --git a/arm7/source/loader/NdsLoader.cpp b/arm7/source/loader/NdsLoader.cpp
+index 380d3aa..c9e188d 100644
+--- a/arm7/source/loader/NdsLoader.cpp
++++ b/arm7/source/loader/NdsLoader.cpp
+@@ -1,4 +1,5 @@
+ #include "common.h"
++#include <memory>
+ #include <string.h>
+ #include <libtwl/rtos/rtosIrq.h>
+ #include <libtwl/sys/swi.h>
+@@ -28,6 +29,7 @@
+ #include "Arm7IoRegisterClearer.h"
+ #include "PatchListFactory.h"
+ #include "CheatPreprocessor.h"
++#include "inGameReset.h" // DsRunner
+ #include "NdsLoader.h"
+ 
+ #define AP_LIST_PATH      "/_pico/aplist.bin"
+@@ -40,6 +42,15 @@ static const InverseKmpMatcher sDldiStubMatcher { (const u32[]) { ~0xBF8DA5EDu,
+ 
+ void NdsLoader::Load(BootMode bootMode)
+ {
++    // DsRunner: checked before the rom file is opened, so the directory sector of the rom stays in the fat window
++    auto fileInfo = std::make_unique<FILINFO>();
++    bool inGameResetDisabled = f_stat(IN_GAME_RESET_DISABLE_PATH, fileInfo.get()) == FR_OK;
++    fileInfo.reset();
++    if (inGameResetDisabled)
++    {
++        LOG_DEBUG("In-game reset disabled by %s\n", IN_GAME_RESET_DISABLE_PATH);
++    }
++
+     if (bootMode == BootMode::Normal)
+     {
+         LOG_DEBUG("Loading %s\n", _romPath);
+@@ -196,7 +207,8 @@ void NdsLoader::Load(BootMode bootMode)
+     sendToArm9(IPC_COMMAND_ARM9_SET_ROM_FILE_INFO);
+     sendToArm9(isHomebrew ? 0 : _romFile.dir_sect);
+     sendToArm9(isHomebrew ? 0 : (u32)(_romFile.dir_ptr - _romFile.obj.fs->win));
+-    sendToArm9((isCloneBootRom ? 1 : 0) | (_runInDSiMode ? 2 : 0));
++    sendToArm9((isCloneBootRom ? 1 : 0) | (_runInDSiMode ? 2 : 0)
++        | (inGameResetDisabled ? IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED : 0)); // DsRunner
+ 
+     if (!isHomebrew)
+     {
+diff --git a/arm9/source/Arm9Patcher.cpp b/arm9/source/Arm9Patcher.cpp
+index e54b314..40a8220 100644
+--- a/arm9/source/Arm9Patcher.cpp
++++ b/arm9/source/Arm9Patcher.cpp
+@@ -49,7 +49,7 @@ static const u32 sMiiUncompressBackwardPattern[] = { 0xE3500000, 0x0A000027, 0xE
+ static const u32 sMiiUncompressBackwardPatternHybrid[] = { 0xE3500000, 0x0A000029, 0xE92D01F0, 0xE9100006 };
+ 
+ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderPlatform, const ApListEntry* apListEntry,
+-    bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo) const
++    bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo, bool inGameResetEnabled) const
+ {
+     auto romHeader = (const nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader;
+     auto twlRomHeader = (const nds_header_twl_t*)TWL_SHARED_MEMORY->twlRomHeader;
+@@ -232,9 +232,13 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+         bool hasRomReadPatches = !(sdkVersion.IsTwlSdk() && twlRomHeader->IsDsiWare());
+         // The reboot reuses the sd read code that the rom read patches create. It does not
+         // exist for DSiWare, or on platforms that read roms directly instead of from the sd card.
+-        patchCollection.AddPatch(new InGameResetPatch(osResetSystemPatch, loaderInfo,
+-            sdkVersion.IsTwlSdk() && isHybridRom && runInDSiMode,
+-            hasRomReadPatches && !loaderPlatform->HasRomReads()));
++        // DsRunner: left out when switched off with IN_GAME_RESET_DISABLE_PATH
++        if (inGameResetEnabled)
++        {
++            patchCollection.AddPatch(new InGameResetPatch(osResetSystemPatch, loaderInfo,
++                sdkVersion.IsTwlSdk() && isHybridRom && runInDSiMode,
++                hasRomReadPatches && !loaderPlatform->HasRomReads()));
++        }
+ 
+         if (moduleParams && compressedEnd != 0)
+         {
+diff --git a/arm9/source/Arm9Patcher.h b/arm9/source/Arm9Patcher.h
+index bca9070..0676317 100644
+--- a/arm9/source/Arm9Patcher.h
++++ b/arm9/source/Arm9Patcher.h
+@@ -25,9 +25,10 @@ public:
+     /// @param isCloneBootRom \c true if the rom being loaded is a clone boot rom, or \c false otherwise.
+     /// @param runInDSiMode \c true if the rom should be loaded in DSi mode, or \c false otherwise.
+     /// @param loaderInfo The loader info to use.
++    /// @param inGameResetEnabled DsRunner: \c false to leave out the in-game reset patch.
+     /// @return Some information resulting from the patching.
+     PatchResult ApplyPatches(const LoaderPlatform* loaderPlatform, const ApListEntry* apListEntry,
+-        bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo) const;
++        bool isCloneBootRom, bool runInDSiMode, const loader_info_t* loaderInfo, bool inGameResetEnabled) const;
+ 
+ private:
+     const u32* FindMIiUncompressBackward(u32 arm9LoadAddress, SdkVersion sdkVersion) const;
+diff --git a/arm9/source/main.cpp b/arm9/source/main.cpp
+index 1f25dd4..dae80be 100644
+--- a/arm9/source/main.cpp
++++ b/arm9/source/main.cpp
+@@ -29,6 +29,7 @@
+ #include "jumpToArm9EntryPoint.h"
+ #include "patches/homebrew/BootstubPatchCode.h"
+ #include "HomebrewBootstub.h"
++#include "inGameReset.h" // DsRunner
+ 
+ #define HANDSHAKE_PART0     0xA
+ #define HANDSHAKE_PART1     0xB
+@@ -47,6 +48,7 @@ static u32 sRomDirSector;
+ static u32 sRomDirSectorOffset;
+ static u16 sIsCloneBootRom;
+ static u16 sRunInDSiMode;
++static u16 sInGameResetDisabled; // DsRunner
+ static loader_info_t sLoaderInfo;
+ static void** sSoftResetCheatsPointer = nullptr;
+ 
+@@ -154,7 +156,8 @@ static void handleApplyArm9PatchesCommand()
+         sApListEntry.GetGameCode() == 0 ? nullptr : &sApListEntry,
+         sIsCloneBootRom,
+         sRunInDSiMode,
+-        &sLoaderInfo);
++        &sLoaderInfo,
++        !sInGameResetDisabled); // DsRunner
+     sSoftResetCheatsPointer = result.softResetCheatsPointer;
+     ipc_sendWordDirect(1);
+ }
+@@ -188,6 +191,7 @@ static void handleSetRomFileInfoCommand()
+     u32 flags = receiveFromArm7();
+     sIsCloneBootRom = (flags & 1) != 0;
+     sRunInDSiMode = (flags & 2) != 0;
++    sInGameResetDisabled = (flags & IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED) != 0; // DsRunner
+ }
+ 
+ static void handleInitializeLoaderInfoCommand()
+diff --git a/common/inGameReset.h b/common/inGameReset.h
+index 8f57967..7b3a6b2 100644
+--- a/common/inGameReset.h
++++ b/common/inGameReset.h
+@@ -12,3 +12,10 @@
+ ///        state belonging to the session the reset interrupted, and one that has no use
+ ///        for it simply ignores the extra argument.
+ #define IN_GAME_RESET_LAUNCHER_ARGUMENT         "igr"
++
++/// @brief DsRunner: when this file exists on the card, the in-game reset patch is not applied.
++///        DsRunner creates or deletes it according to its setting "inGameReset".
++#define IN_GAME_RESET_DISABLE_PATH              "/_pico/igr.off"
++
++/// @brief DsRunner: flag in the flags word of IPC_COMMAND_ARM9_SET_ROM_FILE_INFO.
++#define IN_GAME_RESET_ROM_FILE_INFO_FLAG_DISABLED   4

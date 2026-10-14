@@ -1,0 +1,216 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Mon, 14 Sep 2026 18:44:00 -0400
+Subject: [PATCH 03/14] Build the OS_ResetSystem reboot as shared patch code
+
+The reboot into Pico Loader does not depend on the game containing
+OS_ResetSystem; only the jump into it does. Creating it through a shared
+patch code lets other patches enter the same reboot, and creates it when
+the game has no OS_ResetSystem, which is common because the linker drops
+it from games that never call it.
+
+The sizes of its allocations are exposed so a caller can check they fit
+before creating it. Behaviour for games with OS_ResetSystem is unchanged.
+---
+ .../patches/arm9/OSResetSystemPatch.cpp       | 77 +++++++++++--------
+ arm9/source/patches/arm9/OSResetSystemPatch.h | 31 ++++++++
+ .../patches/arm9/OSResetSystemPatchCode.h     | 23 ++++++
+ 3 files changed, 101 insertions(+), 30 deletions(-)
+
+diff --git a/arm9/source/patches/arm9/OSResetSystemPatch.cpp b/arm9/source/patches/arm9/OSResetSystemPatch.cpp
+index a86ef7b..35b3d1a 100644
+--- a/arm9/source/patches/arm9/OSResetSystemPatch.cpp
++++ b/arm9/source/patches/arm9/OSResetSystemPatch.cpp
+@@ -85,48 +85,65 @@ void OSResetSystemPatch::ApplyPatch(PatchContext& patchContext)
+         return;
+     }
+ 
++    // Distance from the matched pattern to the call that sends the reset command to the arm7.
++    // That call is replaced, so the game's own reset stops there and the reboot takes over.
+     u32 offset;
+     if (patchContext.GetSdkVersion().IsTwlSdk())
+     {
+-        patch_osresetsystem_arm7Entry_address = 0x02FFFE34;
+-        if (_hybrid)
+-        {
+-            offset = 0x80;
+-            if (!_runInDSiMode)
+-            {
+-                patch_osresetsystem_entry_jump_to_twl_arm7_sync = THUMB_NOP;
+-            }
+-        }
+-        else
+-        {
+-            offset = 0x44;
+-            patch_osresetsystem_entry_jump_to_twl_arm7_sync = THUMB_NOP;
+-        }
++        // Hybrid roms first check whether they run on a DSi, which puts the call further in.
++        offset = _hybrid ? 0x80 : 0x44;
+     }
+     else
+     {
+         offset = 0xC;
+-        patch_osresetsystem_entry_jump_to_twl_arm7_sync = THUMB_NOP;
+     }
+ 
+-    auto loaderInfoTarget = (loader_info_t*)patchContext.GetPatchHeap().Alloc(sizeof(loader_info_t));
+-    memcpy(loaderInfoTarget, _loaderInfo, sizeof(loader_info_t));
+-
+-    auto sdReadPatchCode = patchContext.GetLoaderPlatform()->CreateSdReadPatchCode(
+-        patchContext.GetPatchCodeCollection(), patchContext.GetPatchHeap());
+-    auto patchCodePart2 = patchContext.GetPatchCodeCollection().AddUniquePatchCode<OSResetSystemPart2PatchCode>(
+-        patchContext.GetPatchHeap());
+-    auto patchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<OSResetSystemPatchCode>
+-    (
+-        patchContext.GetPatchHeap(),
+-        loaderInfoTarget,
+-        sdReadPatchCode,
+-        patchCodePart2
+-    );
++    // Only a hybrid rom running in DSi mode needs the extra arm7 sync of the reboot.
++    auto patchCode = GetOrAddRebootPatchCode(patchContext, _loaderInfo, _hybrid && _runInDSiMode);
+ 
++    // ldr pc, [pc, #-4]: jumps to the address stored in the word that follows.
+     *(u32*)((u8*)_osResetSystem + offset) = 0xE51FF004;
+     *(u32*)((u8*)_osResetSystem + offset + 4) = (u32)patchCode->GetOSResetSystemFunction();
+ 
+-    _cheatsPointer = patchCodePart2->GetCheatsPointerAtTarget();
++    // Pico Loader writes the location of the cheats here, so they stay active after the reset.
++    _cheatsPointer = patchCode->GetPart2PatchCode()->GetCheatsPointerAtTarget();
++}
++
++const OSResetSystemPatchCode* OSResetSystemPatch::GetOrAddRebootPatchCode(
++    PatchContext& patchContext, const loader_info_t* loaderInfo, bool twlArm7Sync)
++{
++    // Shared, so a second caller gets the same copy instead of placing another one.
++    return patchContext.GetPatchCodeCollection().GetOrAddSharedPatchCode([&]
++    {
++        // Arm7 entry point field of the rom header copy in shared memory (header + 0x34).
++        // SDK 5 games keep that copy at 0x02FFFE00, older games at 0x027FFE00.
++        patch_osresetsystem_arm7Entry_address = patchContext.GetSdkVersion().IsTwlSdk() ? 0x02FFFE34 : 0x027FFE34;
++        if (!twlArm7Sync)
++        {
++            // Replace the call to the DSi-only arm7 sync with a no-op.
++            patch_osresetsystem_entry_jump_to_twl_arm7_sync = THUMB_NOP;
++        }
++
++        // The reboot walks the cluster map in the loader info to find Pico Loader on the sd card.
++        auto loaderInfoTarget = (loader_info_t*)patchContext.GetPatchHeap().Alloc(sizeof(loader_info_t));
++        memcpy(loaderInfoTarget, loaderInfo, sizeof(loader_info_t));
++
++        // Keep this allocation order in sync with GetRebootPatchCodeAllocationSizes.
++        auto sdReadPatchCode = patchContext.GetLoaderPlatform()->CreateSdReadPatchCode(
++            patchContext.GetPatchCodeCollection(), patchContext.GetPatchHeap());
++        auto patchCodePart2 = patchContext.GetPatchCodeCollection().AddUniquePatchCode<OSResetSystemPart2PatchCode>(
++            patchContext.GetPatchHeap());
++        return new OSResetSystemPatchCode(patchContext.GetPatchHeap(), loaderInfoTarget, sdReadPatchCode, patchCodePart2);
++    });
++}
++
++u32 OSResetSystemPatch::GetRebootPatchCodeAllocationSizes(u32* sizes)
++{
++    // Same order as GetOrAddRebootPatchCode allocates them. The sd read code is not listed
++    // because the rom read patches have already created it by then.
++    sizes[0] = sizeof(loader_info_t);
++    sizes[1] = OSResetSystemPart2PatchCode::GetSize();
++    sizes[2] = OSResetSystemPatchCode::GetSize();
++    return REBOOT_PATCH_CODE_ALLOCATION_COUNT;
+ }
+ 
+diff --git a/arm9/source/patches/arm9/OSResetSystemPatch.h b/arm9/source/patches/arm9/OSResetSystemPatch.h
+index e5b9c2f..aec8740 100644
+--- a/arm9/source/patches/arm9/OSResetSystemPatch.h
++++ b/arm9/source/patches/arm9/OSResetSystemPatch.h
+@@ -2,6 +2,8 @@
+ #include "../Patch.h"
+ #include "LoaderInfo.h"
+ 
++class OSResetSystemPatchCode;
++
+ /// @brief Arm9 patch to make OS_ResetSystem reboot into Pico Loader.
+ class OSResetSystemPatch : public Patch
+ {
+@@ -17,8 +19,37 @@ public:
+         return _cheatsPointer;
+     }
+ 
++    /// @brief Returns whether OS_ResetSystem was found and patched. Only valid after \see ApplyPatch.
++    bool IsApplied() const
++    {
++        // ApplyPatch sets the cheats pointer only after it has written the jump into the reboot.
++        return _cheatsPointer != nullptr;
++    }
++
++    /// @brief Returns the patch code that reboots into Pico Loader, creating it when this is
++    ///        the first request. The reboot does not depend on the game containing OS_ResetSystem,
++    ///        so other patches can enter it too.
++    /// @param patchContext The patch context to use.
++    /// @param loaderInfo The loader info to use.
++    /// @param twlArm7Sync \c true when the arm7 of a hybrid rom running in DSi mode must be synced
++    ///                    through shared memory before the reset, or \c false otherwise.
++    ///                    Only used when the patch code is created.
++    /// @return The reboot patch code.
++    static const OSResetSystemPatchCode* GetOrAddRebootPatchCode(
++        PatchContext& patchContext, const loader_info_t* loaderInfo, bool twlArm7Sync);
++
++    /// @brief Number of allocations for the reboot: the loader info copy and the reboot's two code parts.
++    static constexpr u32 REBOOT_PATCH_CODE_ALLOCATION_COUNT = 3;
++
++    /// @brief Gets the sizes of the patch heap allocations made when creating the reboot patch code,
++    ///        in allocation order, besides the platform sd read code that the rom read patches also use.
++    /// @param sizes Receives \see REBOOT_PATCH_CODE_ALLOCATION_COUNT sizes.
++    /// @return The number of sizes written.
++    static u32 GetRebootPatchCodeAllocationSizes(u32* sizes);
++
+ private:
+     u32* _osResetSystem = nullptr;
++    // Pico Loader's arm9 runs from vram, where 8-bit writes have no effect, so these are not bool.
+     u16 _hybrid = false;
+     u16 _runInDSiMode;
+     const loader_info_t* _loaderInfo;
+diff --git a/arm9/source/patches/arm9/OSResetSystemPatchCode.h b/arm9/source/patches/arm9/OSResetSystemPatchCode.h
+index 179ea98..6c1ded6 100644
+--- a/arm9/source/patches/arm9/OSResetSystemPatchCode.h
++++ b/arm9/source/patches/arm9/OSResetSystemPatchCode.h
+@@ -34,6 +34,12 @@ public:
+     {
+         return (void**)GetAddressAtTarget(&patch_osresetsystem_cheats_address);
+     }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_osresetsystem_boot);
++    }
+ };
+ 
+ class OSResetSystemPatchCode : public PatchCode
+@@ -42,6 +48,7 @@ public:
+     OSResetSystemPatchCode(PatchHeap& patchHeap, const loader_info_t* loaderInfo,
+         const IReadSectorsPatchCode* readSectorsPatchCode, const OSResetSystemPart2PatchCode* part2PatchCode)
+         : PatchCode(SECTION_START(patch_osresetsystem), SECTION_SIZE(patch_osresetsystem), patchHeap)
++        , _part2PatchCode(part2PatchCode)
+     {
+         patch_osresetsystem_loader_info_address = loaderInfo;
+         patch_osresetsystem_readSdSectors_address = (u32)readSectorsPatchCode->GetReadSectorsFunction();
+@@ -52,4 +59,20 @@ public:
+     {
+         return GetAddressAtTarget((void*)patch_osresetsystem_entry);
+     }
++
++    /// @brief Returns the second part of the reboot, which holds the cheats pointer.
++    const OSResetSystemPart2PatchCode* GetPart2PatchCode() const
++    {
++        return _part2PatchCode;
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_osresetsystem);
++    }
++
++private:
++    // Kept so a caller that did not create the reboot can still reach its second part.
++    const OSResetSystemPart2PatchCode* _part2PatchCode;
+ };

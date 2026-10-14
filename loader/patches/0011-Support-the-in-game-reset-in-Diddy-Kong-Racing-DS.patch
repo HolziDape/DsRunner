@@ -1,0 +1,339 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Fri, 18 Sep 2026 22:10:45 -0400
+Subject: [PATCH 11/14] Support the in-game reset in Diddy Kong Racing DS
+
+The game uses the stock interrupt dispatcher up to the acknowledge and then
+dispatches differently: the handler is loaded into r2 rather than r0, and both
+the push of lr and the load of the return address are skipped for interrupt 10,
+so that handler is entered with no return address at all. The stock signature
+cannot match, and in fact the whole arm9 binary contains no "bx r0".
+
+The jump replaces the conditional return address load and the call, so the push
+has already happened and the flags still say whether this is the interrupt that
+skips it. Setting lr for that one would send its handler to a return address
+with nothing pushed to match, so it is left holding the return into the BIOS.
+
+This dispatcher also enters handlers with the interrupt index in r0 rather than
+the handler address, so the dispatch part leaves r0 alone. On the vblank path,
+where the key check and the reset need r2 and overwrite r0, the handler is kept
+in a word of the patch and a small stub restores it along with the index, which
+is always zero there.
+---
+ .../arm9/InGameReset/InGameResetPatch.cpp     |  9 ++
+ .../arm9/InGameReset/InGameResetPatchCode.h   |  6 ++
+ .../arm9/InGameReset/InGameResetPatchCode.s   | 76 +++++++++++++++++
+ .../patches/arm9/InGameReset/IrqDispatcher.h  |  6 +-
+ .../InGameReset/IrqDispatcherCondReturn.cpp   | 84 +++++++++++++++++++
+ .../InGameReset/IrqDispatcherCondReturn.h     | 35 ++++++++
+ 6 files changed, 215 insertions(+), 1 deletion(-)
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.cpp
+ create mode 100644 arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.h
+
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+index 3c06fdd..2a8359d 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatch.cpp
+@@ -9,6 +9,7 @@
+ #include "IrqDispatcherSdk.h"
+ #include "IrqDispatcherBlx.h"
+ #include "IrqDispatcherNested.h"
++#include "IrqDispatcherCondReturn.h"
+ #include "InGameResetPatch.h"
+ 
+ bool InGameResetPatch::FindPatchTarget(PatchContext& patchContext)
+@@ -27,6 +28,10 @@ bool InGameResetPatch::FindPatchTarget(PatchContext& patchContext)
+     {
+         _irqDispatcherVariant = IrqDispatcherVariant::Nested;
+     }
++    else if (FindCondReturnIrqDispatcher(patchContext, _irqDispatcherMatch))
++    {
++        _irqDispatcherVariant = IrqDispatcherVariant::CondReturn;
++    }
+     else
+     {
+         LOG_DEBUG("In-game reset: no known irq dispatcher found\n");
+@@ -41,6 +46,7 @@ u32 InGameResetPatch::GetDispatchPatchCodeSize() const
+         case IrqDispatcherVariant::Sdk:    return InGameResetSdkDispatchPatchCode::GetSize();
+         case IrqDispatcherVariant::Blx:    return InGameResetBlxDispatchPatchCode::GetSize();
+         case IrqDispatcherVariant::Nested: return InGameResetNestedDispatchPatchCode::GetSize();
++        case IrqDispatcherVariant::CondReturn: return InGameResetCondReturnDispatchPatchCode::GetSize();
+         default:                           return 0;
+     }
+ }
+@@ -61,6 +67,9 @@ const InGameResetDispatchPatchCode* InGameResetPatch::CreateDispatchPatchCode(
+         case IrqDispatcherVariant::Nested:
+             return patchCodeCollection.AddUniquePatchCode<InGameResetNestedDispatchPatchCode>(
+                 patchHeap, _irqDispatcherMatch, keyCheckPatchCode);
++        case IrqDispatcherVariant::CondReturn:
++            return patchCodeCollection.AddUniquePatchCode<InGameResetCondReturnDispatchPatchCode>(
++                patchHeap, _irqDispatcherMatch, keyCheckPatchCode);
+         default:
+             return nullptr;
+     }
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+index 6e05725..fed5340 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.h
+@@ -6,6 +6,7 @@ DEFINE_SECTION_SYMBOLS(patch_ingamereset_keycheck);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_sdk);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_blx);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_nested);
++DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_condreturn);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_reset);
+ 
+ extern "C" void patch_ingamereset_keyCheck(void);
+@@ -13,6 +14,8 @@ extern "C" void patch_ingamereset_sdkDispatch(void);
+ extern "C" void patch_ingamereset_blxDispatch(void);
+ extern "C" void patch_ingamereset_nestedDispatch(void);
+ extern "C" void patch_ingamereset_nestedResume(void);
++extern "C" void patch_ingamereset_condReturnDispatch(void);
++extern "C" void patch_ingamereset_condReturnResume(void);
+ extern "C" void patch_ingamereset_resetEntry(void);
+ 
+ extern u32 patch_ingamereset_resetAddress;
+@@ -25,6 +28,9 @@ extern u32 patch_ingamereset_nestedIrqTable;
+ extern u32 patch_ingamereset_nestedContinue;
+ extern u32 patch_ingamereset_nestedResumeAddress;
+ extern u32 patch_ingamereset_nestedKeyCheck;
++extern u32 patch_ingamereset_condReturnIrqReturn;
++extern u32 patch_ingamereset_condReturnResumeAddress;
++extern u32 patch_ingamereset_condReturnKeyCheck;
+ extern u32 patch_ingamereset_slot1LockAddress;
+ extern u32 patch_ingamereset_resetParamAddress;
+ extern u32 patch_ingamereset_resetParam;
+diff --git a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+index 3fb4051..c94c4f2 100644
+--- a/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameReset/InGameResetPatchCode.s
+@@ -219,6 +219,82 @@ patch_ingamereset_blxKeyCheck:
+ 
+ .pool
+ 
++.section "patch_ingamereset_dispatch_condreturn", "ax"
++
++// Dispatch part for a dispatcher that sets the handler's return address only for some
++// interrupts, found in Diddy Kong Racing DS. It is the stock dispatcher up to the
++// acknowledge, then:
++//
++//     ldr r1, =irqTable
++//     rsbs r0, r0, #31
++//     ldr r2, [r1, r0, lsl #2]       @ handler in r2, not r0
++//     cmp r0, #10
++//     stmfdne sp!, {lr}              @ interrupt 10 pushes nothing
++//     ldrne lr, =irqReturn           @ and is given no return address
++//     bx  r2
++//
++// The jump replaces the last two instructions, so the push has already happened and the
++// flags of "cmp r0, #10" still say whether this interrupt is the one that skips it. Setting
++// lr for that interrupt would send its handler to a return address with nothing pushed to
++// match, so it is left holding the return into the BIOS, as the replaced code does.
++//
++// This dispatcher also enters handlers with the interrupt index in r0 rather than the
++// handler address, so unlike the other parts this one leaves r0 alone.
++
++.thumb
++.global patch_ingamereset_condReturnDispatch
++.type patch_ingamereset_condReturnDispatch, %function
++patch_ingamereset_condReturnDispatch:
++    beq condReturnCall
++    ldr r3, patch_ingamereset_condReturnIrqReturn
++    mov lr, r3
++
++condReturnCall:
++    cmp r0, #0 // irq 0 is vblank, and only vblank advances the count
++    bne condReturnContinue
++
++    // The key check and the reset overwrite r0 and take r2 as the address to carry on at,
++    // so the handler is kept here and restored by the resume stub below. Nothing can
++    // interrupt this code, so a plain word is enough.
++    adr r3, condReturnHandler
++    str r2, [r3]
++    ldr r2, patch_ingamereset_condReturnResumeAddress
++    ldr r3, patch_ingamereset_condReturnKeyCheck
++    bx r3
++
++condReturnContinue:
++    // r0 still holds the interrupt index, which is what this dispatcher's handlers are
++    // entered with.
++    bx r2
++
++// Reached as the continuation when the reset could not be performed.
++.global patch_ingamereset_condReturnResume
++.type patch_ingamereset_condReturnResume, %function
++patch_ingamereset_condReturnResume:
++    ldr r3, condReturnHandler
++    movs r0, #0 // only interrupt 0 reaches the key check
++    bx r3
++
++.balign 4
++
++// The handler for the interrupt being serviced, kept across the key check and the reset.
++condReturnHandler:
++    .word 0
++
++.global patch_ingamereset_condReturnIrqReturn
++patch_ingamereset_condReturnIrqReturn:
++    .word 0
++
++.global patch_ingamereset_condReturnResumeAddress
++patch_ingamereset_condReturnResumeAddress:
++    .word 0
++
++.global patch_ingamereset_condReturnKeyCheck
++patch_ingamereset_condReturnKeyCheck:
++    .word 0
++
++.pool
++
+ .section "patch_ingamereset_dispatch_nested", "ax"
+ 
+ // Dispatch part for the stock dispatcher wrapped so that interrupts can nest, found in
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h
+index 3c35cbf..69556a0 100644
+--- a/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcher.h
+@@ -19,7 +19,11 @@ enum class IrqDispatcherVariant
+ 
+     /// @brief The stock dispatcher wrapped so that interrupts can nest.
+     ///        Found in Black Sigil: Blade of the Exiled.
+-    Nested
++    Nested,
++
++    /// @brief Sets the handler's return address only for some interrupts.
++    ///        Found in Diddy Kong Racing DS.
++    CondReturn
+ };
+ 
+ /// @brief Where and how the in-game reset hooks into a game's arm9 interrupt dispatcher,
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.cpp b/arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.cpp
+new file mode 100644
+index 0000000..dbe93bc
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.cpp
+@@ -0,0 +1,84 @@
++#include "common.h"
++#include "patches/PatchContext.h"
++#include "IrqDispatcherCondReturn.h"
++
++// A dispatcher that sets the handler's return address only for some interrupts, found in
++// Diddy Kong Racing DS. It is the stock dispatcher up to the acknowledge, so the pattern has
++// to reach past it into the dispatch, where it loads the handler into r2 instead of r0 and
++// makes the push and the return address conditional.
++static const u32 sPattern[] =
++{
++    0xE16F0F11u, // clz r0, r1
++    0xE1D11033u, // bics r1, r1, r3, lsr r0
++    0x1AFFFFFCu, // bne clz
++    0xE1A01033u, // lsr r1, r3, r0
++    0xE58C1004u, // str r1, [ip, #4]              @ acknowledge
++    0xE59F1000u, // ldr r1, [pc, #irqTable]       @ offset differs between builds
++    0xE270001Fu, // rsbs r0, r0, #31
++    0xE7912100u, // ldr r2, [r1, r0, lsl #2]      @ handler in r2, not r0
++    0xE350000Au, // cmp r0, #10
++    0x192D4000u, // stmfdne sp!, {lr}
++    0x159FE000u, // ldrne lr, [pc, #irqReturn]    @ offset differs between builds
++    0xE12FFF12u  // bx r2
++};
++
++// The two pc relative loads, whose literal pool offsets are the only parts of this dispatcher
++// that differ between builds.
++#define IRQ_TABLE_LOAD_WORD     5
++#define IRQ_TABLE_LOAD_OPCODE   0xE59F1000u // ldr r1, [pc, #imm12], adding the offset
++#define IRQ_RETURN_LOAD_WORD    10
++#define IRQ_RETURN_LOAD_OPCODE  0x159FE000u // ldrne lr, [pc, #imm12], adding the offset
++
++// The conditional return address load and the call the jump replaces, and the instruction the
++// handler returns to, which is the whole pattern plus its two literals away.
++#define HOOK_WORD               10
++#define IRQ_RETURN_OFFSET       0x38
++
++bool FindCondReturnIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result)
++{
++    u32* match = FindUniqueIrqDispatcherPattern(patchContext, sPattern,
++        sizeof(sPattern) / sizeof(u32),
++        (1u << IRQ_TABLE_LOAD_WORD) | (1u << IRQ_RETURN_LOAD_WORD), "condreturn");
++    if (!match)
++    {
++        return false;
++    }
++
++    // Resolving the loads also confirms the wildcarded words are still the pc relative loads
++    // they should be.
++    const u32* tableLiteral = ResolvePcRelativeLoad(patchContext,
++        &match[IRQ_TABLE_LOAD_WORD], IRQ_TABLE_LOAD_OPCODE);
++    const u32* returnLiteral = ResolvePcRelativeLoad(patchContext,
++        &match[IRQ_RETURN_LOAD_WORD], IRQ_RETURN_LOAD_OPCODE);
++    if (!tableLiteral || !returnLiteral)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher literal loads mismatch\n");
++        return false;
++    }
++
++    // The literal return address is where the instruction after the dispatcher's call ends
++    // up, which ties the match to the real dispatcher at its final location.
++    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
++    if (*returnLiteral != finalAddress + IRQ_RETURN_OFFSET)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
++        return false;
++    }
++
++    // The dispatch part does not need the table, because the dispatcher has already looked the
++    // handler up, but a match whose table is nonsense is not this dispatcher. The table is an
++    // array of 32-bit handler addresses, so its address must be word aligned.
++    u32 irqTable = *tableLiteral;
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return false;
++    }
++
++    result.hook = match + HOOK_WORD;
++    result.irqTable = irqTable;
++    result.continueAddress = *returnLiteral;
++    LOG_DEBUG("In-game reset: condreturn irq dispatcher at 0x%p (final 0x%X), table 0x%X\n",
++        match, finalAddress, irqTable);
++    return true;
++}
+diff --git a/arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.h b/arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.h
+new file mode 100644
+index 0000000..225dcbe
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameReset/IrqDispatcherCondReturn.h
+@@ -0,0 +1,35 @@
++#pragma once
++#include "IrqDispatcher.h"
++#include "InGameResetPatchCode.h"
++
++/// @brief Dispatch part for a dispatcher that sets the handler's return address only for some
++///        interrupts. It needs no interrupt table address, because the dispatcher has already
++///        looked the handler up by the point where this takes over.
++class InGameResetCondReturnDispatchPatchCode : public InGameResetDispatchPatchCode
++{
++public:
++    InGameResetCondReturnDispatchPatchCode(PatchHeap& patchHeap, const IrqDispatcherMatch& match,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_condreturn),
++            SECTION_SIZE(patch_ingamereset_dispatch_condreturn), patchHeap,
++            (void*)patch_ingamereset_condReturnDispatch)
++    {
++        patch_ingamereset_condReturnIrqReturn = match.continueAddress;
++        patch_ingamereset_condReturnResumeAddress =
++            (u32)GetAddressAtTarget((void*)patch_ingamereset_condReturnResume);
++        patch_ingamereset_condReturnKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_dispatch_condreturn);
++    }
++};
++
++/// @brief Searches for a dispatcher that sets the handler's return address only for some
++///        interrupts.
++/// @param patchContext The patch context to use.
++/// @param result Receives the hook location and addresses when it is found.
++/// @return True when it was found, or false otherwise.
++bool FindCondReturnIrqDispatcher(PatchContext& patchContext, IrqDispatcherMatch& result);

@@ -1,0 +1,470 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Mon, 14 Sep 2026 09:25:54 -0400
+Subject: [PATCH 01/14] Cache the DLDI driver on the SD card
+
+Pico Loader is handed a DLDI driver on every normal boot, but not when it is
+reloaded from the card, such as after a soft reset. Homebrew booted then had
+no SD access.
+
+Save the handed-down driver to /_pico/dldi.bin when the saved copy is missing
+or belongs to a different driver, and use the saved copy when no driver is
+handed down. If homebrew still has no driver, show an error asking for a
+power cycle instead of booting it without SD access.
+---
+ arm7/source/fat/dldi.cpp         | 264 +++++++++++++++++++++++++++++++
+ arm7/source/fat/dldi.h           |  13 ++
+ arm7/source/loader/NdsLoader.cpp |  47 +++++-
+ arm7/source/loader/NdsLoader.h   |   3 +
+ arm7/source/main.cpp             |   7 +-
+ 5 files changed, 325 insertions(+), 9 deletions(-)
+
+diff --git a/arm7/source/fat/dldi.cpp b/arm7/source/fat/dldi.cpp
+index 76b8b39..a0ab2fd 100644
+--- a/arm7/source/fat/dldi.cpp
++++ b/arm7/source/fat/dldi.cpp
+@@ -1,12 +1,26 @@
+ #include "common.h"
++#include <memory>
++#include <malloc.h>
+ #include <string.h>
+ #include "ipc.h"
+ #include "ipcCommands.h"
+ #include "loader/DldiDriver.h"
++#include "dldi.h"
++
++#define DLDI_CACHE_PATH         "/_pico/dldi.bin"
++#define DLDI_CACHE_TEMP_PATH    "/_pico/dldi.tmp"
+ 
+ static u8 sDldiBuffer[16 * 1024] alignas(32);
+ static DldiDriver sDldiDriver = DldiDriver((dldi_header_t*)sDldiBuffer);
+ 
++/// @brief Whether the driver in sDldiBuffer was handed down through gLoaderHeader.dldiDriver.
++///        Otherwise sDldiBuffer only holds entry points into the platform's SD patch code,
++///        which can be used for Pico Loader's own reads but cannot be patched into a program.
++static bool sIsHandedDownDriver = false;
++
++/// @brief The card's own driver loaded from DLDI_CACHE_PATH, or \c nullptr when none was loaded.
++static dldi_header_t* sCachedDriver = nullptr;
++
+ [[gnu::target("thumb")]]
+ static bool readSectorsWithPatchCode(u32 sector, u32 count, void* buffer)
+ {
+@@ -29,6 +43,7 @@ bool dldi_init()
+     if (!driver || driver->dldiMagic != DLDI_MAGIC || driver->driverMagic == DLDI_DRIVER_MAGIC_NONE)
+     {
+         LOG_DEBUG("No dldi driver found\n");
++        sIsHandedDownDriver = false;
+ 
+         // Need to initialize before getting the patch code
+         sendToArm9(IPC_COMMAND_ARM9_INITIALIZE_SD_CARD);
+@@ -60,6 +75,7 @@ bool dldi_init()
+         }
+ 
+         memcpy(sDldiBuffer, driver, driverSize);
++        sIsHandedDownDriver = true;
+ 
+         sDldiDriver.Relocate();
+         sDldiDriver.PrepareForUse();
+@@ -91,12 +107,260 @@ extern "C" bool dldi_writeSectors(const void* buffer, u32 sector, u32 count)
+     return sDldiDriver.WriteSectors(sector, count, buffer);
+ }
+ 
++bool dldi_hasDriver()
++{
++    return sIsHandedDownDriver || sCachedDriver != nullptr;
++}
++
+ bool dldi_patchTo(dldi_header_t* stub)
+ {
++    if (sCachedDriver)
++    {
++        return DldiDriver(sCachedDriver).PatchTo(stub);
++    }
+     return sDldiDriver.PatchTo(stub);
+ }
+ 
+ void dldi_copyTo(void* target)
+ {
++    // The copy is handed back to Pico Loader when the booted program returns to the
++    // launcher, long after this instance is gone, so it must be a complete driver.
++    if (sCachedDriver)
++    {
++        memcpy(target, sCachedDriver, 1u << sCachedDriver->driverSize);
++        return;
++    }
+     memcpy(target, sDldiBuffer, sizeof(sDldiBuffer));
+ }
++
++static bool isRangeInsideDriver(const dldi_header_t* driver, u32 start, u32 end)
++{
++    return start <= end && driver->driverStartAddress <= start && end <= driver->driverEndAddress;
++}
++
++static bool isFunctionInsideDriver(const dldi_header_t* driver, u32 function)
++{
++    return driver->driverStartAddress <= function && function < driver->driverEndAddress;
++}
++
++/// @brief Checks that a driver image is a real card driver whose header cannot make
++///        DldiDriver::Relocate() or DldiDriver::PrepareForUse() touch memory outside
++///        the image. Both do pointer arithmetic and a memset driven purely by header fields.
++/// @param driver The driver header.
++/// @param imageSize The number of bytes available for the driver image.
++static bool isCacheableDriver(const dldi_header_t* driver, u32 imageSize)
++{
++    if (driver->dldiMagic != DLDI_MAGIC || driver->driverMagic == DLDI_DRIVER_MAGIC_NONE)
++    {
++        return false;
++    }
++
++    // A driver larger than sDldiBuffer also would not fit the space the homebrew
++    // bootstub reserves for dldi_copyTo().
++    if (driver->driverSize >= 32 ||
++        (1u << driver->driverSize) < sizeof(dldi_header_t) ||
++        (1u << driver->driverSize) > sizeof(sDldiBuffer) ||
++        (1u << driver->driverSize) != imageSize)
++    {
++        return false;
++    }
++
++    if (driver->driverStartAddress >= driver->driverEndAddress ||
++        driver->driverEndAddress - driver->driverStartAddress > imageSize)
++    {
++        return false;
++    }
++
++    // A glue, GOT or BSS range is only dereferenced when its fix flag is set, and
++    // FIX_ALL replaces the glue and GOT fixes, so unused ranges are not checked.
++    if (!(driver->fixFlags & DLDI_FIX_ALL))
++    {
++        if ((driver->fixFlags & DLDI_FIX_GLUE) &&
++            !isRangeInsideDriver(driver, driver->glueStartAddress, driver->glueEndAddress))
++        {
++            return false;
++        }
++        if ((driver->fixFlags & DLDI_FIX_GOT) &&
++            !isRangeInsideDriver(driver, driver->gotStartAddress, driver->gotEndAddress))
++        {
++            return false;
++        }
++    }
++    if ((driver->fixFlags & DLDI_FIX_BSS) &&
++        !isRangeInsideDriver(driver, driver->bssStartAddress, driver->bssEndAddress))
++    {
++        return false;
++    }
++
++    return isFunctionInsideDriver(driver, driver->startupFuncAddress) &&
++        isFunctionInsideDriver(driver, driver->isInsertedFuncAddress) &&
++        isFunctionInsideDriver(driver, driver->readSectorsFuncAddress) &&
++        isFunctionInsideDriver(driver, driver->writeSectorsFuncAddress) &&
++        isFunctionInsideDriver(driver, driver->clearStatusFuncAddress) &&
++        isFunctionInsideDriver(driver, driver->shutdownFuncAddress);
++}
++
++/// @brief Returns whether two headers describe the same driver build.
++///        Only fields that identify the driver are compared. The rest of the image holds
++///        the driver's variables, which differ from boot to boot, and the absolute
++///        addresses change whenever the driver is relocated, so the layout is compared
++///        relative to driverStartAddress. stubSize is excluded because PatchTo() replaces
++///        it with the size of whichever stub the driver was patched into.
++static bool isSameDriver(const dldi_header_t* a, const dldi_header_t* b)
++{
++    static constexpr u32 dldi_header_t::* sAddressFields[] =
++    {
++        &dldi_header_t::driverEndAddress,
++        &dldi_header_t::glueStartAddress,
++        &dldi_header_t::glueEndAddress,
++        &dldi_header_t::gotStartAddress,
++        &dldi_header_t::gotEndAddress,
++        &dldi_header_t::bssStartAddress,
++        &dldi_header_t::bssEndAddress,
++        &dldi_header_t::startupFuncAddress,
++        &dldi_header_t::isInsertedFuncAddress,
++        &dldi_header_t::readSectorsFuncAddress,
++        &dldi_header_t::writeSectorsFuncAddress,
++        &dldi_header_t::clearStatusFuncAddress,
++        &dldi_header_t::shutdownFuncAddress
++    };
++
++    if (a->driverMagic != b->driverMagic ||
++        a->driverSize != b->driverSize ||
++        a->fixFlags != b->fixFlags ||
++        a->featureFlags != b->featureFlags ||
++        memcmp(a->driverName, b->driverName, sizeof(a->driverName)) != 0)
++    {
++        return false;
++    }
++
++    for (auto field : sAddressFields)
++    {
++        if (a->*field - a->driverStartAddress != b->*field - b->driverStartAddress)
++            return false;
++    }
++
++    return true;
++}
++
++static void saveDriverCache()
++{
++    auto driver = (const dldi_header_t*)sDldiBuffer;
++    u32 imageSize = 1u << driver->driverSize;
++    if (!isCacheableDriver(driver, imageSize))
++    {
++        LOG_DEBUG("Handed down dldi driver is not cacheable\n");
++        return;
++    }
++
++    // Skip the write when the saved copy is already this driver.
++    auto file = std::make_unique<FIL>();
++    if (f_open(file.get(), DLDI_CACHE_PATH, FA_READ) == FR_OK)
++    {
++        dldi_header_t cachedHeader;
++        UINT bytesRead = 0;
++        bool isUpToDate = f_read(file.get(), &cachedHeader, sizeof(cachedHeader), &bytesRead) == FR_OK &&
++            bytesRead == sizeof(cachedHeader) &&
++            f_size(file.get()) == imageSize &&
++            isSameDriver(&cachedHeader, driver);
++        f_close(file.get());
++        if (isUpToDate)
++        {
++            LOG_DEBUG("Cached dldi driver is up to date\n");
++            return;
++        }
++    }
++
++    // Write to a temporary file first, so an interrupted write can never
++    // leave a truncated driver under DLDI_CACHE_PATH.
++    LOG_DEBUG("Updating cached dldi driver\n");
++    if (f_open(file.get(), DLDI_CACHE_TEMP_PATH, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
++    {
++        LOG_ERROR("Failed to create dldi cache file\n");
++        return;
++    }
++    UINT bytesWritten = 0;
++    bool written = f_write(file.get(), driver, imageSize, &bytesWritten) == FR_OK &&
++        bytesWritten == imageSize;
++    if (f_close(file.get()) != FR_OK || !written)
++    {
++        // Leave the existing saved copy untouched and discard the partial one.
++        LOG_ERROR("Failed to write dldi cache file\n");
++        f_unlink(DLDI_CACHE_TEMP_PATH);
++        return;
++    }
++
++    // Delete the old copy first: f_rename() fails with FR_EXIST instead of
++    // replacing a file. A missing old copy is not an error.
++    FRESULT result = f_unlink(DLDI_CACHE_PATH);
++
++    // Rename the temporary file to the saved copy's name (DLDI_CACHE_PATH).
++    // It is then the saved copy itself, loaded whenever no driver is handed down.
++    if ((result != FR_OK && result != FR_NO_FILE) ||
++        f_rename(DLDI_CACHE_TEMP_PATH, DLDI_CACHE_PATH) != FR_OK)
++    {
++        LOG_ERROR("Failed to replace dldi cache file\n");
++    }
++}
++
++static void loadDriverCache()
++{
++    auto file = std::make_unique<FIL>();
++    if (f_open(file.get(), DLDI_CACHE_PATH, FA_READ) != FR_OK)
++    {
++        LOG_DEBUG("No cached dldi driver\n");
++        return;
++    }
++
++    dldi_header_t header;
++    UINT bytesRead = 0;
++    u32 imageSize = f_size(file.get());
++    if (f_read(file.get(), &header, sizeof(header), &bytesRead) != FR_OK ||
++        bytesRead != sizeof(header) ||
++        !isCacheableDriver(&header, imageSize))
++    {
++        LOG_ERROR("Cached dldi driver is invalid\n");
++        f_close(file.get());
++        return;
++    }
++
++    // sDldiBuffer cannot hold the cached driver: it holds the patch code entry points
++    // that are reading this very file.
++    auto image = (dldi_header_t*)memalign(32, imageSize);
++    if (!image)
++    {
++        LOG_ERROR("Not enough memory for cached dldi driver of size %d\n", imageSize);
++        f_close(file.get());
++        return;
++    }
++
++    u32 remaining = imageSize - sizeof(header);
++    memcpy(image, &header, sizeof(header));
++    if (f_read(file.get(), (u8*)image + sizeof(header), remaining, &bytesRead) != FR_OK ||
++        bytesRead != remaining)
++    {
++        LOG_ERROR("Failed to read cached dldi driver\n");
++        free(image);
++        f_close(file.get());
++        return;
++    }
++    f_close(file.get());
++
++    // The driver is not relocated or started here. Pico Loader keeps reading the card
++    // through the patch code, and DldiDriver::PatchTo() relocates the driver and clears
++    // its BSS in the stub of the program being booted, which starts it itself.
++    LOG_DEBUG("Using cached dldi driver\n");
++    sCachedDriver = image;
++}
++
++void dldi_updateDriverCache()
++{
++    if (sIsHandedDownDriver)
++    {
++        saveDriverCache();
++    }
++    else
++    {
++        loadDriverCache();
++    }
++}
+diff --git a/arm7/source/fat/dldi.h b/arm7/source/fat/dldi.h
+index 95ede13..5450f48 100644
+--- a/arm7/source/fat/dldi.h
++++ b/arm7/source/fat/dldi.h
+@@ -2,6 +2,19 @@
+ #include "loader/dldiHeader.h"
+ 
+ bool dldi_init();
++
++/// @brief Keeps a copy of the card's DLDI driver on the mounted card.
++///        A driver handed down through gLoaderHeader.dldiDriver is saved when the saved
++///        copy is missing or belongs to a different driver. When no driver was handed down,
++///        as after an in-game reset, the saved copy is loaded instead and is used by
++///        dldi_patchTo() and dldi_copyTo().
++/// @note Requires the card to be mounted.
++void dldi_updateDriverCache();
++
++/// @brief Returns whether a DLDI driver is available to patch into the program being booted,
++///        either handed down through gLoaderHeader.dldiDriver or loaded from the card.
++bool dldi_hasDriver();
++
+ bool dldi_patchTo(dldi_header_t* stub);
+ void dldi_copyTo(void* target);
+ 
+diff --git a/arm7/source/loader/NdsLoader.cpp b/arm7/source/loader/NdsLoader.cpp
+index 71b5a14..380d3aa 100644
+--- a/arm7/source/loader/NdsLoader.cpp
++++ b/arm7/source/loader/NdsLoader.cpp
+@@ -294,6 +294,20 @@ void NdsLoader::Load(BootMode bootMode)
+             ErrorDisplay().PrintError("Failed to load arm7i.");
+             return;
+         }
++
++        if (isHomebrew && RequiresMissingDldiDriver())
++        {
++            // A power cycle is the only recovery that works on every console. The
++            // next boot hands a driver down again, which also saves it to the card.
++            //
++            // Supported consoles could instead restart or power off when a button is
++            // pressed: a DSi or a 3DS in DSi mode can be reset through the MCU, while a
++            // DS or DS Lite cannot restart from software and can only be powered off
++            // through the power management device.
++            ErrorDisplay().PrintError(
++                "Pico Loader: DLDI driver not found.\n\nThis homebrew application cannot\naccess the SD card without it.\n\nPlease turn the console off and\non again.");
++            return;
++        }
+     }
+ 
+     if (!isHomebrew)
+@@ -973,6 +987,27 @@ bool NdsLoader::TryLoadArm7i()
+     return TryDecryptArm7i();
+ }
+ 
++dldi_header_t* NdsLoader::FindDldiStub(u32 loadAddress, u32 size) const
++{
++    int offset = sDldiStubMatcher.FindFirstOccurance((const u32*)loadAddress, size >> 2);
++    if (offset < 0)
++    {
++        return nullptr;
++    }
++    return (dldi_header_t*)(loadAddress + (offset << 2));
++}
++
++bool NdsLoader::RequiresMissingDldiDriver()
++{
++    // Only the DLDI boot drive hands drivers to booted programs. Without a driver the
++    // program would start with its placeholder stub, whose reads always fail.
++    return gLoaderHeader.bootDrive == PLOAD_BOOT_DRIVE_DLDI &&
++        !dldi_hasDriver() &&
++        ShouldAttemptDldiPatch() &&
++        (FindDldiStub(_romHeader.arm9LoadAddress, _romHeader.arm9Size) ||
++         FindDldiStub(_romHeader.arm7LoadAddress, _romHeader.arm7Size));
++}
++
+ void NdsLoader::HandleDldiPatching()
+ {
+     if (!ShouldAttemptDldiPatch())
+@@ -980,20 +1015,16 @@ void NdsLoader::HandleDldiPatching()
+         return;
+     }
+ 
+-    int arm9DldiAddr = sDldiStubMatcher.FindFirstOccurance(
+-        (const u32*)_romHeader.arm9LoadAddress, _romHeader.arm9Size >> 2) << 2;
+-    if (arm9DldiAddr >= 0)
++    dldi_header_t* arm9Dldi = FindDldiStub(_romHeader.arm9LoadAddress, _romHeader.arm9Size);
++    if (arm9Dldi)
+     {
+-        dldi_header_t* arm9Dldi = (dldi_header_t*)(_romHeader.arm9LoadAddress + arm9DldiAddr);
+         LOG_DEBUG("Dldi found in arm9 at address %p\n", arm9Dldi);
+         dldi_patchTo(arm9Dldi);
+     }
+ 
+-    int arm7DldiAddr = sDldiStubMatcher.FindFirstOccurance(
+-        (const u32*)_romHeader.arm7LoadAddress, _romHeader.arm7Size >> 2) << 2;
+-    if (arm7DldiAddr >= 0)
++    dldi_header_t* arm7Dldi = FindDldiStub(_romHeader.arm7LoadAddress, _romHeader.arm7Size);
++    if (arm7Dldi)
+     {
+-        dldi_header_t* arm7Dldi = (dldi_header_t*)(_romHeader.arm7LoadAddress + arm7DldiAddr);
+         LOG_DEBUG("Dldi found in arm7 at address %p\n", arm7Dldi);
+         dldi_patchTo(arm7Dldi);
+     }
+diff --git a/arm7/source/loader/NdsLoader.h b/arm7/source/loader/NdsLoader.h
+index d5501cc..3fc4cdb 100644
+--- a/arm7/source/loader/NdsLoader.h
++++ b/arm7/source/loader/NdsLoader.h
+@@ -2,6 +2,7 @@
+ #include "common.h"
+ #include "../../include/picoLoader7.h"
+ #include "ndsHeader.h"
++#include "dldiHeader.h"
+ #include "DsiWareSaveArranger.h"
+ #include "BootMode.h"
+ #include "ConsoleRegion.h"
+@@ -84,6 +85,8 @@ private:
+     bool TryDecryptArm7i();
+     bool TryLoadArm7();
+     bool TryLoadArm7i();
++    dldi_header_t* FindDldiStub(u32 loadAddress, u32 size) const;
++    bool RequiresMissingDldiDriver();
+     void HandleDldiPatching();
+     void StartRom(BootMode bootMode);
+     void SetupTwlConfig();
+diff --git a/arm7/source/main.cpp b/arm7/source/main.cpp
+index 96c2122..b95469e 100644
+--- a/arm7/source/main.cpp
++++ b/arm7/source/main.cpp
+@@ -183,7 +183,12 @@ extern "C" void loaderMain()
+         {
+             if (dldi_init())
+             {
+-                mountDldi();
++                // The driver cache depends only on whether a driver was handed down,
++                // not on where the rom is loaded from, so multiboot needs no special case.
++                if (mountDldi())
++                {
++                    dldi_updateDriverCache();
++                }
+             }
+             break;
+         }

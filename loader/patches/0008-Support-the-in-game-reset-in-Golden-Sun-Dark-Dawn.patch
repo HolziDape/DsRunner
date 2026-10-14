@@ -1,0 +1,295 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Thu, 17 Sep 2026 20:12:38 -0400
+Subject: [PATCH 08/14] Support the in-game reset in Golden Sun: Dark Dawn
+
+The game replaces the SDK interrupt dispatcher with one that picks the pending
+interrupt with a single clz instead of a loop, makes its whole body conditional,
+and calls the handler with blx. None of the stock dispatcher's instructions
+survive, so it needs a dispatch part of its own.
+
+Two differences shape that part. The dispatcher keeps the end of the handler
+table in lr, so no copy of the table address is needed, and it has not
+acknowledged the interrupt at the point the jump takes over, so the write to
+REG_IF moves into the patch. When nothing is pending the replaced code called
+the BIOS return, which never comes back, so the patch branches to it instead.
+
+The pattern covers the dispatcher from its first instruction to its call, with
+only the literal pool offset left free, which is a tighter match than the stock
+dispatcher's four instructions. Since this dispatcher has no literal holding the
+address it runs from, the relocation check is that autoload places it in ITCM.
+---
+ .../patches/arm9/InGameResetPatchCode.h       |  27 +++++
+ .../patches/arm9/InGameResetPatchCode.s       |  76 ++++++++++++
+ .../patches/arm9/IrqDispatcherVariants.cpp    | 110 +++++++++++++++++-
+ 3 files changed, 212 insertions(+), 1 deletion(-)
+
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.h b/arm9/source/patches/arm9/InGameResetPatchCode.h
+index 08b9f75..924c9e8 100644
+--- a/arm9/source/patches/arm9/InGameResetPatchCode.h
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.h
+@@ -4,16 +4,20 @@
+ 
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_keycheck);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_sdk);
++DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_blx);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_reset);
+ 
+ extern "C" void patch_ingamereset_keyCheck(void);
+ extern "C" void patch_ingamereset_sdkDispatch(void);
++extern "C" void patch_ingamereset_blxDispatch(void);
+ extern "C" void patch_ingamereset_resetEntry(void);
+ 
+ extern u32 patch_ingamereset_resetAddress;
+ extern u32 patch_ingamereset_sdkIrqTable;
+ extern u32 patch_ingamereset_sdkIrqReturn;
+ extern u32 patch_ingamereset_sdkKeyCheck;
++extern u32 patch_ingamereset_blxIrqReturn;
++extern u32 patch_ingamereset_blxKeyCheck;
+ extern u32 patch_ingamereset_slot1LockAddress;
+ extern u32 patch_ingamereset_resetParamAddress;
+ extern u32 patch_ingamereset_resetParam;
+@@ -108,3 +112,26 @@ public:
+         return SECTION_SIZE(patch_ingamereset_dispatch_sdk);
+     }
+ };
++
++/// @brief Dispatch part for a dispatcher that picks the interrupt with a single clz and calls
++///        the handler with blx. It needs no interrupt table address, because the dispatcher
++///        already holds one in a register at the point where this takes over.
++class InGameResetBlxDispatchPatchCode : public InGameResetDispatchPatchCode
++{
++public:
++    InGameResetBlxDispatchPatchCode(PatchHeap& patchHeap, u32 irqReturn,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_blx),
++            SECTION_SIZE(patch_ingamereset_dispatch_blx), patchHeap,
++            (void*)patch_ingamereset_blxDispatch)
++    {
++        patch_ingamereset_blxIrqReturn = irqReturn;
++        patch_ingamereset_blxKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_dispatch_blx);
++    }
++};
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameResetPatchCode.s
+index 10ab0d9..762ff42 100644
+--- a/arm9/source/patches/arm9/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.s
+@@ -143,6 +143,82 @@ patch_ingamereset_sdkKeyCheck:
+ 
+ .pool
+ 
++.section "patch_ingamereset_dispatch_blx", "ax"
++
++// Dispatch part for a dispatcher that picks the interrupt with a single clz and calls the
++// handler with blx, found in Golden Sun: Dark Dawn. Its whole body is conditional on there
++// being something to service:
++//
++//     mov   ip, #0x04000000
++//     ldr   r2, [ip, #0x208]!        @ IME
++//     ldrd  r0, r1, [ip, #8]!        @ IE, IF
++//     cmp   r2, #0
++//     andsne r1, r0, r1              @ pending = IE & IF
++//     pushne {lr}
++//     ldrne lr, =irqTableEnd
++//     rsbne r0, r1, #0
++//     andne r1, r0, r1               @ lowest pending bit
++//     clzne r0, r1
++//     ldrne lr, [lr, -r0, lsl #2]    @ handler = table[31 - clz]
++//     strne r1, [ip, #4]             @ acknowledge
++//     blx   lr
++//
++// It replaces the last two conditional instructions, so it is entered with the flags of
++// "andsne r1, r0, r1" still set, r0 = clz, r1 = the lowest pending bit, ip = 0x04000210,
++// and lr = the address just past the end of the handler table. There is no need for a copy
++// of the table address, because lr already holds it.
++//
++// Unlike the stock dispatcher this one has not acknowledged the interrupt yet, so the
++// acknowledging write is part of the replaced code and is done here.
++
++.thumb
++.global patch_ingamereset_blxDispatch
++.type patch_ingamereset_blxDispatch, %function
++patch_ingamereset_blxDispatch:
++    // The jump into here does not change the flags, so they still say whether anything is
++    // pending. Nothing is pending when IME is off, or when IE & IF is zero.
++    bne blxPending
++    // The replaced code would fall through to "blx lr" with lr still holding the return
++    // into the BIOS, which never comes back: the matching "pushne {lr}" did not run on
++    // this path, so returning here would unbalance the dispatcher's stack. bx lr is
++    // therefore the same thing without the pointless return address.
++    bx lr
++
++blxPending:
++    // handler = [lr - clz * 4]. Thumb can only subtract low registers, so lr is copied.
++    mov r3, lr
++    lsls r2, r0, #2
++    subs r2, r3, r2
++    ldr r2, [r2] // r2 = handler, which is where normal dispatch carries on
++
++    // Acknowledge the interrupt, as the replaced "strne r1, [ip, #4]" did. REG_IF is at
++    // 0x04000214 and ip holds 0x04000210. Thumb can only store through a low register.
++    mov r3, ip
++    str r1, [r3, #4]
++
++    ldr r3, patch_ingamereset_blxIrqReturn
++    mov lr, r3
++    cmp r1, #1 // bit 0 is vblank, and only vblank advances the count
++    bne blxContinue
++    ldr r3, patch_ingamereset_blxKeyCheck
++    bx r3
++
++blxContinue:
++    movs r0, r2
++    bx r0
++
++.balign 4
++
++.global patch_ingamereset_blxIrqReturn
++patch_ingamereset_blxIrqReturn:
++    .word 0
++
++.global patch_ingamereset_blxKeyCheck
++patch_ingamereset_blxKeyCheck:
++    .word 0
++
++.pool
++
+ .section "patch_ingamereset_reset", "ax"
+ 
+ // Entered from the key check with r2 = the address that carries on with normal dispatch.
+diff --git a/arm9/source/patches/arm9/IrqDispatcherVariants.cpp b/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
+index 63f47b4..3ab2637 100644
+--- a/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
++++ b/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
+@@ -114,9 +114,105 @@ static const InGameResetDispatchPatchCode* createSdkPatchCode(PatchContext& patc
+     );
+ }
+ 
++// A dispatcher that picks the interrupt with a single clz and calls the handler with blx,
++// found in Golden Sun: Dark Dawn. Everything after the IME test is conditional, so the whole
++// run from the dispatcher's first instruction to its call is one pattern, which identifies it
++// far more tightly than the stock dispatcher's four instructions do.
++static const u32 sBlxPattern[] =
++{
++    0xE3A0C301u, // mov ip, #0x04000000
++    0xE5BC2208u, // ldr r2, [ip, #0x208]!        @ IME
++    0xE1EC00D8u, // ldrd r0, r1, [ip, #8]!       @ IE, IF
++    0xE3520000u, // cmp r2, #0
++    0x10101001u, // andsne r1, r0, r1
++    0x152DE004u, // pushne {lr}
++    0x159FE000u, // ldrne lr, [pc, #irqTableEnd] @ offset differs between builds
++    0x12610000u, // rsbne r0, r1, #0
++    0x10001001u, // andne r1, r0, r1
++    0x116F0F11u, // clzne r0, r1
++    0x171EE100u, // ldrne lr, [lr, -r0, lsl #2]
++    0x158C1004u, // strne r1, [ip, #4]
++    0xE12FFF3Eu  // blx lr
++};
++
++// The load of the table address, whose literal pool offset is the only part of this
++// dispatcher that differs between builds.
++#define BLX_IRQ_TABLE_LOAD_WORD         6
++#define BLX_IRQ_TABLE_LOAD_OPCODE       0x159FE000u // ldrne lr, [pc, #imm12], adding the offset
++#define BLX_IRQ_TABLE_LOAD_MASK         0xFFFFF000u
++
++// The two conditional instructions the jump replaces, and the address of the instruction
++// after the call, which is where the handler returns to. 13 words = 0x34 bytes.
++#define BLX_HOOK_WORD                   10
++#define BLX_IRQ_RETURN_OFFSET           0x34
++
++// SDK code that runs from instruction tightly-coupled memory is linked into this range, which
++// is a mirror of ITCM. A dispatcher that autoload does not place there is not this one.
++#define ITCM_MIRROR_START               0x01FF8000u
++#define ITCM_MIRROR_END                 0x02000000u
++
++static bool validateBlx(PatchContext& patchContext, u32* match, IrqDispatcherMatch& result)
++{
++    // This dispatcher has no literal holding the address it runs from, so instead check that
++    // autoload does move it into ITCM, which is where it has to run.
++    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
++    if (finalAddress < ITCM_MIRROR_START || finalAddress >= ITCM_MIRROR_END)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher is not in itcm (0x%X)\n", finalAddress);
++        return false;
++    }
++
++    // The wildcard word must still be the pc relative load this dispatcher has there.
++    u32 tableLoad = match[BLX_IRQ_TABLE_LOAD_WORD];
++    if ((tableLoad & BLX_IRQ_TABLE_LOAD_MASK) != BLX_IRQ_TABLE_LOAD_OPCODE)
++    {
++        LOG_WARNING("In-game reset: irq table load mismatch (0x%X)\n", tableLoad);
++        return false;
++    }
++
++    // Reading pc gives the address of the instruction plus 8, so the literal is two words
++    // past the load plus its offset.
++    const u32* tableLiteral = &match[BLX_IRQ_TABLE_LOAD_WORD] + 2 + ((tableLoad & ~BLX_IRQ_TABLE_LOAD_MASK) >> 2);
++    if (tableLiteral >= patchContext.GetDataEnd())
++    {
++        LOG_WARNING("In-game reset: irq table literal is out of range\n");
++        return false;
++    }
++
++    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
++    // The dispatch part does not need it, because the dispatcher has already loaded it, but a
++    // match whose table is nonsense is not this dispatcher.
++    u32 irqTable = *tableLiteral;
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return false;
++    }
++
++    result.irqTable = irqTable;
++    result.continueAddress = finalAddress + BLX_IRQ_RETURN_OFFSET;
++    return true;
++}
++
++static u32 getBlxPatchCodeSize()
++{
++    return InGameResetBlxDispatchPatchCode::GetSize();
++}
++
++static const InGameResetDispatchPatchCode* createBlxPatchCode(PatchContext& patchContext,
++    const IrqDispatcherMatch& match, const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++{
++    return patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetBlxDispatchPatchCode>
++    (
++        patchContext.GetPatchHeap(),
++        match.continueAddress,
++        keyCheckPatchCode
++    );
++}
++
+ // Dispatcher versions in the order they are tried. The stock one comes first, because it is
+ // what nearly every game has.
+-static const std::array<const irq_dispatcher_variant_t, 1> sIrqDispatcherVariants
++static const std::array<const irq_dispatcher_variant_t, 2> sIrqDispatcherVariants
+ {
+     irq_dispatcher_variant_t
+     {
+@@ -129,6 +225,18 @@ static const std::array<const irq_dispatcher_variant_t, 1> sIrqDispatcherVariant
+         .validate = validateSdk,
+         .getPatchCodeSize = getSdkPatchCodeSize,
+         .createPatchCode = createSdkPatchCode
++    },
++    irq_dispatcher_variant_t
++    {
++        .name = "blx",
++        .pattern = sBlxPattern,
++        .patternWordCount = sizeof(sBlxPattern) / sizeof(u32),
++        .wildcardMask = 1u << BLX_IRQ_TABLE_LOAD_WORD,
++        .anchorWordIndex = 0,
++        .hookWordIndex = BLX_HOOK_WORD,
++        .validate = validateBlx,
++        .getPatchCodeSize = getBlxPatchCodeSize,
++        .createPatchCode = createBlxPatchCode
+     }
+ };
+ 

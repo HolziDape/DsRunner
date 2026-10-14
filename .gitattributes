@@ -1,1 +1,3 @@
 *.bin binary
+# loader/build.sh applies these with git am; keep them byte for byte (also on Windows)
+loader/patches/*.patch -text

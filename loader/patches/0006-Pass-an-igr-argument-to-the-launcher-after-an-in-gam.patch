@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Tue, 15 Sep 2026 21:27:30 -0400
+Subject: [PATCH 06/14] Pass an "igr" argument to the launcher after an in-game
+ reset
+
+The launcher is homebrew, so it is handed its own path as argv[0]. Appending
+an "igr" marker after that path lets it tell a boot that follows an in-game
+reset apart from a boot out of power on, and restore the state belonging to
+the interrupted session. A launcher with no use for the marker ignores the
+extra argument.
+
+Also require A alongside L + R + Down + B and shorten the hold to one second,
+which makes the combo harder to hit by accident while staying quick to use.
+---
+ arm7/source/main.cpp                            |  3 +++
+ arm9/source/patches/arm9/InGameResetPatchCode.s | 10 +++++-----
+ common/inGameReset.h                            |  6 ++++++
+ 3 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/arm7/source/main.cpp b/arm7/source/main.cpp
+index 9d64013..5c6d6b3 100644
+--- a/arm7/source/main.cpp
++++ b/arm7/source/main.cpp
+@@ -244,6 +244,9 @@ extern "C" void loaderMain()
+         LOG_DEBUG("In-game reset, returning to launcher %s\n", launcherPath);
+         sLoader.SetRomPath(launcherPath);
+         sLoader.SetLauncherPath(launcherPath);
++        // The launcher is homebrew, so it receives its own path as argv[0] followed by this
++        // marker, which tells it apart from a boot out of power on.
++        sLoader.SetArguments(IN_GAME_RESET_LAUNCHER_ARGUMENT, sizeof(IN_GAME_RESET_LAUNCHER_ARGUMENT));
+         sLoader.Load(BootMode::Normal);
+     }
+     else if (((nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader)->arm7EntryAddress == (u32)gLoaderHeader.entryPoint)
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameResetPatchCode.s
+index c57c4f5..0189bfd 100644
+--- a/arm9/source/patches/arm9/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.s
+@@ -1,13 +1,13 @@
+ .cpu arm946e-s
+ .syntax unified
+ 
+-// L + R + Down + B, as the bits that read 0 in REG_KEYINPUT while held.
+-// Bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B, giving 0x382.
+-.equ IN_GAME_RESET_KEY_MASK, (1 << 9) | (1 << 8) | (1 << 7) | (1 << 1)
++// L + R + Down + B + A, as the bits that read 0 in REG_KEYINPUT while held.
++// Bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B, bit 0 = A, giving 0x383.
++.equ IN_GAME_RESET_KEY_MASK, (1 << 9) | (1 << 8) | (1 << 7) | (1 << 1) | (1 << 0)
+ 
+ // Number of consecutive vblanks the keys must be held before the reset is performed.
+-// The DS draws 60 frames per second, so 120 is two seconds.
+-.equ IN_GAME_RESET_HOLD_FRAMES, 120
++// The DS draws 60 frames per second, so 60 is one second.
++.equ IN_GAME_RESET_HOLD_FRAMES, 60
+ 
+ // Lock id used while holding the slot 1 lock. The SDK hands out ids starting at 0x40 and
+ // the game never runs again once the lock is taken, so any nonzero id is sufficient.
+diff --git a/common/inGameReset.h b/common/inGameReset.h
+index 96b44f6..8f57967 100644
+--- a/common/inGameReset.h
++++ b/common/inGameReset.h
+@@ -6,3 +6,9 @@
+ ///        any small integer or pointer a game would use.
+ ///        Stored little-endian, its bytes read "PIGR" (Pico In-Game Reset) in a memory dump.
+ #define IN_GAME_RESET_PARAM_RETURN_TO_LAUNCHER  0x52474950
++
++/// @brief Argument handed to the launcher, after its own path, when it is booted by an
++///        in-game reset rather than from power on. A launcher can use it to restore
++///        state belonging to the session the reset interrupted, and one that has no use
++///        for it simply ignores the extra argument.
++#define IN_GAME_RESET_LAUNCHER_ARGUMENT         "igr"

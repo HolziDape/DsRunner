@@ -1,0 +1,663 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Mon, 14 Sep 2026 18:44:00 -0400
+Subject: [PATCH 05/14] Return to the launcher when L+R+Down+B is held in a
+ retail game
+
+Holding L+R+Down+B for two seconds reboots into Pico Loader, which then
+boots the launcher. This works whether or not the game implements a soft
+reset of its own.
+
+The keys are counted in the SDK interrupt dispatcher. Its final table
+dispatch is the same from SDK 2 through SDK 5, so one signature covers
+the retail library; the match is only used when the dispatcher's start
+is nearby and its literal return address matches the relocated location.
+The dispatch is replaced with a jump to patch code that performs it and
+checks the keys on vblank.
+
+The reset waits until the slot 1 lock is free and takes it, so no rom
+read or save operation is interrupted on the cartridge bus, then enters
+the OS_ResetSystem reboot and marks the reset parameter. Pico Loader's
+arm7 recognises the marker and loads the launcher.
+
+The patch is optional: it is skipped when the dispatcher is not found or
+its code, and the reboot if the game has none, do not fit in the
+remaining patch space.
+---
+ CHANGELOG.md                                  |   1 +
+ arm7/source/main.cpp                          |  23 ++
+ arm9/source/Arm9Patcher.cpp                   |  14 ++
+ arm9/source/patches/arm9/InGameResetPatch.cpp | 176 +++++++++++++++
+ arm9/source/patches/arm9/InGameResetPatch.h   |  40 ++++
+ .../patches/arm9/InGameResetPatchCode.h       |  68 ++++++
+ .../patches/arm9/InGameResetPatchCode.s       | 208 ++++++++++++++++++
+ common/inGameReset.h                          |   8 +
+ 8 files changed, 538 insertions(+)
+ create mode 100644 arm9/source/patches/arm9/InGameResetPatch.cpp
+ create mode 100644 arm9/source/patches/arm9/InGameResetPatch.h
+ create mode 100644 arm9/source/patches/arm9/InGameResetPatchCode.h
+ create mode 100644 arm9/source/patches/arm9/InGameResetPatchCode.s
+ create mode 100644 common/inGameReset.h
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 94eb77e..b334b2c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -4,6 +4,7 @@
+ 
+ ### Added
+ - Support for banner save files
++- In-game reset: hold L+R+Down+B for two seconds in a retail game to return to the launcher
+ 
+ ## Fixed
+ - BG2/BG3 reference point registers now cleared before starting ROMs - by @danyocom
+diff --git a/arm7/source/main.cpp b/arm7/source/main.cpp
+index b95469e..9d64013 100644
+--- a/arm7/source/main.cpp
++++ b/arm7/source/main.cpp
+@@ -17,6 +17,7 @@
+ #include "fat/dldi.h"
+ #include "loader/NdsLoader.h"
+ #include "sharedMemory.h"
++#include "inGameReset.h"
+ #include "ndsHeader.h"
+ #include "globalHeap.h"
+ #include "mmc/tmio.h"
+@@ -26,6 +27,10 @@
+ #define HANDSHAKE_PART2     0xC
+ #define HANDSHAKE_PART3     0xD
+ 
++/// @brief Launcher booted by an in-game reset when the reloaded header has no launcher path.
++///        This is the file the DSpico bootloader boots.
++#define DEFAULT_LAUNCHER_PATH   "/_picoboot.nds"
++
+ ILogger* gLogger;
+ FATFS gFatFs;
+ 
+@@ -223,6 +228,24 @@ extern "C" void loaderMain()
+         LOG_DEBUG("Multiboot\n");
+         sLoader.Load(BootMode::Multiboot);
+     }
++    // The reboot sets the arm7 entry of the header copy to Pico Loader's own entry point, so this
++    // match means Pico Loader was started by a reset from a running game rather than a fresh boot.
++    else if (((nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader)->arm7EntryAddress == (u32)gLoaderHeader.entryPoint &&
++        TWL_SHARED_MEMORY->ntrSharedMem.resetParam == IN_GAME_RESET_PARAM_RETURN_TO_LAUNCHER)
++    {
++        // The in-game reset patch enters the same reboot as the OS_ResetSystem patch and
++        // marks it in the reset parameter. Pico Loader was reloaded from the card, so
++        // launcherPath is only set when the reloaded binary itself carries one.
++        // Cleared so a later reset from the launcher is not mistaken for another in-game reset.
++        TWL_SHARED_MEMORY->ntrSharedMem.resetParam = 0;
++        const char* launcherPath = gLoaderHeader.v2.launcherPath[0] != 0
++            ? gLoaderHeader.v2.launcherPath
++            : DEFAULT_LAUNCHER_PATH;
++        LOG_DEBUG("In-game reset, returning to launcher %s\n", launcherPath);
++        sLoader.SetRomPath(launcherPath);
++        sLoader.SetLauncherPath(launcherPath);
++        sLoader.Load(BootMode::Normal);
++    }
+     else if (((nds_header_ntr_t*)TWL_SHARED_MEMORY->ntrSharedMem.romHeader)->arm7EntryAddress == (u32)gLoaderHeader.entryPoint)
+     {
+         LOG_DEBUG("Retail soft reset detected\n");
+diff --git a/arm9/source/Arm9Patcher.cpp b/arm9/source/Arm9Patcher.cpp
+index aa4e341..885635d 100644
+--- a/arm9/source/Arm9Patcher.cpp
++++ b/arm9/source/Arm9Patcher.cpp
+@@ -12,6 +12,7 @@
+ #include "patches/arm9/sdk5/CardiReadRomWithCpuPatch.h"
+ #include "patches/arm9/CardiReadRomIdCorePatch.h"
+ #include "patches/arm9/OSResetSystemPatch.h"
++#include "patches/arm9/InGameResetPatch.h"
+ #include "patches/arm9/PokemonDownloaderArm9Patch.h"
+ #include "patches/arm9/DSProtectArm9Patch.h"
+ #include "patches/arm9/LastWindowCrcPatch.h"
+@@ -222,6 +223,19 @@ Arm9Patcher::PatchResult Arm9Patcher::ApplyPatches(const LoaderPlatform* loaderP
+         patchCollection.AddPatch(osResetSystemPatch);
+         AddGamePatches(patchCollection, romHeader->gameCode, apListEntry);
+ 
++        // Added last, so that it only uses patch space left over by the patches a game needs.
++        // A hybrid rom runs on both a DS and a DSi: it supports DSi mode and does not have
++        // the unit code bit that marks a rom as unable to run in DS mode.
++        bool isHybridRom = romHeader->SupportsDsiMode() &&
++            !(romHeader->unitCode & NDS_HEADER_UNIT_CODE_NOT_SUPPORTS_DS_MODE);
++        // DSiWare does not read from a cartridge, so it gets no rom read patches.
++        bool hasRomReadPatches = !(sdkVersion.IsTwlSdk() && twlRomHeader->IsDsiWare());
++        // The reboot reuses the sd read code that the rom read patches create. It does not
++        // exist for DSiWare, or on platforms that read roms directly instead of from the sd card.
++        patchCollection.AddPatch(new InGameResetPatch(osResetSystemPatch, loaderInfo,
++            sdkVersion.IsTwlSdk() && isHybridRom && runInDSiMode,
++            hasRomReadPatches && !loaderPlatform->HasRomReads()));
++
+         if (moduleParams && compressedEnd != 0)
+         {
+             AddRestoreCompressedEndPatch(
+diff --git a/arm9/source/patches/arm9/InGameResetPatch.cpp b/arm9/source/patches/arm9/InGameResetPatch.cpp
+new file mode 100644
+index 0000000..5eccf83
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameResetPatch.cpp
+@@ -0,0 +1,176 @@
++#include "common.h"
++#include <array>
++#include "patches/PatchContext.h"
++#include "sharedMemory.h"
++#include "inGameReset.h"
++#include "OSResetSystemPatch.h"
++#include "OSResetSystemPatchCode.h"
++#include "InGameResetPatchCode.h"
++#include "InGameResetPatch.h"
++
++// Last four instructions of the SDK interrupt dispatcher (OS_IrqHandler), followed in
++// its literal pool by the address of the interrupt table and the address the handler
++// returns to. The same code is used from SDK 2 through SDK 5, on both cpus.
++static const u32 sIrqDispatchPattern[] =
++{
++    0xE59F1008u, // ldr r1, =irqTable
++    0xE7910100u, // ldr r0, [r1, r0, lsl #2]
++    0xE59FE004u, // ldr lr, =irqReturn
++    0xE12FFF10u  // bx r0
++};
++
++// Start of the same dispatcher: fetching REG_IE, which is not something unrelated code
++// ending in the same four instructions would do.
++static const u32 sIrqHandlerStart[] =
++{
++    0xE92D4000u, // push {lr}
++    0xE3A0C301u, // mov r12, #0x04000000
++    0xE28CCE21u  // add r12, r12, #0x210
++};
++
++// How many words before the dispatch to look for the start of the same dispatcher. This
++// covers the dispatcher's own length with slack, without reaching far into other code.
++#define IRQ_HANDLER_MAX_LENGTH_WORDS    32
++
++// Word positions after the four matched instructions: word 4 is the irqTable literal and
++// word 5 the irqReturn literal. irqReturn is the instruction right after those two literals,
++// so 4 instructions + 2 literals = 6 words = 0x18 bytes past the start of the match.
++#define IRQ_DISPATCH_IRQ_TABLE_WORD     4
++#define IRQ_DISPATCH_IRQ_RETURN_WORD    5
++#define IRQ_DISPATCH_IRQ_RETURN_OFFSET  0x18
++
++// Looks backwards from the dispatch for the dispatcher's first three instructions.
++static bool hasIrqHandlerStart(const u32* irqDispatch)
++{
++    for (u32 i = 1; i <= IRQ_HANDLER_MAX_LENGTH_WORDS; i++)
++    {
++        const u32* candidate = irqDispatch - i;
++        if (candidate[0] == sIrqHandlerStart[0] &&
++            candidate[1] == sIrqHandlerStart[1] &&
++            candidate[2] == sIrqHandlerStart[2])
++        {
++            return true;
++        }
++    }
++    return false;
++}
++
++bool InGameResetPatch::FindPatchTarget(PatchContext& patchContext)
++{
++    _irqDispatch = nullptr;
++
++    u32* irqDispatch = patchContext.FindPattern32(sIrqDispatchPattern, sizeof(sIrqDispatchPattern));
++    if (!irqDispatch)
++    {
++        LOG_DEBUG("In-game reset: SDK irq dispatcher not found\n");
++        return true;
++    }
++
++    // A second match means it is unclear which one is the real dispatcher, so patch neither.
++    if (patchContext.FindPattern32(sIrqDispatchPattern, sizeof(sIrqDispatchPattern), irqDispatch + 1))
++    {
++        LOG_WARNING("In-game reset: SDK irq dispatcher is ambiguous\n");
++        return true;
++    }
++
++    if (!hasIrqHandlerStart(irqDispatch))
++    {
++        LOG_WARNING("In-game reset: irq dispatcher start not found\n");
++        return true;
++    }
++
++    // The dispatcher normally lives in ITCM and is copied there by autoload when the game
++    // starts. Its literal return address is where the instruction after the dispatch ends
++    // up, which ties the match to the real dispatcher at its final location.
++    auto autoloadAdjuster = patchContext.GetAutoloadAdjuster();
++    if (!autoloadAdjuster)
++    {
++        LOG_WARNING("In-game reset: no autoload information\n");
++        return true;
++    }
++
++    u32 finalAddress = autoloadAdjuster->AdjustInitialToFinal((u32)irqDispatch);
++    if (irqDispatch[IRQ_DISPATCH_IRQ_RETURN_WORD] != finalAddress + IRQ_DISPATCH_IRQ_RETURN_OFFSET)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
++        return true;
++    }
++
++    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
++    u32 irqTable = irqDispatch[IRQ_DISPATCH_IRQ_TABLE_WORD];
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return true;
++    }
++
++    LOG_DEBUG("In-game reset: irq dispatch at 0x%p (final 0x%X), table 0x%X\n",
++        irqDispatch, finalAddress, irqTable);
++    _irqDispatch = irqDispatch;
++    return true;
++}
++
++void InGameResetPatch::ApplyPatch(PatchContext& patchContext)
++{
++    if (!_irqDispatch)
++    {
++        return;
++    }
++
++    // When the game's own OS_ResetSystem was patched the reboot already exists and is reused.
++    bool createsReboot = !_osResetSystemPatch->IsApplied();
++    if (createsReboot && !_hasSdReadPatchCode)
++    {
++        // The size of the platform sd read code is not known up front, so its allocation
++        // cannot be checked below.
++        LOG_WARNING("In-game reset: no sd read code to reuse\n");
++        return;
++    }
++
++    // Running out of patch heap is not recoverable, and a game must never fail to boot
++    // because this optional patch could not be placed. The check replays every allocation
++    // made below, in order.
++    // Room for the reboot's allocations plus the two in-game reset parts.
++    std::array<u32, OSResetSystemPatch::REBOOT_PATCH_CODE_ALLOCATION_COUNT + 2> sizes;
++    u32 count = 0;
++    if (createsReboot)
++    {
++        count = OSResetSystemPatch::GetRebootPatchCodeAllocationSizes(sizes.data());
++    }
++    sizes[count++] = InGameResetResetPatchCode::GetSize();
++    sizes[count++] = InGameResetPatchCode::GetSize();
++    if (!patchContext.GetPatchHeap().CanAllocAll(sizes.data(), count))
++    {
++        LOG_WARNING("In-game reset: not enough patch space\n");
++        return;
++    }
++
++    auto rebootPatchCode = OSResetSystemPatch::GetOrAddRebootPatchCode(patchContext, _loaderInfo, _twlArm7Sync);
++
++    // Shared memory holds the slot 1 lock and the reset parameter. SDK 5 games keep it at
++    // 0x02FFF800, older games at 0x027FF800.
++    auto sharedMemory = patchContext.GetSdkVersion().IsTwlSdk() ? NTR_SHARED_MEMORY_SDK5 : NTR_SHARED_MEMORY;
++    auto resetPatchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetResetPatchCode>
++    (
++        patchContext.GetPatchHeap(),
++        (u32)&sharedMemory->slot1Lock,
++        (u32)&sharedMemory->resetParam,
++        (u32)IN_GAME_RESET_PARAM_RETURN_TO_LAUNCHER,
++        rebootPatchCode->GetOSResetSystemFunction()
++    );
++    auto patchCode = patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetPatchCode>
++    (
++        patchContext.GetPatchHeap(),
++        _irqDispatch[IRQ_DISPATCH_IRQ_TABLE_WORD],
++        _irqDispatch[IRQ_DISPATCH_IRQ_RETURN_WORD],
++        resetPatchCode
++    );
++
++    // Overwrite the first two of the four dispatch instructions with a jump. r0 still holds
++    // the irq index at that point, and the remaining two instructions are never reached.
++    // 0xE51FF004 is ldr pc, [pc, #-4]: load pc from the word that follows it.
++    _irqDispatch[0] = 0xE51FF004;
++    _irqDispatch[1] = (u32)patchCode->GetIrqDispatchFunction();
++    LOG_DEBUG("In-game reset enabled\n");
++}
++
+diff --git a/arm9/source/patches/arm9/InGameResetPatch.h b/arm9/source/patches/arm9/InGameResetPatch.h
+new file mode 100644
+index 0000000..23b4388
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameResetPatch.h
+@@ -0,0 +1,40 @@
++#pragma once
++#include "../Patch.h"
++#include "LoaderInfo.h"
++
++class OSResetSystemPatch;
++
++/// @brief Arm9 patch that returns to the launcher when a key combination is held during
++///        gameplay, regardless of whether the game implements a soft reset of its own.
++///
++///        The keys are sampled in the SDK interrupt dispatcher, which is library code
++///        shared by every retail title, and the reset enters the same reboot into Pico
++///        Loader that \see OSResetSystemPatch uses. That reboot is installed here when the
++///        game has no OS_ResetSystem, which is common, as the linker drops it from games
++///        that never call it. When the dispatcher cannot be found the patch does nothing
++///        and the game boots as it would without it.
++class InGameResetPatch : public Patch
++{
++public:
++    /// @param osResetSystemPatch The OS_ResetSystem patch, which must be applied before this patch.
++    /// @param loaderInfo The loader info to use.
++    /// @param twlArm7Sync \c true when the rom is a hybrid rom running in DSi mode, or \c false otherwise.
++    /// @param hasSdReadPatchCode \c true when the rom read patches create the platform sd read code,
++    ///                           or \c false otherwise.
++    InGameResetPatch(const OSResetSystemPatch* osResetSystemPatch, const loader_info_t* loaderInfo,
++        bool twlArm7Sync, bool hasSdReadPatchCode)
++        : _osResetSystemPatch(osResetSystemPatch), _loaderInfo(loaderInfo)
++        , _twlArm7Sync(twlArm7Sync), _hasSdReadPatchCode(hasSdReadPatchCode) { }
++
++    bool FindPatchTarget(PatchContext& patchContext) override;
++    void ApplyPatch(PatchContext& patchContext) override;
++
++private:
++    const OSResetSystemPatch* _osResetSystemPatch;
++    const loader_info_t* _loaderInfo;
++    // Pico Loader's arm9 runs from vram, where 8-bit writes have no effect, so these are
++    // not bool.
++    u16 _twlArm7Sync;
++    u16 _hasSdReadPatchCode;
++    u32* _irqDispatch = nullptr;
++};
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.h b/arm9/source/patches/arm9/InGameResetPatchCode.h
+new file mode 100644
+index 0000000..dbfbd35
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.h
+@@ -0,0 +1,68 @@
++#pragma once
++#include "../PatchCode.h"
++#include "sections.h"
++
++DEFINE_SECTION_SYMBOLS(patch_ingamereset);
++DEFINE_SECTION_SYMBOLS(patch_ingamereset_reset);
++
++extern "C" void patch_ingamereset_irqDispatch(void);
++extern "C" void patch_ingamereset_resetEntry(void);
++
++extern u32 patch_ingamereset_irqTable;
++extern u32 patch_ingamereset_irqReturn;
++extern u32 patch_ingamereset_resetAddress;
++extern u32 patch_ingamereset_slot1LockAddress;
++extern u32 patch_ingamereset_resetParamAddress;
++extern u32 patch_ingamereset_resetParam;
++extern u32 patch_ingamereset_resetSystemEntry;
++
++/// @brief The part of the in-game reset that runs once the reset keys have been held long enough.
++class InGameResetResetPatchCode : public PatchCode
++{
++public:
++    InGameResetResetPatchCode(PatchHeap& patchHeap, u32 slot1LockAddress,
++        u32 resetParamAddress, u32 resetParam, const void* resetSystemEntry)
++        : PatchCode(SECTION_START(patch_ingamereset_reset), SECTION_SIZE(patch_ingamereset_reset), patchHeap)
++    {
++        patch_ingamereset_slot1LockAddress = slot1LockAddress;
++        patch_ingamereset_resetParamAddress = resetParamAddress;
++        patch_ingamereset_resetParam = resetParam;
++        patch_ingamereset_resetSystemEntry = (u32)resetSystemEntry;
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_reset);
++    }
++
++    const void* GetResetFunction() const
++    {
++        return GetAddressAtTarget((void*)patch_ingamereset_resetEntry);
++    }
++};
++
++/// @brief The part of the in-game reset that replaces the dispatch of the SDK interrupt dispatcher.
++class InGameResetPatchCode : public PatchCode
++{
++public:
++    InGameResetPatchCode(PatchHeap& patchHeap, u32 irqTable, u32 irqReturn,
++        const InGameResetResetPatchCode* resetPatchCode)
++        : PatchCode(SECTION_START(patch_ingamereset), SECTION_SIZE(patch_ingamereset), patchHeap)
++    {
++        patch_ingamereset_irqTable = irqTable;
++        patch_ingamereset_irqReturn = irqReturn;
++        patch_ingamereset_resetAddress = (u32)resetPatchCode->GetResetFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset);
++    }
++
++    const void* GetIrqDispatchFunction() const
++    {
++        return GetAddressAtTarget((void*)patch_ingamereset_irqDispatch);
++    }
++};
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameResetPatchCode.s
+new file mode 100644
+index 0000000..c57c4f5
+--- /dev/null
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.s
+@@ -0,0 +1,208 @@
++.cpu arm946e-s
++.syntax unified
++
++// L + R + Down + B, as the bits that read 0 in REG_KEYINPUT while held.
++// Bit 9 = L, bit 8 = R, bit 7 = Down, bit 1 = B, giving 0x382.
++.equ IN_GAME_RESET_KEY_MASK, (1 << 9) | (1 << 8) | (1 << 7) | (1 << 1)
++
++// Number of consecutive vblanks the keys must be held before the reset is performed.
++// The DS draws 60 frames per second, so 120 is two seconds.
++.equ IN_GAME_RESET_HOLD_FRAMES, 120
++
++// Lock id used while holding the slot 1 lock. The SDK hands out ids starting at 0x40 and
++// the game never runs again once the lock is taken, so any nonzero id is sufficient.
++.equ IN_GAME_RESET_LOCK_ID, 0x7D
++
++// ARM9 patch space is usually made of the gaps between the secure area syscall thunks,
++// most of which are around 0x70 bytes. The code is therefore split in two small parts that
++// are placed independently: the dispatch that runs on every interrupt, and the reset.
++
++.section "patch_ingamereset", "ax"
++
++// Replaces the last four instructions of the SDK interrupt dispatcher (OS_IrqHandler):
++//
++//     ldr r1, =irqTable
++//     ldr r0, [r1, r0, lsl #2]
++//     ldr lr, =irqReturn
++//     bx  r0
++//
++// It is entered with r0 holding the index of the interrupt being serviced and performs
++// the same dispatch, counting on the way the vblanks during which the reset keys are held.
++// r0-r3 and r12 are free to use, as they are for the handler being dispatched to.
++
++.thumb
++.global patch_ingamereset_irqDispatch
++.type patch_ingamereset_irqDispatch, %function
++patch_ingamereset_irqDispatch:
++    // Same as the replaced code: look up the handler for irq r0 and set its return address.
++    ldr r1, patch_ingamereset_irqTable
++    lsls r2, r0, #2 // table entries are 4 bytes each
++    ldr r2, [r1, r2] // r2 = handler
++    ldr r1, patch_ingamereset_irqReturn
++    mov lr, r1
++    cmp r0, #0 // irq 0 is vblank, and only vblank advances the count
++    bne callHandler
++
++    ldr r0, regKeyInput
++    ldrh r0, [r0]
++    // Thumb can only load an 8-bit constant, so the 10-bit key mask is built in two steps:
++    // 0x38 << 4 = 0x380, then + 0x2 = 0x382.
++    movs r1, #(IN_GAME_RESET_KEY_MASK >> 4)
++    lsls r1, r1, #4
++    adds r1, #(IN_GAME_RESET_KEY_MASK & 0xF)
++    adr r3, heldFrames
++    tst r0, r1 // keys read 0 while pressed, so any 1 bit means a key is released
++    bne keysReleased
++
++    // All keys held: count this frame, or reset once the limit is reached.
++    ldrh r0, [r3]
++    cmp r0, #IN_GAME_RESET_HOLD_FRAMES
++    bhs tryReset
++    adds r0, #1
++    b storeHeldFrames
++
++keysReleased:
++    movs r0, #0
++storeHeldFrames:
++    strh r0, [r3]
++
++callHandler:
++    // The handler is entered with its address in r0, as the replaced bx r0 did.
++    movs r0, r2
++    bx r0
++
++tryReset:
++    // r2 and lr are still set up for dispatching, in case the reset has to wait
++    ldr r3, patch_ingamereset_resetAddress
++    bx r3
++
++.balign 4
++
++// Number of vblanks the keys have been held so far. Written 16 bits wide.
++heldFrames:
++    .word 0
++
++// REG_KEYINPUT: one bit per button, 0 while pressed.
++regKeyInput:
++    .word 0x04000130
++
++.global patch_ingamereset_irqTable
++patch_ingamereset_irqTable:
++    .word 0
++
++.global patch_ingamereset_irqReturn
++patch_ingamereset_irqReturn:
++    .word 0
++
++.global patch_ingamereset_resetAddress
++patch_ingamereset_resetAddress:
++    .word 0
++
++.pool
++
++.section "patch_ingamereset_reset", "ax"
++
++// Entered from the dispatch with r2 = the vblank handler and lr = the dispatcher's return
++// address. Returns into the handler when the reset cannot be performed yet.
++//
++// The cpu is in irq mode with interrupts disabled, and nothing from here on returns into
++// the game or enables interrupts before Pico Loader has started.
++
++.thumb
++.global patch_ingamereset_resetEntry
++.type patch_ingamereset_resetEntry, %function
++patch_ingamereset_resetEntry:
++    // Card access only ever happens with the slot 1 lock held, by either cpu. Taking the
++    // lock guarantees no rom read or save operation is left half done on the cartridge
++    // bus. This mirrors the SDK's own try-lock: swap the lock id into the lock flag, and
++    // the lock is ours only if the flag was clear. A holder that is overwritten this way
++    // clears the flag when it unlocks, exactly as it would after a failed SDK attempt.
++    // The SDK's OS_ResetSystem likewise holds this lock while resetting the arm7.
++    // The lock is 8 bytes: a 32-bit lock flag at +0, then the 16-bit owner id at +4.
++    ldr r1, patch_ingamereset_slot1LockAddress
++    ldrh r0, [r1, #4] // owner id, 0 when nobody holds the lock
++    cmp r0, #0
++    bne waitForLock
++    movs r0, #IN_GAME_RESET_LOCK_ID
++    // swp only exists in ARM code. bx pc from a word-aligned address jumps 4 bytes ahead,
++    // past the nop, and switches to ARM because bit 0 of the target is clear.
++    .balign 4
++    bx pc
++    nop
++
++.arm
++    swp r0, r0, [r1] // in one step: write our id to the lock flag, r0 = previous flag
++    // pc reads 8 bytes ahead in ARM code, which is the instruction after bx r3. Adding 1
++    // sets bit 0, so bx switches back to Thumb.
++    add r3, pc, #1
++    bx r3
++
++.thumb
++    cmp r0, #0 // a nonzero previous flag means someone else took the lock first
++    bne waitForLock
++    movs r0, #IN_GAME_RESET_LOCK_ID
++    strh r0, [r1, #4]
++
++    // The SDK gives both slots to the arm7 whenever they are unlocked, while the reboot
++    // reads Pico Loader from the sd card through the flashcard's slot on the arm9.
++    // In REG_EXMEMCNT, bit 11 selects the slot 1 owner and bit 7 the slot 2 owner, where 0
++    // is the arm9. The mask 0x88 << 4 = 0x880 clears both.
++    ldr r1, regExMemCnt
++    ldrh r0, [r1]
++    movs r3, #0x88
++    lsls r3, r3, #4
++    bics r0, r3
++    strh r0, [r1]
++
++    // A dma transfer left running could write over the memory the reboot uses.
++    // Clearing the low 12 bits of 0x04000204 gives 0x04000000, the start of the io
++    // registers, and the dma registers start at 0x040000B0.
++    lsrs r1, r1, #12
++    lsls r1, r1, #12
++    adds r1, #0xB0
++    movs r0, #0 // writing 0 to a DMAxCNT stops that transfer
++    str r0, [r1, #0x08] // REG_DMA0CNT
++    str r0, [r1, #0x14] // REG_DMA1CNT
++    str r0, [r1, #0x20] // REG_DMA2CNT
++    str r0, [r1, #0x2C] // REG_DMA3CNT
++
++    // Leave a marker for Pico Loader's arm7, telling it to load the launcher instead of
++    // restarting the game.
++    ldr r1, patch_ingamereset_resetParamAddress
++    ldr r0, patch_ingamereset_resetParam
++    str r0, [r1]
++
++    // The dispatcher's stack remains valid for the reboot.
++    ldr r0, patch_ingamereset_resetSystemEntry
++    bx r0
++
++waitForLock:
++    // Try again on the next vblank; the hold count stays at its limit.
++    movs r0, r2
++    bx r0
++
++.balign 4
++
++// REG_EXMEMCNT: selects which cpu owns each cartridge slot.
++regExMemCnt:
++    .word 0x04000204
++
++.global patch_ingamereset_slot1LockAddress
++patch_ingamereset_slot1LockAddress:
++    .word 0
++
++.global patch_ingamereset_resetParamAddress
++patch_ingamereset_resetParamAddress:
++    .word 0
++
++.global patch_ingamereset_resetParam
++patch_ingamereset_resetParam:
++    .word 0
++
++.global patch_ingamereset_resetSystemEntry
++patch_ingamereset_resetSystemEntry:
++    .word 0
++
++.pool
++
++.end
+diff --git a/common/inGameReset.h b/common/inGameReset.h
+new file mode 100644
+index 0000000..96b44f6
+--- /dev/null
++++ b/common/inGameReset.h
+@@ -0,0 +1,8 @@
++#pragma once
++
++/// @brief Value placed in the shared reset parameter by the in-game reset patch, telling
++///        the reloaded Pico Loader to boot the launcher instead of restarting the game.
++///        Games pass their own values to OS_ResetSystem, so this is chosen to be unlike
++///        any small integer or pointer a game would use.
++///        Stored little-endian, its bytes read "PIGR" (Pico In-Game Reset) in a memory dump.
++#define IN_GAME_RESET_PARAM_RETURN_TO_LAUNCHER  0x52474950

@@ -1,0 +1,317 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Dan Yocom <630234+danyocom@users.noreply.github.com>
+Date: Thu, 17 Sep 2026 20:15:16 -0400
+Subject: [PATCH 09/14] Support the in-game reset in Black Sigil: Blade of the
+ Exiled
+
+The game wraps the stock interrupt dispatcher so that interrupts can nest: it
+saves SPSR and sets IME on entry, and switches to system mode with irqs enabled
+around the handler call. Up to the table lookup it is the stock dispatcher, so
+the pattern has to reach past the lookup into the mode switch, which is also
+what distinguishes the two.
+
+The jump replaces the two loads before that mode switch rather than the call.
+Hooking at the call would run the reset in system mode with interrupts on, where
+a handler that interrupts it and waits on the slot 1 lock could deadlock. That
+puts the hook ahead of code the game still has to run, so normal dispatch
+carries on in the dispatcher itself rather than at the handler, and that code
+expects the handler in r0.
+
+Since the reset overwrites r0 while it waits for the lock, the vblank path keeps
+the handler in a word of the patch and hands the key check a small stub that
+restores it. Nothing can interrupt this code, so a plain word is enough.
+
+Both literal pool offsets are left free in the pattern, and the literal return
+address is checked against the location autoload moves the dispatcher to.
+---
+ .../patches/arm9/InGameResetPatchCode.h       |  32 +++++
+ .../patches/arm9/InGameResetPatchCode.s       |  80 ++++++++++++
+ .../patches/arm9/IrqDispatcherVariants.cpp    | 116 +++++++++++++++++-
+ 3 files changed, 227 insertions(+), 1 deletion(-)
+
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.h b/arm9/source/patches/arm9/InGameResetPatchCode.h
+index 924c9e8..45e9693 100644
+--- a/arm9/source/patches/arm9/InGameResetPatchCode.h
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.h
+@@ -5,11 +5,14 @@
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_keycheck);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_sdk);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_blx);
++DEFINE_SECTION_SYMBOLS(patch_ingamereset_dispatch_nested);
+ DEFINE_SECTION_SYMBOLS(patch_ingamereset_reset);
+ 
+ extern "C" void patch_ingamereset_keyCheck(void);
+ extern "C" void patch_ingamereset_sdkDispatch(void);
+ extern "C" void patch_ingamereset_blxDispatch(void);
++extern "C" void patch_ingamereset_nestedDispatch(void);
++extern "C" void patch_ingamereset_nestedResume(void);
+ extern "C" void patch_ingamereset_resetEntry(void);
+ 
+ extern u32 patch_ingamereset_resetAddress;
+@@ -18,6 +21,10 @@ extern u32 patch_ingamereset_sdkIrqReturn;
+ extern u32 patch_ingamereset_sdkKeyCheck;
+ extern u32 patch_ingamereset_blxIrqReturn;
+ extern u32 patch_ingamereset_blxKeyCheck;
++extern u32 patch_ingamereset_nestedIrqTable;
++extern u32 patch_ingamereset_nestedContinue;
++extern u32 patch_ingamereset_nestedResumeAddress;
++extern u32 patch_ingamereset_nestedKeyCheck;
+ extern u32 patch_ingamereset_slot1LockAddress;
+ extern u32 patch_ingamereset_resetParamAddress;
+ extern u32 patch_ingamereset_resetParam;
+@@ -135,3 +142,28 @@ public:
+         return SECTION_SIZE(patch_ingamereset_dispatch_blx);
+     }
+ };
++
++/// @brief Dispatch part for the stock dispatcher wrapped so that interrupts can nest. It hooks
++///        before the game switches to system mode with irqs enabled, so normal dispatch carries
++///        on in the game's own code rather than at the handler.
++class InGameResetNestedDispatchPatchCode : public InGameResetDispatchPatchCode
++{
++public:
++    InGameResetNestedDispatchPatchCode(PatchHeap& patchHeap, u32 irqTable, u32 continueAddress,
++        const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++        : InGameResetDispatchPatchCode(SECTION_START(patch_ingamereset_dispatch_nested),
++            SECTION_SIZE(patch_ingamereset_dispatch_nested), patchHeap,
++            (void*)patch_ingamereset_nestedDispatch)
++    {
++        patch_ingamereset_nestedIrqTable = irqTable;
++        patch_ingamereset_nestedContinue = continueAddress;
++        patch_ingamereset_nestedResumeAddress = (u32)GetAddressAtTarget((void*)patch_ingamereset_nestedResume);
++        patch_ingamereset_nestedKeyCheck = (u32)keyCheckPatchCode->GetKeyCheckFunction();
++    }
++
++    /// @brief Returns the patch heap space this part needs, so callers can check it fits.
++    static u32 GetSize()
++    {
++        return SECTION_SIZE(patch_ingamereset_dispatch_nested);
++    }
++};
+diff --git a/arm9/source/patches/arm9/InGameResetPatchCode.s b/arm9/source/patches/arm9/InGameResetPatchCode.s
+index 762ff42..3fb4051 100644
+--- a/arm9/source/patches/arm9/InGameResetPatchCode.s
++++ b/arm9/source/patches/arm9/InGameResetPatchCode.s
+@@ -219,6 +219,86 @@ patch_ingamereset_blxKeyCheck:
+ 
+ .pool
+ 
++.section "patch_ingamereset_dispatch_nested", "ax"
++
++// Dispatch part for the stock dispatcher wrapped so that interrupts can nest, found in
++// Black Sigil: Blade of the Exiled. Up to the table lookup it is the stock dispatcher, but
++// it saves SPSR and sets IME on entry, and around the handler call it switches to system
++// mode with irqs enabled so that a handler can be interrupted in turn:
++//
++//     ... stock clz loop, acknowledge, rsbs r0, r0, #31 ...
++//     ldr r1, =irqTable
++//     ldr r0, [r1, r0, lsl #2]
++//     mrs r3, CPSR ; bic r3, r3, #0xDF ; orr r3, r3, #0x1F ; msr CPSR_fc, r3
++//     push {lr} ; ldr lr, =irqReturn ; bx r0
++//
++// The jump replaces the two loads, which is before the mode switch. Hooking at the bx would
++// run the reset in system mode with interrupts on, where a nested handler waiting on the
++// slot 1 lock could deadlock. So this is entered in irq mode with irqs still masked, with
++// the flags of "rsbs r0, r0, #31" set, which say whether this is interrupt 0, and r0 holding
++// the interrupt index.
++//
++// Normal dispatch therefore carries on in the game's own code at the mode switch rather than
++// at the handler, and that code expects the handler in r0.
++
++.thumb
++.global patch_ingamereset_nestedDispatch
++.type patch_ingamereset_nestedDispatch, %function
++patch_ingamereset_nestedDispatch:
++    // The flags have to be tested before anything else, because the shift below sets them.
++    bne nestedNotVblank
++
++    ldr r2, patch_ingamereset_nestedIrqTable
++    lsls r3, r0, #2 // table entries are 4 bytes each
++    ldr r2, [r2, r3] // r2 = handler
++    // The reset overwrites r0 while it waits for the slot 1 lock, so the handler cannot be
++    // left there. Nothing can interrupt this code, so a plain word is enough to keep it.
++    adr r3, nestedHandler
++    str r2, [r3]
++    ldr r2, patch_ingamereset_nestedResumeAddress
++    ldr r3, patch_ingamereset_nestedKeyCheck
++    bx r3
++
++nestedNotVblank:
++    ldr r2, patch_ingamereset_nestedIrqTable
++    lsls r3, r0, #2
++    ldr r0, [r2, r3] // the game's own code carries on with the handler in r0
++    ldr r3, patch_ingamereset_nestedContinue
++    bx r3
++
++// Reached as the continuation when the reset could not be performed, which restores the
++// handler and carries on where the game left off.
++.global patch_ingamereset_nestedResume
++.type patch_ingamereset_nestedResume, %function
++patch_ingamereset_nestedResume:
++    ldr r0, nestedHandler
++    ldr r3, patch_ingamereset_nestedContinue
++    bx r3
++
++.balign 4
++
++// The handler for the interrupt being serviced, kept across the key check and the reset.
++nestedHandler:
++    .word 0
++
++.global patch_ingamereset_nestedIrqTable
++patch_ingamereset_nestedIrqTable:
++    .word 0
++
++.global patch_ingamereset_nestedContinue
++patch_ingamereset_nestedContinue:
++    .word 0
++
++.global patch_ingamereset_nestedResumeAddress
++patch_ingamereset_nestedResumeAddress:
++    .word 0
++
++.global patch_ingamereset_nestedKeyCheck
++patch_ingamereset_nestedKeyCheck:
++    .word 0
++
++.pool
++
+ .section "patch_ingamereset_reset", "ax"
+ 
+ // Entered from the key check with r2 = the address that carries on with normal dispatch.
+diff --git a/arm9/source/patches/arm9/IrqDispatcherVariants.cpp b/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
+index 3ab2637..03077d3 100644
+--- a/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
++++ b/arm9/source/patches/arm9/IrqDispatcherVariants.cpp
+@@ -210,9 +210,111 @@ static const InGameResetDispatchPatchCode* createBlxPatchCode(PatchContext& patc
+     );
+ }
+ 
++// The stock dispatcher wrapped so that interrupts can nest, found in Black Sigil: Blade of
++// the Exiled. It is the stock dispatcher up to the table lookup, which is why the pattern has
++// to reach past it into the mode switch: without those instructions it would also match the
++// stock dispatcher.
++static const u32 sNestedPattern[] =
++{
++    0xE16F0F11u, // clz r0, r1
++    0xE1D11033u, // bics r1, r1, r3, lsr r0
++    0x1AFFFFFCu, // bne clz
++    0xE1A01033u, // lsr r1, r3, r0
++    0xE58C1004u, // str r1, [ip, #4]              @ acknowledge
++    0xE270001Fu, // rsbs r0, r0, #31
++    0xE59F1000u, // ldr r1, [pc, #irqTable]       @ offset differs between builds
++    0xE7910100u, // ldr r0, [r1, r0, lsl #2]
++    0xE10F3000u, // mrs r3, CPSR                  @ switch to system mode with irqs on
++    0xE3C330DFu, // bic r3, r3, #0xDF
++    0xE383301Fu, // orr r3, r3, #0x1F
++    0xE129F003u, // msr CPSR_fc, r3
++    0xE92D4000u, // stmfd sp!, {lr}
++    0xE59FE000u, // ldr lr, [pc, #irqReturn]      @ offset differs between builds
++    0xE12FFF10u  // bx r0
++};
++
++// The two pc relative loads, whose literal pool offsets are the only parts of this dispatcher
++// that differ between builds.
++#define NESTED_IRQ_TABLE_LOAD_WORD      6
++#define NESTED_IRQ_TABLE_LOAD_OPCODE    0xE59F1000u // ldr r1, [pc, #imm12], adding the offset
++#define NESTED_IRQ_RETURN_LOAD_WORD     13
++#define NESTED_IRQ_RETURN_LOAD_OPCODE   0xE59FE000u // ldr lr, [pc, #imm12], adding the offset
++#define NESTED_PC_RELATIVE_LOAD_MASK    0xFFFFF000u
++
++// The two loads the jump replaces, the mode switch the dispatch part carries on at, and the
++// instruction the handler returns to, which is the whole pattern away.
++#define NESTED_HOOK_WORD                6
++#define NESTED_CONTINUE_OFFSET          0x20
++#define NESTED_IRQ_RETURN_OFFSET        0x3C
++
++// Resolves a pc relative load into the word it reads. Reading pc gives the address of the
++// instruction plus 8, so the literal is two words past the load plus its offset.
++static const u32* resolvePcRelativeLoad(const u32* load, u32 opcode, const u32* dataEnd)
++{
++    if ((*load & NESTED_PC_RELATIVE_LOAD_MASK) != opcode)
++    {
++        return nullptr;
++    }
++    const u32* literal = load + 2 + ((*load & ~NESTED_PC_RELATIVE_LOAD_MASK) >> 2);
++    return literal < dataEnd ? literal : nullptr;
++}
++
++static bool validateNested(PatchContext& patchContext, u32* match, IrqDispatcherMatch& result)
++{
++    const u32* dataEnd = patchContext.GetDataEnd();
++
++    const u32* tableLiteral = resolvePcRelativeLoad(
++        &match[NESTED_IRQ_TABLE_LOAD_WORD], NESTED_IRQ_TABLE_LOAD_OPCODE, dataEnd);
++    const u32* returnLiteral = resolvePcRelativeLoad(
++        &match[NESTED_IRQ_RETURN_LOAD_WORD], NESTED_IRQ_RETURN_LOAD_OPCODE, dataEnd);
++    if (!tableLiteral || !returnLiteral)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher literal loads mismatch\n");
++        return false;
++    }
++
++    // The literal return address is where the instruction after the dispatcher's call ends
++    // up, which ties the match to the real dispatcher at its final location.
++    u32 finalAddress = patchContext.GetAutoloadAdjuster()->AdjustInitialToFinal((u32)match);
++    if (*returnLiteral != finalAddress + NESTED_IRQ_RETURN_OFFSET)
++    {
++        LOG_WARNING("In-game reset: irq dispatcher return address mismatch\n");
++        return false;
++    }
++
++    // The table is an array of 32-bit handler addresses, so its address must be word aligned.
++    u32 irqTable = *tableLiteral;
++    if (irqTable == 0 || (irqTable & 3) != 0)
++    {
++        LOG_WARNING("In-game reset: invalid irq table address 0x%X\n", irqTable);
++        return false;
++    }
++
++    result.irqTable = irqTable;
++    result.continueAddress = finalAddress + NESTED_CONTINUE_OFFSET;
++    return true;
++}
++
++static u32 getNestedPatchCodeSize()
++{
++    return InGameResetNestedDispatchPatchCode::GetSize();
++}
++
++static const InGameResetDispatchPatchCode* createNestedPatchCode(PatchContext& patchContext,
++    const IrqDispatcherMatch& match, const InGameResetKeyCheckPatchCode* keyCheckPatchCode)
++{
++    return patchContext.GetPatchCodeCollection().AddUniquePatchCode<InGameResetNestedDispatchPatchCode>
++    (
++        patchContext.GetPatchHeap(),
++        match.irqTable,
++        match.continueAddress,
++        keyCheckPatchCode
++    );
++}
++
+ // Dispatcher versions in the order they are tried. The stock one comes first, because it is
+ // what nearly every game has.
+-static const std::array<const irq_dispatcher_variant_t, 2> sIrqDispatcherVariants
++static const std::array<const irq_dispatcher_variant_t, 3> sIrqDispatcherVariants
+ {
+     irq_dispatcher_variant_t
+     {
+@@ -237,6 +339,18 @@ static const std::array<const irq_dispatcher_variant_t, 2> sIrqDispatcherVariant
+         .validate = validateBlx,
+         .getPatchCodeSize = getBlxPatchCodeSize,
+         .createPatchCode = createBlxPatchCode
++    },
++    irq_dispatcher_variant_t
++    {
++        .name = "nested",
++        .pattern = sNestedPattern,
++        .patternWordCount = sizeof(sNestedPattern) / sizeof(u32),
++        .wildcardMask = (1u << NESTED_IRQ_TABLE_LOAD_WORD) | (1u << NESTED_IRQ_RETURN_LOAD_WORD),
++        .anchorWordIndex = 0,
++        .hookWordIndex = NESTED_HOOK_WORD,
++        .validate = validateNested,
++        .getPatchCodeSize = getNestedPatchCodeSize,
++        .createPatchCode = createNestedPatchCode
+     }
+ };
+ 
