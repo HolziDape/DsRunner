@@ -102,7 +102,8 @@ class StreamServer(asyncio.DatagramProtocol):
     def __init__(self, browser, mapping: Mapping, mode: int, *, port: int = P.DEFAULT_PORT,
                  name: str | None = None, palette: str = "adaptive", use_lz4: bool = True,
                  max_fps: float = 20.0, rate_kbs: float = 120.0, min_rate_kbs: float = 40.0,
-                 max_rate_kbs: float = 220.0, stats_every: float = 5.0):
+                 max_rate_kbs: float = 220.0, stats_every: float = 5.0,
+                 broadcast: bool = False):
         self.browser = browser
         self.mapping = mapping
         self.mode = mode
@@ -112,6 +113,10 @@ class StreamServer(asyncio.DatagramProtocol):
         self.max_fps = max_fps
         self.rc = RateControl(rate_kbs * 1000, min_rate_kbs * 1000, max_rate_kbs * 1000)
         self.stats_every = stats_every
+        # send the pictures as broadcasts: WiFi sends those at the lowest rate that every
+        # device understands, which helps when the access point picks a rate the DS can't
+        # receive (the DS Lite only knows 1 and 2 Mbit/s). No retries, so a bit more loss.
+        self.broadcast = broadcast
         self.session: Session | None = None
         self.transport = None
         self.events: asyncio.Queue = asyncio.Queue()
@@ -145,7 +150,13 @@ class StreamServer(asyncio.DatagramProtocol):
         t = data[0]
         now = time.monotonic()
         if t == P.PKT_HELLO:
-            self.transport.sendto(P.pack_here(self.port, self.mode, self.name), addr)
+            here = P.pack_here(self.port, self.mode, self.name)
+            self.transport.sendto(here, addr)
+            # also as a broadcast: reaches the DS even when unicast frames to it get lost
+            try:
+                self.transport.sendto(here, ("255.255.255.255", addr[1]))
+            except OSError:
+                pass
             log.debug("HELLO von %s", addr)
         elif t == P.PKT_INPUT and len(data) >= P.INPUT.size:
             inp = P.InputState.unpack(data)
@@ -207,7 +218,7 @@ class StreamServer(asyncio.DatagramProtocol):
             now = time.monotonic()
             if self.next_send > now:
                 await asyncio.sleep(self.next_send - now)
-            self.transport.sendto(pkt, addr)
+            self.transport.sendto(pkt, ("255.255.255.255", addr[1]) if self.broadcast else addr)
             self.bytes_sent += len(pkt)
             self.sent_hist.append((time.monotonic(), self.bytes_sent))
             self.next_send = max(self.next_send, time.monotonic() - 0.02) + (len(pkt) + 28) / self.rc.rate
