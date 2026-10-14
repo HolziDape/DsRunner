@@ -98,12 +98,20 @@ class Stats:
     captured0: int | None = None   # pictures from the browser at the start of the interval
 
 
+def subnet_broadcast(ip: str) -> str:
+    """Broadcast address of the DS's /24 network (192.168.4.247 -> 192.168.4.255).
+    255.255.255.255 would leave a Pi through its default route (the LAN cable), not
+    through the hotspot the DS is in."""
+    parts = ip.split(".")
+    return ".".join(parts[:3] + ["255"]) if len(parts) == 4 else "255.255.255.255"
+
+
 class StreamServer(asyncio.DatagramProtocol):
     def __init__(self, browser, mapping: Mapping, mode: int, *, port: int = P.DEFAULT_PORT,
                  name: str | None = None, palette: str = "adaptive", use_lz4: bool = True,
                  max_fps: float = 20.0, rate_kbs: float = 120.0, min_rate_kbs: float = 40.0,
                  max_rate_kbs: float = 220.0, stats_every: float = 5.0,
-                 broadcast: bool = False):
+                 broadcast: bool = False, packet_size: int = P.MAX_CHUNK):
         self.browser = browser
         self.mapping = mapping
         self.mode = mode
@@ -117,6 +125,7 @@ class StreamServer(asyncio.DatagramProtocol):
         # device understands, which helps when the access point picks a rate the DS can't
         # receive (the DS Lite only knows 1 and 2 Mbit/s). No retries, so a bit more loss.
         self.broadcast = broadcast
+        self.chunk = max(200, min(P.MAX_CHUNK, packet_size)) - P.PKT_HDR.size
         self.session: Session | None = None
         self.transport = None
         self.events: asyncio.Queue = asyncio.Queue()
@@ -154,7 +163,7 @@ class StreamServer(asyncio.DatagramProtocol):
             self.transport.sendto(here, addr)
             # also as a broadcast: reaches the DS even when unicast frames to it get lost
             try:
-                self.transport.sendto(here, ("255.255.255.255", addr[1]))
+                self.transport.sendto(here, (subnet_broadcast(addr[0]), addr[1]))
             except OSError:
                 pass
             log.debug("HELLO von %s", addr)
@@ -218,7 +227,7 @@ class StreamServer(asyncio.DatagramProtocol):
             now = time.monotonic()
             if self.next_send > now:
                 await asyncio.sleep(self.next_send - now)
-            self.transport.sendto(pkt, ("255.255.255.255", addr[1]) if self.broadcast else addr)
+            self.transport.sendto(pkt, (subnet_broadcast(addr[0]), addr[1]) if self.broadcast else addr)
             self.bytes_sent += len(pkt)
             self.sent_hist.append((time.monotonic(), self.bytes_sent))
             self.next_send = max(self.next_send, time.monotonic() - 0.02) + (len(pkt) + 28) / self.rc.rate
@@ -280,7 +289,7 @@ class StreamServer(asyncio.DatagramProtocol):
             log.debug("frame %d %s ref=%s tiles=%d raw=%d size=%d enc=%.1fms",
                       info.frame_id, "KEY" if info.key else "delta", ref, info.ntiles,
                       info.raw_size, info.size, info.ms)
-            await self._send_paced(P.packetize(info.frame_id, payload), s.addr)
+            await self._send_paced(P.packetize(info.frame_id, payload, self.chunk), s.addr)
             self.last_send_time = time.monotonic()
 
     async def stats_loop(self) -> None:
