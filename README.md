@@ -18,7 +18,7 @@ Ein moderner Launcher für den **Nintendo DS Lite** mit der Flashkarte **M3 DS R
 - Uhr (abschaltbar) und Akkuanzeige, Oberfläche auf Deutsch
 - **GBA und weitere Konsolen** (NES, Game Boy, Master System, Game Gear, Mega Drive, SNES, PC Engine) über Emulatoren, die DsRunner selbst findet. Die Emulatoren für GBA, NES, Game Boy und SNES sind im Paket enthalten; eigene Konsolen über `systems.json`
 - **Cheats** über `usrcheat.dat`
-- **Zurück zu DsRunner aus dem Spiel:** L+R+Unten+B 2 Sekunden halten (M3-Paket, [Hinweise](#zurück-zu-dsrunner-aus-einem-spiel))
+- **Zurück zu DsRunner aus dem Spiel:** L+R+Unten+B 2 Sekunden halten, Tasten einstellbar (M3-Paket, [Hinweise](#zurück-zu-dsrunner-aus-einem-spiel))
 
 ## Download
 
@@ -111,7 +111,7 @@ Die gesicherten Dateien `SYSTEM/g6dsload.1`, `SYSTEM/g6dsload.eng` und `SRESET.D
 | Y | Cheats für das ausgewählte Spiel |
 | START | auf der Konsolen-Ebene: zuletzt gespieltes Spiel weiterspielen |
 | Zahnrad (oben rechts) | Ansicht, Sortierung und Uhr ein/aus wählen |
-| **L + R + Unten + B** (2 s halten, im Spiel) | zurück zu DsRunner |
+| **L + R + Unten + B** (2 s halten, im Spiel) | zurück zu DsRunner (Tasten einstellbar, siehe unten) |
 
 Der Touchscreen funktioniert ebenfalls.
 
@@ -122,6 +122,12 @@ Im laufenden DS-Spiel **L + R + Unten + B zwei Sekunden lang halten**: der DS st
 - **Vorher im Spiel speichern.** Was nicht gespeichert ist, geht verloren, genau wie beim Ausschalten. Einen laufenden Speichervorgang bricht der Hotkey nicht ab, er wartet, bis er fertig ist.
 - **Nicht jedes Spiel reagiert.** Fehlt im Spiel der passende Einsprungpunkt oder der Platz für den Patch, läuft das Spiel ganz normal, nur ohne Hotkey. Dann wie gewohnt ausschalten. Rückmeldungen gerne in die [Kompatibilitätsliste](docs/compat/pico-vs-ysmenu.md).
 - **Abschalten:** in `/_pico/settings.json` `"inGameReset": false` eintragen. DsRunner legt dann vor jedem Spielstart `/_pico/igr.off` an, und Pico Loader baut den Hotkey nicht mehr ein.
+- **Andere Tasten:** in `/_pico/settings.json` z. B. `"inGameResetKeys": "SELECT+START+DOWN"` eintragen. Das hilft vor allem, wenn **L oder R ausgeleiert** sind und nur noch bei festem Druck reagieren (beim DS Lite häufig). Erlaubt sind `A`, `B`, `SELECT`, `START`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `L`, `R` (auch `OBEN`, `UNTEN`, `LINKS`, `RECHTS`), mindestens 3 Tasten, Groß-/Kleinschreibung egal. **X und Y gehen nicht**, die kann der Hotkey-Code im Spiel nicht lesen. Ungültige Angaben ergeben wieder L+R+Unten+B. Empfehlungen ohne L/R:
+  - `SELECT+START+DOWN`: braucht kaum ein Spiel gleichzeitig, START öffnet höchstens kurz das Pausenmenü.
+  - `SELECT+DOWN+B`: falls ein Spiel START+SELECT selbst belegt.
+  - Nicht empfohlen: `L+R+START+SELECT`, das ist in vielen Spielen der eingebaute Soft-Reset (startet das Spiel neu statt DsRunner).
+
+  Weil die Tasten 2 s gehalten werden müssen, löst keine dieser Kombinationen versehentlich aus. Welche Tasten gerade gelten, steht in `/_pico/igr-log.txt` (Zeile `keys:`).
 - Homebrew kehrt wie bisher über das eigene „Beenden“ zurück.
 
 ## Artworks

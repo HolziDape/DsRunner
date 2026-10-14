@@ -13,6 +13,11 @@ namespace DsRunnerInGameReset
     /// Must match IN_GAME_RESET_DISABLE_PATH in loader/patches.
     inline constexpr const char* kDisableFilePath = "/_pico/igr.off";
 
+    /// Keys of the in-game reset for the DsRunner Pico Loader when they are not the default:
+    /// first line "0x08C SELECT+START+DOWN" (mask in hexadecimal, then the names for people).
+    /// Must match IN_GAME_RESET_KEYS_PATH in loader/patches.
+    inline constexpr const char* kKeysFilePath = "/_pico/igr.keys";
+
     /// Launchers used when argv[0] is missing, in this order. The first is the file the
     /// M3 DS Real autoboot chain starts (tools/make-sd-package.sh), the others are copies
     /// to start by hand. The loader has a similar list (sFallbackLauncherPaths in
@@ -33,7 +38,9 @@ namespace DsRunnerInGameReset
     /// @brief Returns whether DsRunner was booted by Pico Loader after an in-game reset.
     bool IsInGameResetBoot(int argc, char* argv[]);
 
-    /// @brief Creates or deletes kDisableFilePath so that Pico Loader follows the setting
-    ///        "inGameReset" of settings.json. Only writes to the card when the state changes.
-    void ApplySetting(bool inGameResetEnabled);
+    /// @brief Creates or deletes kDisableFilePath and kKeysFilePath so that Pico Loader follows
+    ///        the settings "inGameReset" and "inGameResetKeys" of settings.json. Invalid keys
+    ///        (unknown name, X/Y, fewer than 3 keys) are logged and give the default keys.
+    ///        Only writes to the card when something changes.
+    void ApplySetting(bool inGameResetEnabled, const char* inGameResetKeys);
 }

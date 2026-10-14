@@ -17,6 +17,8 @@ public:
     bool showClock = true;
     /// DsRunner: L+R+Down+B held for two seconds in a game returns to DsRunner (DsRunner Pico Loader).
     bool inGameReset = true;
+    /// DsRunner: keys of the in-game reset, e.g. "SELECT+START+DOWN" (DsRunnerInGameResetKeys).
+    String<char, 48> inGameResetKeys = "L+R+DOWN+B";
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;

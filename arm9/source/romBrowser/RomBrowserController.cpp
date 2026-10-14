@@ -517,8 +517,10 @@ void RomBrowserController::SetPicoLoaderParams() const
     loadParams->argumentsLength = 0;
     if (_triggerFileInfo.GetFileType()->TrySetLaunchParameters(loadParams, _navigatePath))
     {
-        // DsRunner: switch the in-game reset of the DsRunner Pico Loader on or off (settings.json "inGameReset")
-        DsRunnerInGameReset::ApplySetting(_appSettingsService->GetAppSettings().inGameReset);
+        // DsRunner: in-game reset of the DsRunner Pico Loader on or off and its keys
+        // (settings.json "inGameReset", "inGameResetKeys")
+        DsRunnerInGameReset::ApplySetting(_appSettingsService->GetAppSettings().inGameReset,
+            _appSettingsService->GetAppSettings().inGameResetKeys.GetString());
         gProcessManager.Goto<PicoLoaderProcess>();
     }
     else

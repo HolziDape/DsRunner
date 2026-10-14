@@ -1,6 +1,6 @@
 # Pico Loader für DsRunner
 
-Dieser Ordner baut den **Pico Loader** ([LNH-team/pico-loader](https://github.com/LNH-team/pico-loader), Zlib-Lizenz) mit ein paar Zusatz-Patches. Damit kommt man aus **Retail-Spielen zurück zu DsRunner**: im Spiel **L+R+Unten+B 2 Sekunden halten**.
+Dieser Ordner baut den **Pico Loader** ([LNH-team/pico-loader](https://github.com/LNH-team/pico-loader), Zlib-Lizenz) mit ein paar Zusatz-Patches. Damit kommt man aus **Retail-Spielen zurück zu DsRunner**: im Spiel **L+R+Unten+B 2 Sekunden halten** (Tasten einstellbar, Patch 0016).
 
 Hier liegt kein kompletter Quellcode, nur:
 
@@ -34,6 +34,7 @@ Hintergrund und Recherche: [docs/LOADER.md](../docs/LOADER.md).
 | 0012 | **DsRunner:** Combo zurück auf **L+R+Unten+B, 2 s** (wie in der DsRunner-Bedienung) | eigener Patch |
 | 0013 | **DsRunner:** Launcher-Pfad überlebt den Reset: Bei jedem normalen Start speichert Pico den von DsRunner übergebenen `launcherPath` in `/_pico/launcher.txt` (nur wenn er sich geändert hat, über `.tmp` + Umbenennen). Nach dem Reset wird dieser Pfad gebootet. Fehlt die Datei, nimmt Pico die erste vorhandene von `/_nds/TWiLightMenu/main.srldr`, `/BOOT.NDS`, `/_picoboot.nds`. | eigener Patch |
 | 0014 | **DsRunner:** Abschalten ohne neuen Build: Gibt es `/_pico/igr.off`, wird der In-Game-Reset-Patch weggelassen. DsRunner legt die Datei passend zur Einstellung `inGameReset` an oder löscht sie. | eigener Patch |
+| 0016 | **DsRunner: Tasten einstellbar.** Der Tastencheck lädt die Maske aus einem Literal, das der Patcher füllt (statt sie mit drei Befehlen zu bauen, Abschnitt bleibt 0x40 Byte). Die ARM7 liest die Maske aus der ersten Zeile von `/_pico/igr.keys` (`0x08C SELECT+START+DOWN`, Hex-Zahl der `REG_KEYINPUT`-Bits) und gibt sie in Bit 16–25 des Flag-Worts von `SET_ROM_FILE_INFO` an die ARM9. Fehlt die Datei oder ist sie ungültig: L+R+Unten+B (0x382). DsRunner schreibt sie aus `inGameResetKeys`. | eigener Patch |
 | 0015 | **DsRunner: Diagnose.** Schreibt bei jedem Start `/_pico/igr-log.txt` (siehe [unten](#diagnose-_picoigr-logtxt)) und hellt den Hauptbildschirm halb auf, sobald der Hotkey erkannt ist. Die Build-Kennung kommt von `build.sh` (`DSRUNNER_BUILD_ID`). | eigener Patch |
 
 Die Patches 0001–0011 sind Cherry-Picks aus dem Fork von **danyocom** (Dan Yocom), ohne Änderung und ohne Konflikte auf `b9f923e` angewendet. Sie sind upstream (noch) nicht gemergt.
@@ -84,6 +85,7 @@ launcher: fat:/_nds/TWiLightMenu/main.srldr [from /_pico/launcher.txt]
 | Zeile | Bedeutung, und was zu tun ist |
 |---|---|
 | *(Datei fehlt)* | Auf der Karte liegt **nicht** dieser Loader (z. B. nur `main.srldr` ersetzt, `_pico/*.bin` noch vom offiziellen v1.7.1). Alle fünf `.bin` aus dem Paket nach `/_pico` kopieren. |
+| `keys:` | Welche Tasten gelten (Namen und Maske) und ob sie aus `/_pico/igr.keys` kommen (Einstellung `inGameResetKeys`) oder der Standard L+R+DOWN+B sind. `key mask patched in:` zeigt, was im Spiel eingebaut wurde. |
 | `build:` | Kennung des Builds (Upstream-Commit + Hash der Patches, wie `loader/build.sh --id`) |
 | `in-game reset: applied` | Der Hotkey ist eingebaut. |
 | `NOT applied: switched off by /_pico/igr.off` | In `settings.json` steht `"inGameReset": false`. |
@@ -144,4 +146,4 @@ Wenn LNH den In-Game-Reset selbst einbaut, fallen 0003–0011 weg. Dann reicht w
 
 ## Lizenz und Dank
 
-Pico Loader: Copyright (c) LNH team, **Zlib-Lizenz** (siehe `LICENSE.txt` im Klon unter `work/pico-loader/` bzw. [upstream](https://github.com/LNH-team/pico-loader/blob/develop/LICENSE.txt)). Die Patches 0001–0011 stammen von **Dan Yocom ([danyocom](https://github.com/danyocom/pico-loader))**, Autor und Datum stehen in jedem Patch. Die Patches 0012–0015 gehören zu DsRunner. Alle Patches stehen unter derselben Zlib-Lizenz wie Pico Loader.
+Pico Loader: Copyright (c) LNH team, **Zlib-Lizenz** (siehe `LICENSE.txt` im Klon unter `work/pico-loader/` bzw. [upstream](https://github.com/LNH-team/pico-loader/blob/develop/LICENSE.txt)). Die Patches 0001–0011 stammen von **Dan Yocom ([danyocom](https://github.com/danyocom/pico-loader))**, Autor und Datum stehen in jedem Patch. Die Patches 0012–0016 gehören zu DsRunner. Alle Patches stehen unter derselben Zlib-Lizenz wie Pico Loader.

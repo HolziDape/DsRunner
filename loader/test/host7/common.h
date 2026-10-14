@@ -37,6 +37,12 @@ static inline FRESULT f_open(FIL* fp, const char* path, BYTE mode)
     return fp->file ? FR_OK : FR_NO_FILE;
 }
 
+static inline FRESULT f_read(FIL* fp, void* buffer, UINT length, UINT* read)
+{
+    *read = fread(buffer, 1, length, fp->file);
+    return FR_OK;
+}
+
 static inline FRESULT f_write(FIL* fp, const void* buffer, UINT length, UINT* written)
 {
     *written = fwrite(buffer, 1, length, fp->file);
