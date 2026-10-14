@@ -51,7 +51,8 @@ SD-Karte
 ├── Games
 │   ├── NDS      ← .nds-Spiele
 │   ├── GBA      ← .gba-Spiele (brauchen GBARunner2, siehe unten)
-│   └── Apps     ← Homebrew
+│   ├── NES, GB, GBC, SNES, SMS, GG, MD, PCE  ← Spiele anderer Konsolen (brauchen einen Emulator)
+│   └── Apps     ← Homebrew-Programme (eigene .nds-Programme, keine Spiele)
 ├── _dsrunner    ← Artworks, Spielverlauf und Favoriten (legt DsRunner selbst an)
 ├── _nds
 ├── _pico
@@ -60,8 +61,24 @@ SD-Karte
 
 - Ordner mit den Namen `NDS`, `GBA`, `GBC`, `GB`, `NES`, `SNES`, `SMS`, `GG`, `MD`, `PCE` und `Apps` bekommen eine eigene Farbe. Jeder andere Ordner erscheint ebenfalls als Kachel.
 - Gibt es keinen Ordner `/Games`, zeigt DsRunner einfach das Hauptverzeichnis der Karte. Einen anderen Ordner stellst du in `/_pico/settings.json` ein (`libraryPath`).
-- **GBA:** [GBARunner2](https://github.com/Gericom/GBARunner2) (`GBARunner2_arm7dldi_ds.nds`) ins Hauptverzeichnis legen, dazu das GBA-BIOS als `/_gba/bios.bin`. DsRunner findet es automatisch.
-- **Andere Konsolen:** den passenden Emulator (z. B. `nesDS.nds`) ins Hauptverzeichnis oder nach `/_dsrunner/emulators` legen. Welche Emulatoren DsRunner kennt und wo es sucht: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).
+
+### Emulatoren für andere Konsolen
+
+DS-Spiele startet DsRunner selbst. Für alle anderen Konsolen braucht es einen Emulator (ein DS-Programm). DsRunner findet ihn automatisch, wenn er unter dem richtigen Namen auf der Karte liegt, am besten in **`/_dsrunner/emulators/`** (oder im Hauptverzeichnis). Ohne Emulator bleibt der Ordner der Konsole leer („Keine Spiele“).
+
+| Konsole | Ordner | Dateien | Emulator | Dateiname auf der Karte |
+|---|---|---|---|---|
+| Game Boy Advance | `GBA` | `.gba` | [GBARunner2](https://github.com/Gericom/GBARunner2/releases) | `GBARunner2_arm7dldi_ds.nds`, dazu das GBA-BIOS als `/_gba/bios.bin` |
+| NES / Famicom | `NES` | `.nes`, `.fds` | [nesDS](https://github.com/DS-Homebrew/NesDS/releases) | `nesDS.nds` |
+| Game Boy / Game Boy Color | `GB`, `GBC` | `.gb`, `.gbc`, `.sgb` | [GameYob](https://github.com/Drenn1/GameYob/releases) | `GameYob.nds` |
+| Master System / Game Gear | `SMS`, `GG` | `.sms`, `.gg` | [S8DS](https://github.com/FluBBaOfWard/S8DS/releases) | `S8DS.nds` |
+| Mega Drive | `MD` | `.gen`, `.md`, `.smd` | jEnesisDS (aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases)) | `jEnesisDS.nds` |
+| Super Nintendo | `SNES` | `.sfc`, `.smc` | SNEmulDS (aus [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases)) | `SNEmulDS-legacy.nds` |
+| PC Engine | `PCE` | `.pce`, `.sgx` | [NitroGrafx](https://github.com/FluBBaOfWard/NitroGrafx/releases) | `NitroGrafx.nds` |
+
+- **Einfachster Weg:** Hast du TWiLight Menu++ schon einmal installiert, liegen die meisten Emulatoren bereits unter `/_nds/TWiLightMenu/emulators/`. Dort findet DsRunner sie auch.
+- Getestet auf dem DS ist bisher nur GBARunner2. Die anderen starten genauso wie in TWiLight Menu++, sind mit DsRunner aber noch nicht ausprobiert. Mega Drive: lädt ein `.md`-Spiel nicht, die Datei in `.gen` umbenennen.
+- Andere Dateinamen, eigene Konsolen und alle Details: [docs/CONFIG.md](docs/CONFIG.md#emulatoren).
 
 ### Update auf eine neue Version
 
