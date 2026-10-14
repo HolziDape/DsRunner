@@ -102,7 +102,7 @@ sudo nmcli connection up DsRunner-Stream
 
 ```ini
 ; DsRunner Stream
-ssid=DsRunner-Stream   ; Name des Hotspots
+ssid=DsRunner-Stream   ; Name des Hotspots (Standard)
 host=                  ; leer: Pi automatisch suchen. Klappt das nicht: host=192.168.4.1
 port=7770
 wifi=auto              ; auto, wfc (nur WFC-Einstellungen) oder list (immer Liste zeigen)
@@ -110,7 +110,7 @@ key=                   ; nur bei WEP-Netzen: Schlüssel (5/13 Zeichen oder 10/26
 screen=bottom          ; Bild unten (Touch trifft das Bild) oder top
 ```
 
-Ohne `stream.ini` geht es auch: Dann nimmt der DS ein Netz aus seinen WFC-Einstellungen (die man einmal in einem Nintendo-WFC-Spiel einrichtet), sonst zeigt er eine Liste der Netze in der Nähe zur Auswahl (Steuerkreuz, A).
+**Ohne `stream.ini` geht es auch:** Der DS verbindet sich dann mit dem Netz „DsRunner-Stream“ (so heißt der Hotspot aus `hotspot.sh`), sonst mit einem Netz aus seinen WFC-Einstellungen (die man einmal in einem Nintendo-WFC-Spiel einrichtet), sonst zeigt er eine Liste der Netze in der Nähe zur Auswahl (Steuerkreuz, A). Die Datei brauchst du also nur für einen anderen Netznamen, WEP oder eine feste Host-Adresse.
 
 ## 4. Spielen
 

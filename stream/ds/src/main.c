@@ -295,12 +295,14 @@ static bool wifi_connect(void)
             int pick = -1;
             if (cfg.wifi == WIFI_AUTO)
             {
-                for (int i = 0; i < n && pick < 0; i++)   // 1. WFC settings
-                    if ((aps[i].flags & WFLAG_APDATA_CONFIG_IN_WFC) &&
-                        (!cfg.ssid[0] || !strcmp(aps[i].ssid, cfg.ssid)))
-                        pick = i;
-                for (int i = 0; i < n && pick < 0; i++)   // 2. ssid= from stream.ini
+                // 1. the network from stream.ini (default "DsRunner-Stream"),
+                //    with its WFC settings if it has some
+                for (int i = 0; i < n && pick < 0; i++)
                     if (cfg.ssid[0] && !strcmp(aps[i].ssid, cfg.ssid))
+                        pick = i;
+                // 2. any network from the WFC settings of the DS
+                for (int i = 0; i < n && pick < 0; i++)
+                    if (aps[i].flags & WFLAG_APDATA_CONFIG_IN_WFC)
                         pick = i;
             }
             if (pick < 0)

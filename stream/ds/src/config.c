@@ -40,6 +40,8 @@ void config_load(Config *c)
     memset(c, 0, sizeof(*c));
     c->port = 7770;
     c->wifi = WIFI_AUTO;
+    // the name the hotspot of stream/host/tools/hotspot.sh gets
+    copy(c->ssid, sizeof(c->ssid), "DsRunner-Stream");
 
     c->fat = fatInitDefault();
     if (!c->fat)

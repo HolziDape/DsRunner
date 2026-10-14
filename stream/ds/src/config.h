@@ -20,6 +20,7 @@ typedef struct {
     int port;
     WifiChoice wifi;
     char ssid[33];          // network for WIFI_AUTO when no WFC AP is found
+                            // (default "DsRunner-Stream", empty in the file = none)
     char key[33];           // WEP key for ssid (5/13 characters or 10/26 hex digits)
     bool screen_top;        // picture on the top screen (one-screen modes)
     bool found;             // the file was read
