@@ -28,6 +28,7 @@ echo "== /_pico/igr-log.txt"
 gcc -c -w -I "$TEST_DIR/host" -I "$SRC/common" "$SRC/common/core/mini-printf.c" -o "$OUT/mini-printf.o"
 g++ -std=gnu++20 -w \
 	-I "$TEST_DIR/host7" -I "$TEST_DIR/host" -I "$SRC/common" -I "$SRC/arm7/source" \
+	-I "$TEST_DIR/../../arm9/source/romBrowser/Theme/dsrunner" \
 	"$TEST_DIR/igr_log_test.cpp" "$SRC/arm7/source/fat/igrLog.cpp" "$OUT/mini-printf.o" \
 	-o "$OUT/igr_log_test"
 "$OUT/igr_log_test"
