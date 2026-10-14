@@ -55,7 +55,10 @@ INPUT = struct.Struct("<BBHHBBHBBHHI")      # type ver seq keys tx ty cur flags 
 HERE = struct.Struct("<BBHB")               # type ver port mode + name
 HELLO = struct.Struct("<BBH")               # type ver nonce + name
 
-MAX_CHUNK = 1400       # UDP payload per frame packet (header included stays < 1472)
+# UDP payload per frame packet. DSWiFi sets an MTU of 1300 bytes and drops larger IP
+# packets on the DS: 1200 + 8 (UDP) + 20 (IP) stays below. Tested on a DS Lite.
+MAX_CHUNK = 1200
+MAX_CHUNK_LIMIT = 1300 - 28
 
 
 def next_id(fid: int) -> int:

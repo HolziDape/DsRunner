@@ -60,7 +60,7 @@ Der Host macht aus Tasten-Änderungen Tastatur- und Maus-Ereignisse (`mappings/*
 
 ## FRAME (Host → DS)
 
-Ein kodiertes Bild („Payload“, siehe unten) wird in Stücke geteilt. Jedes Paket ist höchstens 1400 Byte groß (passt in ein 802.11-Paket ohne IP-Fragmentierung).
+Ein kodiertes Bild („Payload“, siehe unten) wird in Stücke geteilt. Jedes Paket ist höchstens 1200 Byte groß (Standard, einstellbar bis 1272): DSWiFi hat eine MTU von 1300 Byte und verwirft größere IP-Pakete auf dem DS.
 
 | Offset | Typ | Inhalt |
 |---|---|---|
