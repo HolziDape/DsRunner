@@ -95,6 +95,7 @@ class Stats:
     enc_ms: float = 0.0
     ds_ok0: int | None = None
     ds_bad0: int | None = None
+    captured0: int | None = None   # pictures from the browser at the start of the interval
 
 
 class StreamServer(asyncio.DatagramProtocol):
@@ -280,14 +281,19 @@ class StreamServer(asyncio.DatagramProtocol):
             dt = time.monotonic() - st.t0
             if st.ds_ok0 is None:
                 st.ds_ok0, st.ds_bad0 = s.frames_ok, s.frames_bad
+                st.captured0 = getattr(self.browser, "captured", 0)
                 continue
             ds_ok = (s.frames_ok - st.ds_ok0) & 0xFFFF
             ds_bad = (s.frames_bad - st.ds_bad0) & 0xFFFF
-            log.info("gesendet %.1f fps, %.0f KB/s (Keyframes %d), Encoder %.1f ms/Bild | DS zeigt %.1f fps, "
-                     "verloren %d | Senderate %.0f KB/s, Paketverlust %.0f %%",
-                     st.frames / dt, st.bytes / dt / 1000, st.keys,
+            captured = getattr(self.browser, "captured", 0)
+            # the browser only delivers a picture when the page changed: few pictures here
+            # mean a still page (or a slow browser), not a slow stream
+            browser_fps = (captured - st.captured0) / dt if st.captured0 is not None else 0.0
+            log.info("Browser %.1f fps | gesendet %.1f fps, %.0f KB/s (Keyframes %d), Encoder %.1f ms/Bild | "
+                     "DS zeigt %.1f fps, verloren %d | Senderate %.0f KB/s, Paketverlust %.0f %%",
+                     browser_fps, st.frames / dt, st.bytes / dt / 1000, st.keys,
                      st.enc_ms / max(1, st.frames), ds_ok / dt, ds_bad, self.rc.rate / 1000, self.rc.loss * 100)
-            self.stats = Stats(ds_ok0=s.frames_ok, ds_bad0=s.frames_bad)
+            self.stats = Stats(ds_ok0=s.frames_ok, ds_bad0=s.frames_bad, captured0=captured)
 
 
 async def serve(server: StreamServer, bind: str = "0.0.0.0") -> None:
