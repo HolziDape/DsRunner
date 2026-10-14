@@ -11,6 +11,8 @@
 #   _dsrunner/emulators/, snemul.cfg
 #                        emulators for GBA, NES, GB/GBC and SNES with their licenses
 #                        (tools/fetch-emulators.sh, pinned versions + sha256, no GBA BIOS)
+#   Games/Apps/DsRunnerStream.nds
+#                        DsRunner Stream (experimental), only if stream/ds/build.sh ran
 #   LIESMICH.txt         short German installation and update guide with the version
 #                        (from VERSION, marked as development state unless DSRUNNER_RELEASE=1)
 # Usage: tools/make-sd-package.sh [output dir]   (run after make, needs curl, unzip, 7z)
@@ -122,6 +124,15 @@ for f in $AUTOBOOT_FILES; do
 done
 
 sh "$ROOT/tools/fetch-emulators.sh" "$OUT"
+
+# DsRunner Stream (experimental): only when it was built (stream/ds/build.sh)
+if [ -f "$ROOT/stream/ds/DsRunnerStream.nds" ]; then
+	echo "DsRunner Stream (experimentell)"
+	mkdir -p "$OUT/Games/Apps"
+	cp "$ROOT/stream/ds/DsRunnerStream.nds" "$OUT/Games/Apps/DsRunnerStream.nds"
+else
+	echo "DsRunner Stream nicht gebaut (stream/ds/build.sh), nicht im Paket"
+fi
 
 # short German guide; plain ASCII with CRLF so it opens anywhere on Windows
 VERSION_TEXT="$(tr -d ' \t\r\n' < "$ROOT/VERSION")"

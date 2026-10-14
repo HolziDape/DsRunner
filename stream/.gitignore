@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+ds/hosttest/decode_test
+ds/hosttest/decode_test.exe

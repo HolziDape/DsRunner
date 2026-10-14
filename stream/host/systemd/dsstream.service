@@ -1,0 +1,22 @@
+# DsRunner Stream host as systemd user service (Chromium without window).
+#   mkdir -p ~/.config/systemd/user
+#   cp dsstream.service ~/.config/systemd/user/
+#   cp dsstream.env ~/.config/dsstream.env     (adjust)
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now dsstream
+#   sudo loginctl enable-linger $USER          (start at boot without logging in)
+# Logs: journalctl --user -u dsstream -f
+# The path below assumes the repository in ~/DsRunner; adjust ExecStart if not.
+[Unit]
+Description=DsRunner Stream host (Browser-Spiele auf den Nintendo DS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/DsRunner/stream/host/start.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

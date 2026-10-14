@@ -7,6 +7,7 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ## Unveröffentlicht
 
 ### Hinzugefügt
+- **Experimentell: DsRunner Stream:** Browser-Spiele vom Raspberry Pi 5 oder PC auf dem DS spielen. Der Host (`stream/host`, Python + Chromium) streamt eine beliebige Webseite in 256×192 (oder 128×96, oder über beide Bildschirme) mit 256 Farben per WLAN an das neue DS-Programm `DsRunnerStream.nds`; Tasten und Touchscreen gehen als Tastatur und Maus zurück (Belegung per JSON-Datei). Der Pi stellt dafür ein offenes WLAN nur für den DS bereit (`stream/host/tools/hotspot.sh`). Einstellungen am DS optional in `/_dsrunner/stream.ini`. Noch nicht auf echtem DS + Pi getestet, kein Ton auf dem DS. Anleitung: [stream/README.md](stream/README.md).
 - **Tasten für „zurück zu DsRunner“ einstellbar** (Pico Loader geändert): `"inGameResetKeys"` in `/_pico/settings.json`, z. B. `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`, wenn L oder R ausgeleiert sind. Erlaubt sind A, B, SELECT, START, Steuerkreuz, L und R (nicht X/Y), mindestens 3 Tasten. Standard bleibt L + R + Unten + B. Details: [README](README.md#zurück-zu-dsrunner-aus-einem-spiel), [docs/CONFIG.md](docs/CONFIG.md).
 
 ### Geändert
