@@ -1,0 +1,6 @@
+# DsRunner Stream host (Python 3.10+). Install: pip install -r requirements.txt
+playwright>=1.40
+numpy>=1.24
+pillow>=10.0
+lz4>=4.0
+# for the tests only: pytest (python -m unittest works as well)

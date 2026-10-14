@@ -1,0 +1,9 @@
+[Desktop Entry]
+# DsRunner Stream host with a Chromium window on the Pi desktop (GPU/WebGL).
+# Copy to ~/.config/autostart/ to start it after the desktop login.
+Type=Application
+Name=DsRunner Stream
+Comment=Browser-Spiele auf den Nintendo DS streamen
+Exec=sh -c 'sleep 5; exec "$HOME/DsRunner/stream/host/start.sh" --headful'
+Terminal=false
+X-GNOME-Autostart-enabled=true

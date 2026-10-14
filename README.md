@@ -16,6 +16,7 @@ Ein moderner Launcher für den **Nintendo DS** (getestet auf dem DS Lite mit der
 - **Favoriten** (Taste X), **zuletzt gespielt** als Sortierung und **Weiterspielen** mit START
 - **Zurück zu DsRunner aus dem Spiel**, ohne den DS auszuschalten
 - Cheats über `usrcheat.dat`, Uhr und Akkuanzeige, Oberfläche auf Deutsch
+- **Experimentell:** Browser-Spiele über einen Raspberry Pi auf dem DS spielen ([DsRunner Stream](#dsrunner-stream-experimentell))
 
 ## Download
 
@@ -125,6 +126,16 @@ Die meisten Einstellungen (Ansicht, Sortierung, Uhr) gibt es im Menü unter dem 
 | `"inGameResetKeys": "SELECT+START+DOWN"` | andere Tasten dafür: mindestens 3 aus A, B, SELECT, START, UP, DOWN, LEFT, RIGHT, L, R (nicht X/Y) |
 
 Beim Bearbeiten auf die Kommas zwischen den Zeilen achten. Alle Einstellungen: **[docs/CONFIG.md](docs/CONFIG.md)**.
+
+## DsRunner Stream (experimentell)
+
+Mit **DsRunner Stream** spielst du Browser-Spiele auf dem DS. Ein Raspberry Pi (oder PC) öffnet das Spiel und schickt das Bild per WLAN an den DS, die Tasten und der Touchscreen des DS steuern das Spiel.
+
+- Auf dem DS läuft dafür die App `DsRunnerStream.nds` aus `Games/Apps`.
+- Der Pi stellt ein eigenes offenes WLAN nur für den DS bereit und hängt selbst per Kabel am Router.
+- Etwa 10 bis 20 Bilder pro Sekunde in 256 Farben, kein Ton auf dem DS. Für ruhigere Spiele gut, für schnelle Action eher nicht.
+
+Noch nicht auf echter Hardware getestet. Einrichtung, Tastenbelegung und Sicherheitshinweise: **[stream/README.md](stream/README.md)**.
 
 ## Update auf eine neue Version
 

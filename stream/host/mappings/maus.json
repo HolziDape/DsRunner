@@ -1,0 +1,14 @@
+{
+  "name": "Maus (Touchscreen = Mauszeiger, A = Linksklick)",
+  "keys": {
+    "A": "MouseLeft",
+    "B": "MouseRight",
+    "UP": "ArrowUp",
+    "DOWN": "ArrowDown",
+    "LEFT": "ArrowLeft",
+    "RIGHT": "ArrowRight",
+    "START": "Enter",
+    "SELECT": "Escape"
+  },
+  "touch": "move"
+}
