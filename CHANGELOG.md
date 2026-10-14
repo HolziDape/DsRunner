@@ -8,12 +8,16 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 
 ### Hinzugefügt
 - **Experimentell: DsRunner Stream:** Browser-Spiele vom Raspberry Pi 5 oder PC auf dem DS spielen. Der Host (`stream/host`, Python + Chromium) streamt eine beliebige Webseite in 256×192 (oder 128×96, oder über beide Bildschirme) mit 256 Farben per WLAN an das neue DS-Programm `DsRunnerStream.nds`; Tasten und Touchscreen gehen als Tastatur und Maus zurück (Belegung per JSON-Datei). Der Pi stellt dafür ein offenes WLAN nur für den DS bereit (`stream/host/tools/hotspot.sh`). Einstellungen am DS optional in `/_dsrunner/stream.ini`. Noch nicht auf echtem DS + Pi getestet, kein Ton auf dem DS. Anleitung: [stream/README.md](stream/README.md).
+- **Andere Flashkarten:** DsRunner ist nicht auf die M3 DS Real beschränkt. Das README zeigt jetzt unter [Kompatible Flashkarten](README.md#kompatible-flashkarten), auf welchen Karten DsRunner laufen sollte (alle, die Pico Loader unterstützt, z. B. Acekard 2/2i, Ace3DS+, DSTT, Original R4, R4iDSN, M3i Zero, Stargate 3DS, DSpico, EZ-Flash Parallel und Slot-2-Karten wie die SuperCard), wie man es dort einrichtet und wie der Autostart mit den Dateien von TWiLight Menu++ geht. Details: [docs/FLASHCARDS.md](docs/FLASHCARDS.md). Getestet ist weiterhin nur die M3 DS Real.
+- **Pico Loader für andere Flashkarten:** Zu jedem Release gibt es `PicoLoader-DsRunner_<Plattform>.zip` für 17 Kartentypen (z. B. `PicoLoader-DsRunner_DSTT.zip`). Damit geht „zurück zu DsRunner aus dem Spiel“ auch dort (ungetestet; auf der Plattform `R4` nur in manchen Spielen).
 - **Tasten für „zurück zu DsRunner“ einstellbar** (Pico Loader geändert): `"inGameResetKeys"` in `/_pico/settings.json`, z. B. `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`, wenn L oder R ausgeleiert sind. Erlaubt sind A, B, SELECT, START, Steuerkreuz, L und R (nicht X/Y), mindestens 3 Tasten. Standard bleibt L + R + Unten + B. Details: [README](README.md#zurück-zu-dsrunner-aus-einem-spiel), [docs/CONFIG.md](docs/CONFIG.md).
 
 ### Geändert
 - „Zurück zu DsRunner“ (L + R + Unten + B) ist jetzt auf DS Lite + M3 DS Real getestet und funktioniert.
+- Fehlt beim Start der eigene Pfad, merkt sich DsRunner als Rückkehrziel jetzt auch `/_picoboot.nds` (so startet die DSpico DsRunner).
 
 ### Behoben
+- DsRunner Stream: Bekommt der DS im Netz „DsRunner-Stream“ keine Adresse per DHCP (Anzeige „hole IP-Adresse (DHCP)“, dann „Zeitueberschreitung“), nimmt die App nach 8 Sekunden die feste Adresse 192.168.4.5. Neue Einstellung `ip=` in `stream.ini`.
 - DsRunner Stream: Wird die Seite geschlossen oder stürzt sie ab (z. B. durch ein Werbe-Pop-up), öffnet der Host sie von selbst neu. Pop-ups werden automatisch geschlossen (`--allow-popups` streamt sie stattdessen).
 
 ## [0.3.1](https://github.com/HolziDape/DsRunner/releases/tag/v0.3.1) - 2026-10-14

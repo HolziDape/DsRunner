@@ -1,6 +1,8 @@
 # DsRunner
 
-Ein moderner Launcher für den **Nintendo DS** (getestet auf dem DS Lite mit der Flashkarte **M3 DS Real**). DsRunner startet beim Einschalten automatisch und zeigt deine Spiele in einem dunklen Kachel-Design: erst die Konsolen, dann ihre Spiele, mit großen Bildern auf dem oberen Bildschirm. Gestartet werden die Spiele über [Pico Loader](https://github.com/LNH-team/pico-loader).
+Ein moderner Launcher für den **Nintendo DS**. DsRunner startet beim Einschalten automatisch und zeigt deine Spiele in einem dunklen Kachel-Design: erst die Konsolen, dann ihre Spiele, mit großen Bildern auf dem oberen Bildschirm. Gestartet werden die Spiele über [Pico Loader](https://github.com/LNH-team/pico-loader).
+
+Getestet ist DsRunner auf dem DS Lite mit der Flashkarte **M3 DS Real**. Laufen sollte er auf allen Flashkarten, die Pico Loader unterstützt, z. B. Acekard 2, Ace3DS+, DSTT, R4 und DSpico: siehe [Kompatible Flashkarten](#kompatible-flashkarten).
 
 ![DsRunner: Konsolen-Ebene im 3×2-Raster, im 4×3-Raster und im Coverflow](docs/images/DsRunner.png)
 
@@ -8,7 +10,7 @@ Ein moderner Launcher für den **Nintendo DS** (getestet auf dem DS Lite mit der
 
 ## Funktionen
 
-- **Startet automatisch** beim Einschalten, ohne Umweg über ein anderes Menü (M3 DS Real)
+- **Startet automatisch** beim Einschalten, ohne Umweg über ein anderes Menü (fertig eingerichtet für die M3 DS Real, für viele andere Karten [von Hand](docs/FLASHCARDS.md#autostart))
 - **Konsolen und Spiele:** erst NDS, GBA, NES & Co. als Kacheln mit eigenem Bild, dann die Spiele der Konsole
 - **Drei Ansichten:** große Kacheln (3×2), kleine Kacheln (4×3) und Coverflow
 - **Bilder für jedes Spiel** auf dem oberen Bildschirm und in den Kacheln, automatisch geladen mit dem PC-Programm [DsRunner Art](#bilder-für-die-spiele)
@@ -25,7 +27,8 @@ Ein moderner Launcher für den **Nintendo DS** (getestet auf dem DS Lite mit der
 | Datei | Wofür |
 |---|---|
 | **`DsRunner_M3DSReal.zip`** | **M3 DS Real:** komplettes Paket für die SD-Karte, mit Autostart und Emulatoren |
-| `DsRunner.zip` | andere Flashkarten, siehe [unten](#andere-flashkarten) |
+| `DsRunner.zip` | andere Flashkarten, siehe [unten](#kompatible-flashkarten) |
+| `PicoLoader-DsRunner_<Plattform>.zip` | andere Flashkarten: Pico Loader mit „zurück zu DsRunner aus dem Spiel“, eine Datei pro Kartentyp |
 | `DsRunnerArt.exe` | PC-Programm für Windows, lädt die Bilder für deine Spiele auf die Karte |
 
 Was in welcher Version neu ist, steht im **[Changelog](CHANGELOG.md)**. Die installierte Version siehst du in DsRunner unten rechts im Menü „Anzeige“ (Zahnrad oben rechts).
@@ -101,7 +104,7 @@ Im laufenden DS-Spiel **L + R + Unten + B zwei Sekunden halten**. Der Bildschirm
 - **Vorher im Spiel speichern.** Nicht Gespeichertes geht verloren, wie beim Ausschalten. Ein laufender Speichervorgang wird nicht abgebrochen.
 - **Nicht jedes Spiel unterstützt das.** Dann läuft das Spiel ganz normal weiter, nur ohne diese Funktion.
 - **Andere Tasten**, z. B. wenn L oder R schlecht reagieren: in den [Einstellungen](#einstellungen) `"inGameResetKeys": "SELECT+START+DOWN"` eintragen.
-- Funktioniert mit dem Pico Loader aus `DsRunner_M3DSReal.zip`. Technische Details und Fehlersuche: [loader/README.md](loader/README.md).
+- Funktioniert mit dem Pico Loader aus `DsRunner_M3DSReal.zip` bzw. `PicoLoader-DsRunner_<Plattform>.zip`, nicht mit dem offiziellen Pico Loader. Technische Details und Fehlersuche: [loader/README.md](loader/README.md).
 
 ## Bilder für die Spiele
 
@@ -143,17 +146,43 @@ Noch nicht auf echter Hardware getestet. Einrichtung, Tastenbelegung und Sicherh
 2. Steht im [Changelog](CHANGELOG.md) bei der Version **„Pico Loader geändert“**, zusätzlich die fünf `.bin`-Dateien aus `_pico` kopieren.
 3. Fehlen dir noch die Emulatoren, einmal den Ordner `_dsrunner/emulators` und die Datei `snemul.cfg` kopieren.
 
-Spiele, Spielstände, Einstellungen, Bilder und Favoriten bleiben dabei erhalten.
+Spiele, Spielstände, Einstellungen, Bilder und Favoriten bleiben dabei erhalten. Andere Flashkarten: siehe [docs/FLASHCARDS.md](docs/FLASHCARDS.md#autostart).
 
-## Andere Flashkarten
+## Kompatible Flashkarten
 
-DsRunner läuft überall, wo Pico Loader läuft. Getestet ist bisher nur die M3 DS Real.
+**DsRunner ist nicht auf die M3 DS Real beschränkt.** Getestet ist bisher allerdings nur die M3 DS Real. Was wo geht:
 
-1. `DsRunner.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren.
-2. Bei [Pico Loader](https://github.com/LNH-team/pico-loader/releases) die Dateien für deine Flashkarte herunterladen und `aplist.bin`, `savelist.bin`, `patchlist.bin`, `picoLoader7.bin` und `picoLoader9.bin` nach `/_pico` kopieren.
-3. `DsRunner.nds` aus dem Menü deiner Flashkarte starten.
+- **Überall gleich:** das Menü selbst (ein normales DS-Homebrew-Programm), die Emulatoren, DsRunner Art (läuft am PC) und DsRunner Stream (DS, DS Lite, DSi und 3DS im DS-Modus; WLAN nur offen oder WEP).
+- **Hängt von der Karte ab:** Spiele startet DsRunner über **Pico Loader**, und den gibt es nur für bestimmte Karten („Plattformen“). Ohne passende Plattform startet DsRunner, aber kein Spiel. Auch der **Autostart** ist je Karte verschieden.
+- **Zurück zu DsRunner aus dem Spiel** steckt in unserem Pico Loader und sollte auf allen Plattformen gleich funktionieren, außer `R4` (dort nur in manchen Spielen).
 
-Einen Autostart gibt es nur für die M3 DS Real. Mit dem offiziellen Pico Loader fehlt außerdem „Zurück zu DsRunner aus dem Spiel“.
+| Karte (bekannte Namen und Klone) | Pico-Loader-Plattform | Spiele starten | Autostart möglich | Zurück aus dem Spiel | Getestet |
+|---|---|---|---|---|---|
+| **M3 DS Real** | `M3DS` | ja | ja, fertiges Paket | ja | **ja** (DS Lite) |
+| M3i Zero (nicht GMP-Z003), iTouchDS, r4rts.com, r4isdhc.com RTS (schwarz) | `M3DS` | ja | ja, Paket der M3 DS Real | ja | sollte funktionieren (ungetestet) |
+| M3i Zero (GMP-Z003) | `G003` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| Acekard 2, 2.1, 2i, r4ids.cn und Ableger | `AK2` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| Acekard RPG | `AKRPG` | ja | nein | ja | sollte funktionieren (ungetestet) |
+| Ace3DS+, Gateway 3DS (blau), r4isdhc.com.cn, r4isdhc.hk ab 2020 und Ableger | `ACE3DS` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| DSTT, SuperCard DSONE SDHC, r4isdhc.com ab 2014, r4i-sdhc.com und Ableger | `DSTT` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| r4idsn.com | `R4iDSN` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| Original R4DS (ohne SDHC), M3 DS Simply | `R4` | ja | ja | nur in manchen Spielen | sollte funktionieren (ungetestet) |
+| Stargate 3DS | `STARGATE` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| DSpico | `DSPICO` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| EZ-Flash Parallel | `EZP` | ja | ja | ja | sollte funktionieren (ungetestet) |
+| DATEL Games n' Music, Action Replay DS(i) Media Edition | `DATEL` | ja | nur Games n' Music | ja | sollte funktionieren (ungetestet) |
+| Slot 2: SuperCard SD/Lite/Rumble, SuperChis · SuperCard CF · M3 CF · Max Media Dock CF · GBA Movie Player CF | `SUPERCARD` · `SUPERCARDCF` · `M3CF` · `MMCF` · `MPCF` | ja | nur GBA Movie Player | ja | sollte funktionieren (ungetestet) |
+
+Namen und Klone wie im [Pico-Loader-README](https://github.com/LNH-team/pico-loader#supported-platforms). **Wähle nur eine Plattform, unter der deine Karte mit Namen steht:** Die falsche kann laut Pico Loader die Karte beschädigen. Nicht dabei sind z. B. SuperCard DSTWO, EZ-Flash V/Vi und iSmart Premium. Auf DSi und 3DS gilt dasselbe, solange DsRunner von der Flashkarte läuft. Alle Details, Hinweise zu Klonen, DSi/3DS und GBARunner2: **[docs/FLASHCARDS.md](docs/FLASHCARDS.md)**.
+
+### Installation auf anderen Karten
+
+1. SD-Karte sichern (Spielstände und die Menü-Dateien deiner Karte).
+2. `DsRunner.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren.
+3. `PicoLoader-DsRunner_<Plattform>.zip` für deine Karte aus der Tabelle entpacken und den Inhalt ebenfalls ins Hauptverzeichnis kopieren (landet in `/_pico`). Fehlt diese Datei (bei Releases bis 0.3.1), gehen auch die Dateien `aplist.bin`, `savelist.bin`, `patchlist.bin`, `picoLoader7.bin` und `picoLoader9.bin` aus dem [offiziellen Pico Loader](https://github.com/LNH-team/pico-loader/releases), dann aber ohne „zurück aus dem Spiel“.
+4. `DsRunner.nds` aus dem Menü deiner Karte starten.
+
+**Autostart:** Für die meisten Karten liefert [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu/releases) in `TWiLightMenu-Flashcard.7z` (Ordner `Autoboot`) Startdateien, die `/_nds/TWiLightMenu/main.srldr` starten. Die Dateien deiner Karte ins Hauptverzeichnis kopieren und `DsRunner.nds` als `/_nds/TWiLightMenu/main.srldr` ablegen. Bei der DSpico reicht es, `DsRunner.nds` in `/_picoboot.nds` umzubenennen. Ausnahmen und Schritt für Schritt: [docs/FLASHCARDS.md](docs/FLASHCARDS.md#autostart).
 
 ## Zurück zum alten Menü (M3 DS Real)
 
