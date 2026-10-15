@@ -62,17 +62,7 @@
 
 using Rgb888 = Rgb<8, 8, 8>;
 
-// key colors: letters, special keys (backspace, space), the search key, the selected key
-static constexpr Rgb888 sKeyTop = Rgb888(36, 41, 57);
-static constexpr Rgb888 sKeyBottom = Rgb888(29, 33, 46);
-static constexpr Rgb888 sSpecialTop = Rgb888(52, 59, 80);
-static constexpr Rgb888 sSpecialBottom = Rgb888(42, 48, 66);
-static constexpr Rgb888 sSearchTop = DsRunnerColors::Accent;
-static constexpr Rgb888 sSearchBottom = Rgb888(48, 150, 214);
-static constexpr Rgb888 sSelectedTop = Rgb888(66, 76, 104);
-static constexpr Rgb888 sSelectedBottom = Rgb888(46, 53, 74);
-static constexpr Rgb888 sFieldTop = Rgb888(17, 19, 26);
-static constexpr Rgb888 sFieldBottom = Rgb888(22, 25, 34);
+// key colors (letters, special keys, the search key, the selected key, the field): DsRunnerColors::Key*
 
 // QWERTZ like a German keyboard, no umlauts: the search treats ä as a, ß as ss
 const DsRunnerSearchKeyboardView::Key DsRunnerSearchKeyboardView::sKeys[] =
@@ -280,26 +270,26 @@ void DsRunnerSearchKeyboardView::DrawKey(GraphicsContext& graphicsContext, const
     Rgb888 top, bottom, text;
     if (key.action == KeyAction::Search)
     {
-        top = isSelected ? RgbMixer::Lerp(sSearchTop, DsRunnerColors::White, 1, 4) : sSearchTop;
-        bottom = sSearchBottom;
-        text = DsRunnerColors::BgTop;
+        top = isSelected ? RgbMixer::Lerp(DsRunnerColors::Accent, DsRunnerColors::White, 1, 4) : DsRunnerColors::Accent;
+        bottom = DsRunnerColors::AccentDim;
+        text = DsRunnerColors::OnAccent;
     }
     else if (isSelected)
     {
-        top = sSelectedTop;
-        bottom = sSelectedBottom;
-        text = DsRunnerColors::White;
+        top = DsRunnerColors::KeySelectedTop;
+        bottom = DsRunnerColors::KeySelectedBottom;
+        text = DsRunnerColors::TextStrong;
     }
     else if (key.action == KeyAction::Character)
     {
-        top = sKeyTop;
-        bottom = sKeyBottom;
+        top = DsRunnerColors::KeyTop;
+        bottom = DsRunnerColors::KeyBottom;
         text = DsRunnerColors::Text;
     }
     else
     {
-        top = sSpecialTop;
-        bottom = sSpecialBottom;
+        top = DsRunnerColors::KeySpecialTop;
+        bottom = DsRunnerColors::KeySpecialBottom;
         text = DsRunnerColors::Text;
     }
     DsRunnerShapes::DrawRoundedRect(bounds.GetX(), bounds.GetY(), bounds.GetWidth(), bounds.GetHeight(), KEY_RADIUS, top, bottom, Z_BODY);
@@ -344,7 +334,7 @@ void DsRunnerSearchKeyboardView::Draw(GraphicsContext& graphicsContext)
     _titleLabel->SetForegroundColor(DsRunnerColors::Text);
     _titleLabel->Draw(graphicsContext);
     bool cancelPressed = _penOnCancel;
-    auto cancelColor = cancelPressed ? sSelectedTop : DsRunnerColors::Pill;
+    auto cancelColor = cancelPressed ? DsRunnerColors::KeySelectedTop : DsRunnerColors::Pill;
     DsRunnerShapes::DrawRoundedRect(CANCEL_X, CANCEL_Y, CANCEL_WIDTH, CANCEL_HEIGHT, CANCEL_HEIGHT / 2,
         cancelColor, cancelColor, Z_BODY);
     if (_hasVram)
@@ -366,9 +356,10 @@ void DsRunnerSearchKeyboardView::Draw(GraphicsContext& graphicsContext)
     // the query in its field, with a blinking cursor behind it
     DsRunnerShapes::DrawRoundedRect(FIELD_X - 1, FIELD_Y - 1, FIELD_WIDTH + 2, FIELD_HEIGHT + 2, 7,
         DsRunnerColors::Accent, DsRunnerColors::Accent, Z_RING);
-    DsRunnerShapes::DrawRoundedRect(FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT, 6, sFieldTop, sFieldBottom, Z_BODY);
-    _queryLabel->SetBackgroundColor(RgbMixer::Lerp(sFieldTop, sFieldBottom, 1, 2));
-    _queryLabel->SetForegroundColor(_query[0] == 0 ? DsRunnerColors::TextDim : DsRunnerColors::White);
+    DsRunnerShapes::DrawRoundedRect(FIELD_X, FIELD_Y, FIELD_WIDTH, FIELD_HEIGHT, 6,
+        DsRunnerColors::FieldTop, DsRunnerColors::FieldBottom, Z_BODY);
+    _queryLabel->SetBackgroundColor(RgbMixer::Lerp(DsRunnerColors::FieldTop, DsRunnerColors::FieldBottom, 1, 2));
+    _queryLabel->SetForegroundColor(_query[0] == 0 ? DsRunnerColors::TextDim : DsRunnerColors::TextStrong);
     _queryLabel->Draw(graphicsContext);
     if ((_frameCounter & 32) == 0)
     {
@@ -377,7 +368,7 @@ void DsRunnerSearchKeyboardView::Draw(GraphicsContext& graphicsContext)
             DsRunnerColors::Accent, DsRunnerColors::Accent, Z_CURSOR);
     }
 
-    _statusLabel->SetBackgroundColor(Rgb888(17, 20, 27));
+    _statusLabel->SetBackgroundColor(DsRunnerColors::FieldStatus);
     _statusLabel->SetForegroundColor(_showNoMatches ? DsRunnerColors::Favorite : DsRunnerColors::TextDim);
     _statusLabel->Draw(graphicsContext);
 

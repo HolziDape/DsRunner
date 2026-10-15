@@ -282,7 +282,7 @@ bool DsRunnerTileItemView::LoadTileImage(const char* path, const DsRunnerConsole
         }
     }
     memset(_tilePalette, 0, sizeof(_tilePalette));
-    DsRunnerConsoleArt::ConvertPalette(sBmpPalette, colors, tint, _tilePalette);
+    DsRunnerConsoleArt::ConvertPalette(sBmpPalette, colors, tint, _tilePalette, DsRunnerColors::TileShade);
     // the vblank texture loader copies the buffers with dma
     DC_FlushRange(_tileTexels, sizeof(_tileTexels));
     DC_FlushRange(_tilePalette, sizeof(_tilePalette));
@@ -383,7 +383,7 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
         {
             // the light console images need a body that stays close to the console color
             top = RgbMixer::Lerp(_tint, DsRunnerColors::White, 1, 8);
-            bottom = RgbMixer::Lerp(_tint, DsRunnerColors::BgTop, 1, 8);
+            bottom = RgbMixer::Lerp(_tint, DsRunnerColors::TileShade, 1, 8);
         }
         else if (isSelected)
         {
@@ -392,18 +392,18 @@ void DsRunnerTileItemView::Draw(GraphicsContext& graphicsContext)
         }
         else
         {
-            top = RgbMixer::Lerp(_tint, DsRunnerColors::BgTop, 3, 8);
-            bottom = RgbMixer::Lerp(_tint, DsRunnerColors::BgTop, 5, 8);
+            top = RgbMixer::Lerp(_tint, DsRunnerColors::TileShade, 3, 8);
+            bottom = RgbMixer::Lerp(_tint, DsRunnerColors::TileShade, 5, 8);
         }
     }
     else if (isSelected)
     {
-        top = Rgb888(58, 66, 90);
-        bottom = Rgb888(40, 46, 64);
+        top = DsRunnerColors::TileSelectedTop;
+        bottom = DsRunnerColors::TileSelectedBottom;
     }
     else
     {
-        top = Rgb888(33, 38, 53);
+        top = DsRunnerColors::TileTop;
         bottom = DsRunnerColors::TileDim;
     }
 

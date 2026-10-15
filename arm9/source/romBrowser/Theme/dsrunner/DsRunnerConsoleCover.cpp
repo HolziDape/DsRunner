@@ -6,6 +6,7 @@
 #include "fat/File.h"
 #include "romBrowser/FileType/BmpHeader.h"
 #include "services/settings/AppSettings.h"
+#include "themes/dsrunner/DsRunnerColorScheme.h"
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "DsRunnerLibrary.h"
 #include "DsRunnerConsoleCover.h"
@@ -41,7 +42,7 @@ bool DsRunnerConsoleCover::Load(const char* path, const char* folderName)
         return false;
     u32 dataOffset = _coverBuffer[0xA] | (_coverBuffer[0xB] << 8) | (_coverBuffer[0xC] << 16) | (_coverBuffer[0xD] << 24);
     auto tint = DsRunnerConsoleArt::GetTileColor(folderName);
-    DsRunnerConsoleArt::ConvertPalette(&_coverBuffer[0x36], 256, &tint, _palette);
+    DsRunnerConsoleArt::ConvertPalette(&_coverBuffer[0x36], 256, &tint, _palette, DsRunnerColors::ArtShade);
     if (file->Seek(dataOffset) != FR_OK || !file->ReadExact(_coverBuffer, sizeof(_coverBuffer)))
         return false;
     DC_FlushRange(_coverBuffer, sizeof(_coverBuffer));

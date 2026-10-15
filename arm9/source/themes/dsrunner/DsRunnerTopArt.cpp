@@ -7,6 +7,7 @@
 #include <libtwl/dma/dmaNitro.h>
 #include "fat/File.h"
 #include "VBlank.h"
+#include "DsRunnerColorScheme.h"
 #include "DsRunnerConsoleArt.h"
 #include "DsRunnerTopArt.h"
 
@@ -199,7 +200,7 @@ DsRunnerTopArt::LoadResult DsRunnerTopArt::Load(const char* path, const DsRunner
     }
 
     // BGRA -> BGR555, the built-in console images are tinted with the console color
-    DsRunnerConsoleArt::ConvertPalette(bmpPalette, 256, tint, _palette);
+    DsRunnerConsoleArt::ConvertPalette(bmpPalette, 256, tint, _palette, DsRunnerColors::ArtShade);
 
     // Color 0 of a bitmap background is transparent: draw those pixels with the closest other color.
     int closest = 1;
