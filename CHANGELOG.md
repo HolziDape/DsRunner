@@ -22,6 +22,7 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 - **Tasten für „zurück zu DsRunner“ einstellbar** (Pico Loader geändert): `"inGameResetKeys"` in `/_pico/settings.json`, z. B. `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`, wenn L oder R ausgeleiert sind. Erlaubt sind A, B, SELECT, START, Steuerkreuz, L und R (nicht X/Y), mindestens 3 Tasten. Standard bleibt L + R + Unten + B. Details: [README](README.md#zurück-zu-dsrunner-aus-einem-spiel), [docs/CONFIG.md](docs/CONFIG.md).
 
 ### Geändert
+- **README neu:** Inhaltsverzeichnis mit Sprungmarken, neue Screenshots (Ansichten, Suche, Menü, Farb-Themes) und ein englischer Teil.
 - DsRunner Stream: Der Host schickt jetzt höchstens 30 statt 20 Bilder pro Sekunde (`--fps`). Der DS Lite zeigt 25-30 problemlos an, der Browser auf dem Pi 5 liefert etwa 25.
 - Spiele anderer Konsolen (und DS-Spiele ohne Banner) heißen oben jetzt ohne Dateiendung, also „Zelda“ statt „Zelda.nes“, auch bei „START: Weiterspielen“ und in den Suchergebnissen. Die unterste Zeile zeigt weiter den vollständigen Dateinamen.
 - Die Liste ★ Favoriten folgt jetzt auch der Sortierung „zuletzt gespielt“: die zuletzt gespielten Favoriten zuerst, die übrigen danach von A bis Z. Bisher war sie dann nach Namen sortiert.
