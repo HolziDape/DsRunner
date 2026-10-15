@@ -107,8 +107,9 @@ shell_quote() {
 step "DsRunner Stream einrichten"
 info "Host-Ordner: $HOST_DIR"
 
-[ -f "$HOST_DIR/dsstream/__main__.py" ] && [ -f "$HOST_DIR/requirements.txt" ] ||
+if [ ! -f "$HOST_DIR/dsstream/__main__.py" ] || [ ! -f "$HOST_DIR/requirements.txt" ]; then
 	fail "Hier liegt kein DsRunner-Stream-Host. Das Skript muss in stream/host/tools liegen."
+fi
 [ "$(id -u)" != "0" ] ||
 	fail "Bitte als normaler Benutzer starten, nicht mit sudo. Das Skript fragt selbst nach sudo, wo es noetig ist."
 command -v sudo >/dev/null || fail "sudo fehlt."
