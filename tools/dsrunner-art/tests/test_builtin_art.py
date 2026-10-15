@@ -49,6 +49,7 @@ class ArtKeyTests(unittest.TestCase):
         self.assertEqual(art_key("nds"), "NDS")
         self.assertEqual(art_key("Megadrive"), "MD")
         self.assertEqual(art_key("★ Favoriten"), "FAV")
+        self.assertEqual(art_key("• Suche"), "SEARCH")
         self.assertEqual(art_key("Rennen"), "FOLDER")
         customs, _ = parse_systems_json({"systems": {"WS": {"extensions": ["ws"]}, "SMS": {"label": "MS"}}})
         set_custom_systems(customs)

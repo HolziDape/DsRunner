@@ -21,6 +21,8 @@ bool RomBrowserStateMachine::FireDirect(RomBrowserStateTrigger trigger)
             .Trigger(RomBrowserStateTrigger::ShowGameInfo).GoesTo(RomBrowserState::GameInfo)
             .Trigger(RomBrowserStateTrigger::Launch).GoesTo(RomBrowserState::Launching)
             .Trigger(RomBrowserStateTrigger::ShowDisplaySettings).GoesTo(RomBrowserState::DisplaySettings)
+            // DsRunner: search keyboard
+            .Trigger(RomBrowserStateTrigger::ShowSearch).GoesTo(RomBrowserState::SearchInput)
         .In(RomBrowserState::GameInfo)
             .Trigger(RomBrowserStateTrigger::HideGameInfo).GoesTo(RomBrowserState::Browser)
         .In(RomBrowserState::LoadingFolder)
@@ -29,6 +31,10 @@ bool RomBrowserStateMachine::FireDirect(RomBrowserStateTrigger trigger)
             .Trigger(RomBrowserStateTrigger::ChangeDisplayMode).GoesTo(RomBrowserState::DisplaySettings)
             .Trigger(RomBrowserStateTrigger::HideDisplaySettings).GoesTo(RomBrowserState::Browser)
             .Trigger(RomBrowserStateTrigger::GotoSettingsScreen).GoesTo(RomBrowserState::GoingToSettingsScreen)
+        // DsRunner: the search keyboard closes, or a search (or the console level) is loaded
+        .In(RomBrowserState::SearchInput)
+            .Trigger(RomBrowserStateTrigger::HideSearch).GoesTo(RomBrowserState::Browser)
+            .Trigger(RomBrowserStateTrigger::Navigate).GoesTo(RomBrowserState::LoadingFolder)
         .Check(newState))
     {
         _prevState = _curState;

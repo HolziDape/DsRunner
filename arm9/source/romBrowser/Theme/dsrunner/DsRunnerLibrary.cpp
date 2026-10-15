@@ -8,6 +8,7 @@
 #include "romBrowser/FileType/FileType.h"
 #include "romBrowser/FileType/IFileTypeProvider.h"
 #include "romBrowser/FileType/Folder/FolderFileType.h"
+#include "DsRunnerSearch.h"
 #include "DsRunnerLibrary.h"
 
 #define DSRUNNER_FOLDER         "/_dsrunner"
@@ -76,6 +77,25 @@ bool DsRunnerPaths::MirrorPath(const char* root, const char* folderPath, const c
     memcpy(p, name, nameLength);
     p += nameLength;
     strcpy(p, ".bmp");
+    return true;
+}
+
+bool DsRunnerPaths::GetConsoleFolderName(const char* libraryPath, const char* folderPath, char* result,
+    u32 resultSize)
+{
+    libraryPath = SkipDrive(libraryPath);
+    folderPath = SkipDrive(folderPath);
+    u32 libraryLength = folderLength(libraryPath);
+    if (strncasecmp(folderPath, libraryPath, libraryLength) != 0 || folderPath[libraryLength] != '/')
+        return false;
+    const char* name = folderPath + libraryLength + 1;
+    u32 length = 0;
+    while (name[length] != 0 && name[length] != '/')
+        length++;
+    if (length == 0 || length >= resultSize)
+        return false;
+    memcpy(result, name, length);
+    result[length] = 0;
     return true;
 }
 
@@ -279,24 +299,22 @@ bool DsRunnerFavoritesFolder::IsEntry(const char* name)
     return name && strcmp(name, EntryName) == 0;
 }
 
-void DsRunnerFavoritesFolder::AddEntry(SdFolder& libraryRoot, const DsRunnerFavorites& favorites)
+void DsRunnerVirtualEntries::Add(SdFolder& libraryRoot, const char* name)
 {
-    if (favorites.GetCount() == 0)
-        return;
     // a folder entry that exists nowhere on the card: an empty file reference
     DIR directory;
     FILINFO fileInfo;
     memset(&directory, 0, sizeof(directory));
     memset(&fileInfo, 0, sizeof(fileInfo));
-    libraryRoot.AddFile(new FileInfo(EntryName, &FolderFileType::sInstance,
+    libraryRoot.AddFile(new FileInfo(name, &FolderFileType::sInstance,
         FastFileRef(&directory, &fileInfo), AM_DIR));
 }
 
-void DsRunnerFavoritesFolder::MoveEntryToFront(const FileInfo** files, u32 count)
+void DsRunnerVirtualEntries::MoveToFront(const FileInfo** files, u32 count, const char* name)
 {
     for (u32 i = 1; i < count; i++)
     {
-        if (IsEntry(files[i]->GetFileName()))
+        if (strcmp(files[i]->GetFileName(), name) == 0)
         {
             const FileInfo* entry = files[i];
             for (u32 j = i; j > 0; j--)
@@ -305,6 +323,17 @@ void DsRunnerFavoritesFolder::MoveEntryToFront(const FileInfo** files, u32 count
             return;
         }
     }
+}
+
+void DsRunnerFavoritesFolder::AddEntry(SdFolder& libraryRoot, const DsRunnerFavorites& favorites)
+{
+    if (favorites.GetCount() != 0)
+        DsRunnerVirtualEntries::Add(libraryRoot, EntryName);
+}
+
+void DsRunnerFavoritesFolder::MoveEntryToFront(const FileInfo** files, u32 count)
+{
+    DsRunnerVirtualEntries::MoveToFront(files, count, EntryName);
 }
 
 std::unique_ptr<DsRunnerFavoritesFolder> DsRunnerFavoritesFolder::Create(const DsRunnerFavorites& favorites,
@@ -405,10 +434,11 @@ void DsRunnerGameCounts::SetFolders(const char* libraryPath, const SdFolder& fol
     for (int i = 0; i < folder.GetFileCount() && _entryCount < MaxFolders; i++)
     {
         const auto* file = folder.GetFiles()[i];
-        // the favorites entry is no real folder, its count comes from the favorites
+        // the favorites and search entries are no real folders (the favorites count comes from the favorites)
         if (file->GetFileType()->GetClassification() != FileTypeClassification::Folder ||
             strlen(file->GetFileName()) >= sizeof(Entry::name) ||
-            DsRunnerFavoritesFolder::IsEntry(file->GetFileName()))
+            DsRunnerFavoritesFolder::IsEntry(file->GetFileName()) ||
+            DsRunnerSearch::IsEntry(file->GetFileName()))
         {
             continue;
         }
@@ -464,4 +494,18 @@ int DsRunnerGameCounts::Get(const char* folderPath, const char* folderName) cons
             return _entries[i].count;
     }
     return Unknown;
+}
+
+int DsRunnerGameCounts::GetTotal(const char* libraryPath) const
+{
+    if (_libraryPath[0] == 0 || !DsRunnerPaths::IsSameFolder(libraryPath, _libraryPath))
+        return Unknown;
+    int total = 0;
+    for (u32 i = 0; i < _entryCount; i++)
+    {
+        if (_entries[i].count == Unknown)
+            return Unknown;
+        total += _entries[i].count;
+    }
+    return total;
 }

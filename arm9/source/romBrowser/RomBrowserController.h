@@ -13,6 +13,7 @@
 #include "services/settings/IAppSettingsService.h"
 #include "cheats/ICheatRepository.h"
 #include "Theme/dsrunner/DsRunnerLibrary.h"
+#include "Theme/dsrunner/DsRunnerSearch.h"
 
 class RomBrowserController : public IRomBrowserController
 {
@@ -65,6 +66,19 @@ public:
     void SetShowClock(bool showClock) override;
     bool GetShowClock() const override { return _appSettingsService->GetAppSettings().showClock; }
 
+    // DsRunner: search over all games (see DsRunnerSearch)
+    bool OpenSearch() override;
+    void CloseSearch() override;
+    void StartSearch(const char* query) override;
+    bool SwitchSearchFilter(int direction) override;
+    const char* GetSearchQuery() const override { return _searchQuery; }
+    bool IsCurrentFolderSearch() const override { return _currentFolderIsSearch; }
+    bool IsCurrentFolderVirtual() const override { return _currentFolderIsSearch || _currentFolderIsFavorites; }
+    int GetItemGroup(const FileInfo& fileInfo) const override
+    {
+        return _currentFolderIsSearch && _searchResults ? _searchResults->GetGroup(&fileInfo) : 0;
+    }
+
 private:
     IAppSettingsService* _appSettingsService;
     TaskQueueBase* _ioTaskQueue;
@@ -91,6 +105,16 @@ private:
     bool _currentFolderIsFavorites = false;
     std::unique_ptr<DsRunnerFavoritesFolder> _newFavoritesFolder;
     std::unique_ptr<DsRunnerFavoritesFolder> _favoritesFolder;
+    // DsRunner: the virtual folder with the search results (see DsRunnerSearch)
+    bool _navigateToSearch = false;
+    bool _newFolderIsSearch = false;
+    bool _currentFolderIsSearch = false;
+    std::unique_ptr<DsRunnerSearchResults> _newSearchResults;
+    std::unique_ptr<DsRunnerSearchResults> _searchResults;
+    char _searchQuery[DsRunnerSearch::MaxQueryLength + 1] = { 0 };
+    // console group shown in the search results, -1 for all
+    int _searchGroup = -1;
+    QueueTask<void> _searchIndexTask;
     // DsRunner: launch the selected file once the folder is loaded ("Weiterspielen")
     bool _launchAfterNavigate = false;
     // DsRunner: the game START continues, found while loading the console level
@@ -114,6 +138,9 @@ private:
     void HandleChangeDisplayModeTrigger();
     void HandleGotoSettingsScreenTrigger();
     void StartGameCount();
+    void StartSearchIndex();
+    void NavigateToSearch();
+    void MakeSearchTitle();
     void FindContinueGame();
     void UpdateLastUsedFilepath();
     void SetPicoLoaderParams() const;

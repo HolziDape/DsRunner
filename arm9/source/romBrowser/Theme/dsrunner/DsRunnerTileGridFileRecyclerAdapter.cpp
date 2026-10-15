@@ -5,7 +5,9 @@
 #include "themes/dsrunner/DsRunnerConsoles.h"
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "romBrowser/IRomBrowserController.h"
+#include "services/settings/AppSettings.h"
 #include "DsRunnerLibrary.h"
+#include "DsRunnerSearch.h"
 
 // tile images mirror the sd card: /Games/NDS/Mario.nds -> /_dsrunner/tiles/Games/NDS/Mario.bmp
 #define TILE_FOLDER     "/_dsrunner/tiles"
@@ -30,6 +32,16 @@ void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int ind
     {
         console = DsRunnerConsoles::FindByFolderName(fileInfo.GetFileName());
     }
+    else if (_romBrowserController->IsCurrentFolderSearch() && gDsRunnerLibrary.appSettings)
+    {
+        // the search results show every game in the color of its console
+        char consoleFolder[64];
+        if (DsRunnerPaths::GetConsoleFolderName(gDsRunnerLibrary.appSettings->libraryPath.GetString(),
+                _romBrowserController->GetItemFolderPath(fileInfo), consoleFolder, sizeof(consoleFolder)))
+        {
+            console = DsRunnerConsoles::FindByFolderName(consoleFolder);
+        }
+    }
     if (console)
         tileView->SetTint(console->tile);
     else
@@ -38,7 +50,8 @@ void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int ind
     {
         // the label under the console image: the console's short name, else the folder name
         const char* name = fileInfo.GetFileName();
-        tileView->SetLabel(DsRunnerFavoritesFolder::IsEntry(name) ? "Favoriten" : console ? console->label : name);
+        tileView->SetLabel(DsRunnerFavoritesFolder::IsEntry(name) ? "Favoriten"
+            : DsRunnerSearch::IsEntry(name) ? "Suche" : console ? console->label : name);
     }
     IconGridFileRecyclerAdapter::BindView(view, index);
 }

@@ -11,7 +11,9 @@ class SdFolder
 
     static bool CompareClassification(const FileInfo* a, const FileInfo* b, bool& result);
     static bool CompareName(const FileInfo* a, const FileInfo* b);
-    void SortByLastPlayed(const SdFolderFilterSortParams& filterSortParams,
+
+    // DsRunner: sorting by last played and the sorting of virtual folders
+    void SortWithKeys(const SdFolderFilterSortParams& filterSortParams,
         const FileInfo** files, u32 count) const;
 public:
     /// @brief Creates an SdFolder from the given files. The ownership of both the array

@@ -46,6 +46,8 @@ namespace DsRunnerConsoles
         { "HOMEBREW",  "APP",  "Apps und Homebrew",  Color( 32, 160, 150), Color( 24, 128, 120) },
         // the virtual favorites folder (DsRunnerFavoritesFolder::EntryName, "★ Favoriten"), label "★"
         { "\xE2\x98\x85 Favoriten", "\xE2\x98\x85", "Favoriten", Color(196, 146, 40), Color(150, 108, 24) },
+        // the virtual search folder (DsRunnerSearch::EntryName, "• Suche"), label "?"
+        { "\xE2\x80\xA2 Suche", "?", "Suche", Color( 40, 150, 196), Color( 28, 116, 156) },
     };
 
     struct ExtensionInfo

@@ -39,10 +39,11 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | Steuerkreuz | Auswahl bewegen |
 | A | Konsole öffnen / Spiel starten |
 | B | zurück (auf der Konsolen-Ebene ohne Wirkung) |
-| L / R | eine Seite weiterblättern |
+| L / R | eine Seite weiterblättern, in den Suchergebnissen: Konsole wählen |
 | X | ausgewähltes Spiel zu den [Favoriten](#favoriten) hinzufügen oder entfernen |
 | Y | Cheats für das ausgewählte NDS-Spiel |
 | START | auf der Konsolen-Ebene: [Weiterspielen](#weiterspielen) |
+| SELECT | [Suche](#suche) öffnen (überall) |
 | Zahnrad (oben rechts) | Menü „Anzeige“: Ansicht, Sortierung, Uhr ein/aus, Theme |
 
 ## Ordnerstruktur der Bibliothek
@@ -189,7 +190,7 @@ DsRunner schreibt die Datei bei jedem Start eines Spiels. Ein Laufwerk vor dem P
 
 **X** fügt das ausgewählte Spiel zu den Favoriten hinzu oder nimmt es wieder heraus (in allen Ansichten). Favoriten bekommen in den Kachelrastern einen goldenen Stern in der rechten oberen Ecke, auf dem oberen Bildschirm steht ein ★ vor dem Dateinamen. Ordner können keine Favoriten sein.
 
-Sobald es mindestens einen Favoriten gibt, steht auf der Konsolen-Ebene als erste Kachel **★ Favoriten** (gold, mit der Anzahl auf dem oberen Bildschirm). A öffnet die Liste aller Favoriten aus allen Ordnern, B führt zurück zur Konsolen-Ebene. Spiele starten von dort wie aus ihrem eigenen Ordner (Spielverlauf, Cheats, GBARunner2). In der Liste sind die Favoriten nach Namen sortiert (A–Z bzw. Z–A, „zuletzt gespielt“ sortiert hier ebenfalls nach Namen). Wer in der Liste einen Favoriten mit X entfernt, sieht ihn dort bis zum nächsten Öffnen weiter (ohne Stern). Mit leerem `libraryPath` gibt es keine Konsolen-Ebene und damit auch keine Favoriten-Kachel, X und der Stern funktionieren trotzdem.
+Sobald es mindestens einen Favoriten gibt, steht auf der Konsolen-Ebene als erste Kachel **★ Favoriten** (gold, mit der Anzahl auf dem oberen Bildschirm). A öffnet die Liste aller Favoriten aus allen Ordnern, B führt zurück zur Konsolen-Ebene. Spiele starten von dort wie aus ihrem eigenen Ordner (Spielverlauf, Cheats, GBARunner2). Die Liste folgt der Sortierung im Menü „Anzeige“: A–Z, Z–A oder „zuletzt gespielt“ (die zuletzt gespielten Favoriten zuerst, nach dem [Spielverlauf](#spielverlauf), die übrigen danach von A bis Z). Wer in der Liste einen Favoriten mit X entfernt, sieht ihn dort bis zum nächsten Öffnen weiter (ohne Stern). Mit leerem `libraryPath` gibt es keine Konsolen-Ebene und damit auch keine Favoriten-Kachel, X und der Stern funktionieren trotzdem.
 
 `/_dsrunner/favorites.txt` hält die Favoriten in der Reihenfolge, in der sie hinzugefügt wurden, eine pro Zeile (UTF-8, höchstens 200 Einträge), im selben Format wie der [Spielverlauf](#spielverlauf):
 
@@ -199,6 +200,24 @@ Sobald es mindestens einen Favoriten gibt, steht auf der Konsolen-Ebene als erst
 ```
 
 Die Datei lässt sich auch am PC bearbeiten. Einträge, deren Datei es nicht mehr gibt, erscheinen in der Liste nicht und bleiben in der Datei stehen, bis man sie dort löscht.
+
+## Suche
+
+Die Kachel **Suche** auf der Konsolen-Ebene (nach ★ Favoriten) oder **SELECT** in jedem Ordner öffnet auf dem unteren Bildschirm eine Tastatur. Sie durchsucht die Spiele aller Konsolen-Ordner der Bibliothek, auch in Unterordnern bis zwei Ebenen tief, und die Spiele direkt in der Bibliothek („Weitere“). Gesucht wird im Dateinamen ohne Endung, ohne Rücksicht auf Groß- und Kleinschreibung, Akzente (ä = a, é = e, ß = ss) sowie Leer- und Satzzeichen: „mario kart“ und „mariokart“ finden beide `Mario_Kart_DS.nds`. Den Titel aus dem DS-Banner durchsucht DsRunner nicht, dafür müsste es jedes Spiel öffnen.
+
+| Taste | auf der Tastatur |
+|---|---|
+| Steuerkreuz + A | Taste wählen und tippen (Touchscreen geht auch) |
+| B | letztes Zeichen löschen, bei leerer Eingabe zurück |
+| X | Leerzeichen |
+| START, „Suchen“ | Treffer anzeigen |
+| SELECT, Y, „Abbrechen“ | zurück |
+
+Unter dem Eingabefeld steht schon beim Tippen, wie viele Spiele passen, pro Konsole („6 Treffer: GBA 2 · NDS 3 · NES 1“). Gibt es keine, bleibt die Tastatur offen („Keine Treffer für „…““).
+
+Die Treffer erscheinen wie ein Ordner: nach Konsole geordnet (in der Reihenfolge der Konsolen-Ebene), darin nach der Sortierung im Menü „Anzeige“. Jede Kachel hat die Farbe ihrer Konsole, oben steht die Konsole vor dem Dateinamen. **L / R** zeigen nur die Treffer einer Konsole bzw. wieder alle; die App-Leiste zeigt Suche, Auswahl und Anzahl („Suche: mario · GBA (2)“). Starten, Favoriten (X), Cheats (Y), Bilder und Weiterspielen funktionieren wie im eigenen Ordner des Spiels. **B** führt zurück zur Tastatur (mit der Eingabe), von dort „Abbrechen“ zur Konsolen-Ebene.
+
+Grenzen: höchstens 200 Treffer werden angezeigt (dann „200 von 523“), genauer suchen hilft. Beim ersten Öffnen liest DsRunner die Spiele einmal ein (höchstens 2000 Spiele, 64 KB Dateinamen) und behält die Liste, bis ein Spiel startet.
 
 ## Weiterspielen
 
@@ -283,7 +302,7 @@ Das DsRunner-Theme bringt für jeden Konsolen-Ordner eigene Bilder mit, damit di
 | `NDS-icon.bmp` | Kachel im 4×3-Raster (Kürzel darunter) und Icon oben rechts | 32 × 32, 4 bit, Farbe 0 durchsichtig, Bild in den Zeilen 4 bis 27 |
 | `NDS-cover.bmp` | Coverflow | 128 × 96, 8 bit, sichtbar die linken 106 × 96 |
 
-Namen der Bilder: `NDS` (Ordner `NDS`, `DS`), `GBA`, `GBC`, `GB`, `NES` (`NES`, `FC`), `SNES` (`SNES`, `SFC`), `SMS`, `GG`, `MD` (`MD`, `GEN`, `MEGADRIVE`), `PCE`, `APPS` (`Apps`, `Homebrew`), `FAV` (★ Favoriten). Eigene Konsolen aus der [`systems.json`](#eigene-konsolen-systemsjson) zeigen `CART` (ein Modul), alle anderen Ordner `FOLDER`.
+Namen der Bilder: `NDS` (Ordner `NDS`, `DS`), `GBA`, `GBC`, `GB`, `NES` (`NES`, `FC`), `SNES` (`SNES`, `SFC`), `SMS`, `GG`, `MD` (`MD`, `GEN`, `MEGADRIVE`), `PCE`, `APPS` (`Apps`, `Homebrew`), `FAV` (★ Favoriten), `SEARCH` (Lupe der Kachel Suche). Eigene Konsolen aus der [`systems.json`](#eigene-konsolen-systemsjson) zeigen `CART` (ein Modul), alle anderen Ordner `FOLDER`.
 
 **Farben:** Die Bilder sind Vorlagen in Graustufen. DsRunner färbt jede graue Palettenfarbe in der Farbe der Konsole ein: 0 = Hintergrund des Themes, 128 = Konsolenfarbe (`color` bzw. für oben `heroColor`), 255 = Weiß. Farbige Palettenfarben bleiben, wie sie sind. So passt ein Bild zu jeder Farbe, auch zu geänderten Farben aus der `systems.json`.
 

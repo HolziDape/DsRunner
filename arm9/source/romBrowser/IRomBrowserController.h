@@ -72,6 +72,33 @@ public:
     /// @brief DsRunner: shows or hides the clock of the status bar (saved when the display settings close).
     virtual void SetShowClock(bool showClock) = 0;
     virtual bool GetShowClock() const = 0;
+
+    /// @brief DsRunner: opens the search keyboard (DsRunnerSearchKeyboardView).
+    /// @return True when it opens.
+    virtual bool OpenSearch() = 0;
+
+    /// @brief DsRunner: closes the search keyboard. When it was opened from the search results,
+    ///        this goes back to the console level.
+    virtual void CloseSearch() = 0;
+
+    /// @brief DsRunner: shows the games that match \p query as a folder (from the search keyboard).
+    virtual void StartSearch(const char* query) = 0;
+
+    /// @brief DsRunner: shows the matches of the next (1) or previous (-1) console in the search results.
+    /// @return True when the search results are shown (the key is used).
+    virtual bool SwitchSearchFilter(int direction) = 0;
+
+    /// @brief DsRunner: the query of the search results, also the one the keyboard starts with.
+    virtual const char* GetSearchQuery() const = 0;
+
+    /// @brief DsRunner: returns true while the search results are shown.
+    virtual bool IsCurrentFolderSearch() const = 0;
+
+    /// @brief DsRunner: returns true for the favorites and the search results, which show files of several folders.
+    virtual bool IsCurrentFolderVirtual() const = 0;
+
+    /// @brief DsRunner: gets the group a shown item is sorted by first: its console in the search results, else 0.
+    virtual int GetItemGroup(const FileInfo& fileInfo) const = 0;
 };
 
 inline IRomBrowserController::~IRomBrowserController() { }

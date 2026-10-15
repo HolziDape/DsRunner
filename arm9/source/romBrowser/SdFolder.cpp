@@ -30,9 +30,10 @@ std::unique_ptr<const FileInfo*[]> SdFolder::FilterAndSort(
             sortedFilteredFiles[filteredCount++] = file;
         }
     }
-    if (filterSortParams.sortType == SdFolderSortType::LastPlayed)
+    // DsRunner: last played, and the virtual folders (favorites, search results, see getGroup)
+    if (filterSortParams.sortType == SdFolderSortType::LastPlayed || filterSortParams.getGroup)
     {
-        SortByLastPlayed(filterSortParams, sortedFilteredFiles.get(), filteredCount);
+        SortWithKeys(filterSortParams, sortedFilteredFiles.get(), filteredCount);
         resultCount = filteredCount;
         return sortedFilteredFiles;
     }
@@ -69,39 +70,54 @@ std::unique_ptr<const FileInfo*[]> SdFolder::FilterAndSort(
     return sortedFilteredFiles;
 }
 
-void SdFolder::SortByLastPlayed(const SdFolderFilterSortParams& filterSortParams,
+void SdFolder::SortWithKeys(const SdFolderFilterSortParams& filterSortParams,
     const FileInfo** files, u32 count) const
 {
-    // look up the position in the play history once per file, then sort by it:
-    // folders first (by name), then the played files newest first, then the rest by name
-    struct RankedFile
+    // look up the position in the play history (last played) and the group (virtual folders) once per file,
+    // then sort by them: folders first (by name), then by group, then the played files newest first,
+    // then the rest by name (by name in the chosen direction when not sorting by last played)
+    struct KeyedFile
     {
+        int group;
         u32 rank;
         const FileInfo* file;
     };
-    auto rankedFiles = std::make_unique<RankedFile[]>(count);
+    bool byLastPlayed = filterSortParams.sortType == SdFolderSortType::LastPlayed;
+    bool descending = !byLastPlayed && filterSortParams.sortDirection == SdFolderSortDirection::Descending;
+    auto keyedFiles = std::make_unique<KeyedFile[]>(count);
     for (u32 i = 0; i < count; i++)
     {
         int rank = -1;
-        if (filterSortParams.playHistory && filterSortParams.folderPath &&
-            files[i]->GetFileType()->GetClassification() != FileTypeClassification::Folder)
+        bool isFolder = files[i]->GetFileType()->GetClassification() == FileTypeClassification::Folder;
+        if (byLastPlayed && filterSortParams.playHistory && !isFolder)
         {
-            rank = filterSortParams.playHistory->GetRank(filterSortParams.folderPath, files[i]->GetFileName());
+            // DsRunner: the files of virtual folders (favorites, search results) come from several folders
+            const char* folderPath = filterSortParams.getFolderPath
+                ? filterSortParams.getFolderPath(files[i], filterSortParams.sortContext)
+                : filterSortParams.folderPath;
+            if (folderPath)
+                rank = filterSortParams.playHistory->GetRank(folderPath, files[i]->GetFileName());
         }
-        rankedFiles[i] = { rank < 0 ? 0xFFFFFFFFu : (u32)rank, files[i] };
+        int group = filterSortParams.getGroup ? filterSortParams.getGroup(files[i], filterSortParams.sortContext) : 0;
+        keyedFiles[i] = { group, rank < 0 ? 0xFFFFFFFFu : (u32)rank, files[i] };
     }
-    std::sort(rankedFiles.get(), rankedFiles.get() + count,
-        [] (const RankedFile& a, const RankedFile& b)
+    std::sort(keyedFiles.get(), keyedFiles.get() + count,
+        [descending] (const KeyedFile& a, const KeyedFile& b)
         {
             bool result = true;
             if (CompareClassification(a.file, b.file, result))
                 return result;
+            if (a.group != b.group)
+                return a.group < b.group;
             if (a.rank != b.rank)
                 return a.rank < b.rank;
+            // folders always by name ascending, like Pico does
+            if (descending && a.file->GetFileType()->GetClassification() != FileTypeClassification::Folder)
+                return CompareName(b.file, a.file);
             return CompareName(a.file, b.file);
         });
     for (u32 i = 0; i < count; i++)
-        files[i] = rankedFiles[i].file;
+        files[i] = keyedFiles[i].file;
 }
 
 bool SdFolder::CompareClassification(const FileInfo* a, const FileInfo* b, bool& result)

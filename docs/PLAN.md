@@ -178,9 +178,15 @@ Ein eigener Launcher als Ersatz für YSMenu:
 **Offen:**
 - **Build und Test:** In der Sitzung, in der Phase 6 entstand, war Docker nicht erreichbar. Der Code ist nur mit dem Host-Compiler auf Syntax geprüft. Vor dem Merge: `./build.sh`, DeSmuME-Screenshots (Konsolen-Ebene mit Favoriten-Kachel, Stern auf Kacheln, Menü mit Uhr) und Test auf dem DS (Spielstart aus den Favoriten und mit START, auch GBA).
 - Favoriten-Stern nur in den Kachelrastern, nicht in Picos Ansichten (dort nur der ★ oben).
-- Die Favoriten-Liste sortiert nach Namen. „Zuletzt gespielt“ bräuchte den Spielverlauf pro Datei statt pro Ordner.
 - Ein Favorit, der in der Favoriten-Liste mit X entfernt wird, bleibt bis zum nächsten Öffnen sichtbar.
 - Englische Oberfläche über `language`: bei Bedarf eine kleine Texttabelle statt der festen deutschen Texte.
+
+**Suche (15.10.2026):** Wunsch: alle Spiele durchsuchen, nach Konsole geordnet ([CONFIG.md](CONFIG.md#suche)).
+- Kachel „Suche“ (Lupe, `SEARCH` in den eingebauten Bildern) auf der Konsolen-Ebene nach ★ Favoriten, außerdem SELECT in jedem Ordner. Eigener Zustand `SearchInput`: die Tastatur (`DsRunnerSearchKeyboardView`, QWERTZ ohne Umlaute, Tasten als 3D-Polygone, Text als ein Sprite pro Taste, höchstens 4 OBJ-Palettenzeilen pro Bildschirmzeile, OBJ-VRAM aus dem Bereich der Dialoge) ersetzt das Raster.
+- `DsRunnerSearch`: beim ersten Öffnen liest der IO-Thread alle Konsolen-Ordner (2 Ebenen Unterordner) in einen kompakten Index (Name, Dateityp, `FastFileRef`, ≈ 32 Byte plus Name pro Spiel, höchstens 2000 Spiele / 64 KB Namen). Zählen beim Tippen läuft im Speicher, die Trefferliste (höchstens 200) entsteht ohne Zugriff auf die Karte. Vergleich ohne Groß-/Kleinschreibung, Akzente und Satzzeichen, nur Dateinamen (kein Bannertitel).
+- Treffer als virtueller Ordner wie die Favoriten (`GetItemFolderPath` pro Datei), nach Konsole gruppiert, Kacheln in Konsolenfarbe, Konsole oben vor dem Dateinamen, L/R filtert, B zurück zur Tastatur.
+- Virtuelle Ordner sortieren „zuletzt gespielt“ jetzt mit dem Ordner jeder Datei: die Favoriten folgen damit auch dieser Sortierung.
+- Offen: Test auf dem DS (Tempo des Einlesens bei großen Sammlungen, Touch-Genauigkeit). SELECT ließ sich in DeSmuME nicht auslösen (Tastenbelegung), der Weg über die Kachel ist geprüft.
 
 ### Phase 7: Weitere Konsolen (optional)
 Emulator-Homebrew einbinden (GBARunner2, nesDS, GameYob, S8DS, jEnesisDS …) über `systems.json`, mit passenden Kacheln und Artworks.
