@@ -13,6 +13,7 @@
 #include "Theme/dsrunner/DsRunnerLibrary.h"
 #include "Theme/dsrunner/DsRunnerSystems.h"
 #include "Theme/dsrunner/DsRunnerInGameReset.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "core/mini-printf.h"
 #include "RomBrowserController.h"
 
@@ -73,6 +74,8 @@ RomBrowserController::RomBrowserController(
     , _fileTypeProvider(appSettingsService->GetAppSettings())
 {
     gDsRunnerLibrary.appSettings = &appSettingsService->GetAppSettings();
+    // DsRunner: language of the DsRunner texts (settings.json "uiLanguage")
+    DsRunnerText::SetEnglish(DsRunnerText::IsEnglishSetting(appSettingsService->GetAppSettings().uiLanguage.GetString()));
 }
 
 void RomBrowserController::NavigateUp()
@@ -176,6 +179,22 @@ void RomBrowserController::SetShowClock(bool showClock)
     }
 }
 
+void RomBrowserController::RefreshViews()
+{
+    // the views are built from a new view model, which selects this item again
+    _refreshSelect[0] = 0;
+    if (_romBrowserViewModel)
+    {
+        int index = _romBrowserViewModel->GetSelectedItem();
+        if (index >= 0)
+        {
+            StringUtil::Copy(_refreshSelect, _romBrowserViewModel->GetFileInfoManager().GetItem(index).GetFileName(),
+                sizeof(_refreshSelect) / sizeof(_refreshSelect[0]));
+        }
+    }
+    _stateMachine.Fire(RomBrowserStateTrigger::ChangeDisplayMode);
+}
+
 bool RomBrowserController::OpenSearch()
 {
     if (_stateMachine.GetCurrentState() != RomBrowserState::Browser ||
@@ -268,17 +287,18 @@ void RomBrowserController::StartSearchIndex()
 void RomBrowserController::MakeSearchTitle()
 {
     // "Suche: mario · GBA (3)", "Suche: mario · Alle (200 von 523)". Io thread, with the new results.
-    const char* filter = _searchGroup >= 0 ? gDsRunnerSearch.GetGroupLabel(_searchGroup) : "Alle";
+    const char* filter = _searchGroup >= 0 ? gDsRunnerSearch.GetGroupLabel(_searchGroup)
+        : DsRunnerText::Get(DsRunnerText::Id::SearchFilterAll);
     u32 shown = _newSearchResults ? _newSearchResults->GetShownCount() : 0;
     u32 matches = _newSearchResults ? _newSearchResults->GetFilterMatchCount() : 0;
     if (shown < matches)
     {
-        mini_snprintf(_newFolderName, sizeof(_newFolderName), "Suche: %s \xC2\xB7 %s (%d von %d)",
+        mini_snprintf(_newFolderName, sizeof(_newFolderName), DsRunnerText::Get(DsRunnerText::Id::SearchTitlePartial),
             _searchQuery, filter, shown, matches);
     }
     else
     {
-        mini_snprintf(_newFolderName, sizeof(_newFolderName), "Suche: %s \xC2\xB7 %s (%d)",
+        mini_snprintf(_newFolderName, sizeof(_newFolderName), DsRunnerText::Get(DsRunnerText::Id::SearchTitle),
             _searchQuery, filter, matches);
     }
 }
@@ -626,7 +646,10 @@ void RomBrowserController::HandleLaunchTrigger()
 void RomBrowserController::HandleChangeDisplayModeTrigger()
 {
     LOG_DEBUG("RomBrowserStateTrigger::ChangeDisplayMode\n");
-    _romBrowserViewModel = SharedPtr<RomBrowserViewModel>::MakeShared(this);
+    // DsRunner: RefreshViews keeps the selected item
+    _romBrowserViewModel = SharedPtr<RomBrowserViewModel>::MakeShared(this,
+        _refreshSelect[0] != 0 ? _refreshSelect : nullptr);
+    _refreshSelect[0] = 0;
 }
 
 void RomBrowserController::HandleGotoSettingsScreenTrigger()

@@ -65,6 +65,9 @@ public:
     bool ContinueLastGame() override;
     void SetShowClock(bool showClock) override;
     bool GetShowClock() const override { return _appSettingsService->GetAppSettings().showClock; }
+    AppSettings& GetAppSettings() override { return _appSettingsService->GetAppSettings(); }
+    void SaveSettingsLater() override { _saveSettingsPending = true; }
+    void RefreshViews() override;
 
     // DsRunner: search over all games (see DsRunnerSearch)
     bool OpenSearch() override;
@@ -125,6 +128,8 @@ private:
     QueueTask<void> _navigateTask;
     QueueTask<void> _gameCountTask;
     bool _saveSettingsPending = false;
+    // DsRunner: item to select when the views are built again (RefreshViews), empty for the first one
+    TCHAR _refreshSelect[256] = { 0 };
     std::unique_ptr<CoverRepository> _coverRepository;
     std::unique_ptr<IconRepository> _iconRepository;
     std::unique_ptr<BannerRepository> _bannerRepository;

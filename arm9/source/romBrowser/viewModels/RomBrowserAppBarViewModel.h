@@ -1,5 +1,6 @@
 #pragma once
 #include "../IRomBrowserController.h"
+#include "themes/dsrunner/DsRunnerText.h"
 
 /// @brief View model for the rom browser app bar
 class RomBrowserAppBarViewModel
@@ -24,10 +25,13 @@ public:
     {
         if (_romBrowserController->IsCurrentFolderLibraryRoot())
         {
-            return "Konsolen";
+            return DsRunnerText::Get(DsRunnerText::Id::AppBarConsoles);
         }
         const char* name = _romBrowserController->GetCurrentFolderName();
-        return name[0] != 0 ? name : "SD-Karte";
+        if (name[0] == 0)
+            return DsRunnerText::Get(DsRunnerText::Id::AppBarSdCard);
+        // DsRunner: the favorites folder is named "★ Favoriten" inside, Localize translates it
+        return _romBrowserController->IsCurrentFolderVirtual() ? DsRunnerText::Localize(name) : name;
     }
 
     constexpr RomBrowserLayout GetRomBrowserLayout() const

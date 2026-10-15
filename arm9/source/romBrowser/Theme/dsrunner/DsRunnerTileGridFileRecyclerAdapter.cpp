@@ -3,6 +3,7 @@
 #include "romBrowser/FileType/FileType.h"
 #include "romBrowser/viewModels/RomBrowserItemViewModel.h"
 #include "themes/dsrunner/DsRunnerConsoles.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "romBrowser/IRomBrowserController.h"
 #include "services/settings/AppSettings.h"
@@ -50,8 +51,8 @@ void DsRunnerTileGridFileRecyclerAdapter::BindView(SharedPtr<View> view, int ind
     {
         // the label under the console image: the console's short name, else the folder name
         const char* name = fileInfo.GetFileName();
-        tileView->SetLabel(DsRunnerFavoritesFolder::IsEntry(name) ? "Favoriten"
-            : DsRunnerSearch::IsEntry(name) ? "Suche" : console ? console->label : name);
+        tileView->SetLabel(DsRunnerFavoritesFolder::IsEntry(name) ? DsRunnerText::Get(DsRunnerText::Id::Favorites)
+            : DsRunnerSearch::IsEntry(name) ? DsRunnerText::Get(DsRunnerText::Id::Search) : console ? console->label : name);
     }
     IconGridFileRecyclerAdapter::BindView(view, index);
 }

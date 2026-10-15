@@ -12,6 +12,7 @@
 #include "checkboxUnchecked.h"
 #include "cheatSelector.h"
 #include "gui/DescendingStackVramManager.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "CheatsBottomSheetView.h"
 
 #define TITLE_LABEL_X               20
@@ -53,7 +54,7 @@ CheatsBottomSheetView::CheatsBottomSheetView(SharedPtr<CheatsViewModel> viewMode
     , _focusManager(focusManager)
 {
     _titleLabel->SetText(u"Cheats");
-    _secondaryLabel->SetText(u"Keine Cheats gefunden."); // DsRunner: German text
+    _secondaryLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::NoCheats)); // DsRunner: German or English text
     _secondaryLabel->SetEllipsisStyle(LabelView::EllipsisStyle::Ellipsis);
     _descriptionLabel->SetEllipsisStyle(LabelView::EllipsisStyle::Marquee);
     _descriptionLabel->SetText(u"");

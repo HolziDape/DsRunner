@@ -12,6 +12,7 @@
 #include "themes/dsrunner/DsRunnerConsoles.h"
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "themes/dsrunner/DsRunnerHeroState.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "DsRunnerLibrary.h"
 #include "DsRunnerSearch.h"
 #include "DsRunnerNames.h"
@@ -32,17 +33,9 @@
 // artworks mirror the sd card: /Games/NDS/Mario.nds -> /_dsrunner/art/Games/NDS/Mario.bmp
 #define ART_FOLDER      "/_dsrunner/art"
 
-// Texts of the play statistics (UTF-8), e.g. "12× gespielt · zuletzt gestern"
-static constexpr const char* sTextNeverPlayed = "Noch nie gespielt";
-// played before DsRunner counted the starts (only in recent.txt)
-static constexpr const char* sTextPlayedBefore = "Schon gespielt";
-static constexpr const char* sTextPlayCount = "%d\xC3\x97 gespielt";
-static constexpr const char* sTextLastPlayed = " \xC2\xB7 zuletzt ";
-static constexpr const char* sTextToday = "heute";
-static constexpr const char* sTextYesterday = "gestern";
-static constexpr const char* sTextDaysAgo = "vor %d Tagen";
-static constexpr const char* sTextOnDate = "am %02d.%02d.";
-static constexpr const char* sTextOnDateWithYear = "am %02d.%02d.%04d";
+// English month names for "on Oct 3"; the other texts of the play statistics are in DsRunnerText
+static constexpr const char* sMonthNames[] =
+    { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 // up to this many days ago the date is shown as "vor N Tagen"
 #define DAYS_AGO_MAX    6
 
@@ -79,7 +72,7 @@ void DsRunnerFileInfoCardView::SetFileNameAsync(TaskQueueBase* taskQueue, const 
     {
         // a console folder: use its full name instead of the folder name as title
         _lines = 1;
-        SetFirstLineAsync(taskQueue, console->fullName, true);
+        SetFirstLineAsync(taskQueue, DsRunnerText::Localize(console->fullName), true);
         SetSecondLineAsync(taskQueue, u"", 0);
         SetThirdLineAsync(taskQueue, u"", 0);
     }
@@ -98,7 +91,9 @@ void DsRunnerFileInfoCardView::SetFileNameAsync(TaskQueueBase* taskQueue, const 
     if (console && DsRunnerSearch::IsEntry(fileName))
     {
         // the search tile: how to get there from anywhere
-        SetThirdLineAsync(taskQueue, u"Auch mit SELECT, aus jedem Ordner");
+        char16_t hint[48];
+        StringUtil::Copy(hint, DsRunnerText::Get(DsRunnerText::Id::SearchTileHint), sizeof(hint) / sizeof(hint[0]));
+        SetThirdLineAsync(taskQueue, hint);
     }
 
     if (_isFolder && useAsTitle && !ShowGameCount(taskQueue, fileName) &&
@@ -143,32 +138,45 @@ void DsRunnerFileInfoCardView::FormatPlayStats(char* text, u32 textSize) const
     if (!entry || entry->count == 0)
     {
         bool inHistory = gDsRunnerLibrary.playHistory.GetRank(_folderPath, _fileName) >= 0;
-        strlcpy(text, inHistory || entry ? sTextPlayedBefore : sTextNeverPlayed, textSize);
+        strlcpy(text, inHistory || entry ? DsRunnerText::Get(DsRunnerText::Id::StatsPlayedBefore)
+            : DsRunnerText::Get(DsRunnerText::Id::StatsNeverPlayed), textSize);
         return;
     }
-    u32 length = mini_snprintf(text, textSize, sTextPlayCount, entry->count);
+    u32 length = mini_snprintf(text, textSize, DsRunnerText::Get(DsRunnerText::Id::StatsPlayCount), entry->count);
     const auto& lastPlayed = entry->lastPlayed;
     if (!lastPlayed.IsValid() || length + 1 >= textSize)
         return;
-    length += strlcpy(&text[length], sTextLastPlayed, textSize - length);
+    length += strlcpy(&text[length], DsRunnerText::Get(DsRunnerText::Id::StatsLastPlayed), textSize - length);
     if (length + 1 >= textSize)
         return;
 
     auto now = DsRunnerDateTime::Now();
     int days = now.IsValid() ? now.GetDayNumber() - lastPlayed.GetDayNumber() : -1;
     if (days == 0)
-        strlcpy(&text[length], sTextToday, textSize - length);
+        strlcpy(&text[length], DsRunnerText::Get(DsRunnerText::Id::StatsToday), textSize - length);
     else if (days == 1)
-        strlcpy(&text[length], sTextYesterday, textSize - length);
+        strlcpy(&text[length], DsRunnerText::Get(DsRunnerText::Id::StatsYesterday), textSize - length);
     else if (days > 1 && days <= DAYS_AGO_MAX)
-        mini_snprintf(&text[length], textSize - length, sTextDaysAgo, days);
-    else if (days > 0 && lastPlayed.year == now.year)
-        mini_snprintf(&text[length], textSize - length, sTextOnDate, lastPlayed.day, lastPlayed.month);
+        mini_snprintf(&text[length], textSize - length, DsRunnerText::Get(DsRunnerText::Id::StatsDaysAgo), days);
     else
     {
-        // another year, or the clock of the DS was set back
-        mini_snprintf(&text[length], textSize - length, sTextOnDateWithYear,
-            lastPlayed.day, lastPlayed.month, lastPlayed.year);
+        // the year only for another year, or when the clock of the DS was set back
+        bool withYear = days <= 0 || lastPlayed.year != now.year;
+        if (DsRunnerText::IsEnglish())
+        {
+            const char* month = sMonthNames[lastPlayed.month - 1];
+            if (withYear)
+                mini_snprintf(&text[length], textSize - length, "on %s %d, %04d", month, lastPlayed.day, lastPlayed.year);
+            else
+                mini_snprintf(&text[length], textSize - length, "on %s %d", month, lastPlayed.day);
+        }
+        else if (withYear)
+        {
+            mini_snprintf(&text[length], textSize - length, "am %02d.%02d.%04d",
+                lastPlayed.day, lastPlayed.month, lastPlayed.year);
+        }
+        else
+            mini_snprintf(&text[length], textSize - length, "am %02d.%02d.", lastPlayed.day, lastPlayed.month);
     }
 }
 
@@ -188,7 +196,7 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
         name = name ? name + 1 : continuePath;
         char displayName[sizeof(_fileName)];
         DsRunnerNames::GetDisplayName(name, displayName, sizeof(displayName));
-        mini_snprintf(text, sizeof(text), "START: Weiterspielen (%s)", displayName);
+        mini_snprintf(text, sizeof(text), "%s%s)", DsRunnerText::Get(DsRunnerText::Id::ContinuePrefix), displayName);
     }
     else
     {
@@ -202,7 +210,7 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
         {
             // the search results come from all consoles: say which one
             const auto* console = DsRunnerConsoles::FindByFolderName(consoleFolder);
-            strlcat(text, console ? console->fullName : consoleFolder, sizeof(text));
+            strlcat(text, console ? DsRunnerText::Localize(console->fullName) : consoleFolder, sizeof(text));
             strlcat(text, " \xC2\xB7 ", sizeof(text));
         }
         if (_playStatsOnFileNameLine)
@@ -210,7 +218,9 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
             strlcat(text, _playStatsText, sizeof(text));
             strlcat(text, " \xC2\xB7 ", sizeof(text));
         }
-        strlcat(text, _fileName, sizeof(text));
+        // the favorites and search entries have German internal names
+        bool isEntry = DsRunnerFavoritesFolder::IsEntry(_fileName) || DsRunnerSearch::IsEntry(_fileName);
+        strlcat(text, isEntry ? DsRunnerText::Localize(_fileName) : _fileName, sizeof(text));
     }
 
     if (_fileNameTaskQueue)
@@ -241,7 +251,8 @@ bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCH
             return false;
         char16_t text16[32];
         char text[32];
-        mini_snprintf(text, sizeof(text), total == 1 ? "1 Spiel durchsuchen" : "%d Spiele durchsuchen", total);
+        DsRunnerText::FormatCount(text, sizeof(text), DsRunnerText::Id::SearchGamesOne,
+            DsRunnerText::Id::SearchGamesMany, total);
         StringUtil::Copy(text16, text, sizeof(text16) / sizeof(text16[0]));
         SetSecondLineAsync(taskQueue, text16);
         return true;
@@ -256,19 +267,9 @@ bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCH
 
     char text[24];
     if (count == 0)
-        strcpy(text, "Keine Spiele");
-    else if (count == 1)
-        strcpy(text, "1 Spiel");
+        strcpy(text, DsRunnerText::Get(DsRunnerText::Id::NoGames));
     else
-    {
-        // digits backwards, then reversed
-        int length = 0;
-        for (int value = count; value > 0; value /= 10)
-            text[length++] = '0' + value % 10;
-        for (int i = 0; i < length / 2; i++)
-            std::swap(text[i], text[length - 1 - i]);
-        strcpy(&text[length], " Spiele");
-    }
+        DsRunnerText::FormatCount(text, sizeof(text), DsRunnerText::Id::GamesOne, DsRunnerText::Id::GamesMany, count);
     char16_t text16[24];
     int i = 0;
     for (; text[i] != 0; i++)

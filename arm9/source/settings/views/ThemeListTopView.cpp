@@ -5,6 +5,7 @@
 #include "settings/SettingsController.h"
 #include "themes/IFontRepository.h"
 #include "themes/material/MaterialColorScheme.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "ThemeListTopView.h"
 
 ThemeListTopView::ThemeListTopView(SharedPtr<ThemeListViewModel> viewModel, const MaterialColorScheme* materialColorScheme,
@@ -13,8 +14,8 @@ ThemeListTopView::ThemeListTopView(SharedPtr<ThemeListViewModel> viewModel, cons
     , _noPreviewLabel(Label2DView::CreateShared(96, 16, 25, fontRepository->GetFont(FontType::Medium11)))
 {
     _noPreviewLabel->SetHorizontalAlignment(Alignment::Center);
-    // DsRunner: German text, the label is wider for it
-    _noPreviewLabel->SetText("Keine Vorschau");
+    // DsRunner: text of DsRunnerText (German or English), the label is wider for it
+    _noPreviewLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::NoPreview));
     _noPreviewLabel->SetPosition(128 - 48, 96 - 8);
     _noPreviewLabel->SetBackgroundColor(materialColorScheme->inverseOnSurface);
     _noPreviewLabel->SetForegroundColor(materialColorScheme->onSurfaceVariant);

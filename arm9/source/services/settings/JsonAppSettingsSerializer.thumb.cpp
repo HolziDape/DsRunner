@@ -19,6 +19,7 @@
 #define KEY_CLEAN_NAMES              "cleanNames"
 #define KEY_IN_GAME_RESET            "inGameReset"
 #define KEY_IN_GAME_RESET_KEYS       "inGameResetKeys"
+#define KEY_UI_LANGUAGE              "uiLanguage"
 #define KEY_FILE_ASSOCIATIONS        "fileAssociations"
 #define KEY_FILE_ASSOCIATIONS_APPLICATION_PATH  "appPath"
 
@@ -150,6 +151,7 @@ static std::unique_ptr<u8[]> writeJson(const AppSettings* appSettings, u32& leng
     json[KEY_CLEAN_NAMES] = appSettings->cleanNames;
     json[KEY_IN_GAME_RESET] = appSettings->inGameReset;
     json[KEY_IN_GAME_RESET_KEYS] = appSettings->inGameResetKeys.GetString();
+    json[KEY_UI_LANGUAGE] = appSettings->uiLanguage.GetString();
     serializeFileAssociations(json, appSettings);
 
     u32 outputSize = measureJsonPretty(json);
@@ -193,6 +195,7 @@ static void readJson(AppSettings* appSettings, const JsonDocument& json)
     appSettings->cleanNames = json[KEY_CLEAN_NAMES] | appSettings->cleanNames;
     appSettings->inGameReset = json[KEY_IN_GAME_RESET] | appSettings->inGameReset;
     appSettings->inGameResetKeys = json[KEY_IN_GAME_RESET_KEYS] | appSettings->inGameResetKeys.GetString();
+    appSettings->uiLanguage = json[KEY_UI_LANGUAGE] | appSettings->uiLanguage.GetString();
 
     RomBrowserLayout romBrowserLayout;
     if (tryParseRomBrowserLayout(json[KEY_ROM_BROWSER_LAYOUT].as<const char*>(),
