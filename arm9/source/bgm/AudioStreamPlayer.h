@@ -43,6 +43,19 @@ public:
         rtos_unlockMutex(&_mutex);
     }
 
+    // DsRunner: the volume is part of the channel setup, it applies from the next StartPlayback on
+    void SetVolume(u32 volume) override
+    {
+        if (volume > 127)
+            volume = 127;
+        rtos_lockMutex(&_mutex);
+        {
+            _soundStartCmdList.leftSetup.control = (_soundStartCmdList.leftSetup.control & ~0x7Fu) | volume;
+            _soundStartCmdList.rightSetup.control = (_soundStartCmdList.rightSetup.control & ~0x7Fu) | volume;
+        }
+        rtos_unlockMutex(&_mutex);
+    }
+
 private:
     struct alignas(32) SoundStartCmdList
     {

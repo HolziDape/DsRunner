@@ -18,6 +18,8 @@
 #define KEY_SHOW_CLOCK               "showClock"
 #define KEY_IN_GAME_RESET            "inGameReset"
 #define KEY_IN_GAME_RESET_KEYS       "inGameResetKeys"
+#define KEY_MUSIC                    "music"
+#define KEY_MUSIC_VOLUME             "musicVolume"
 #define KEY_FILE_ASSOCIATIONS        "fileAssociations"
 #define KEY_FILE_ASSOCIATIONS_APPLICATION_PATH  "appPath"
 
@@ -148,6 +150,8 @@ static std::unique_ptr<u8[]> writeJson(const AppSettings* appSettings, u32& leng
     json[KEY_SHOW_CLOCK] = appSettings->showClock;
     json[KEY_IN_GAME_RESET] = appSettings->inGameReset;
     json[KEY_IN_GAME_RESET_KEYS] = appSettings->inGameResetKeys.GetString();
+    json[KEY_MUSIC] = appSettings->music;
+    json[KEY_MUSIC_VOLUME] = appSettings->musicVolume;
     serializeFileAssociations(json, appSettings);
 
     u32 outputSize = measureJsonPretty(json);
@@ -190,6 +194,9 @@ static void readJson(AppSettings* appSettings, const JsonDocument& json)
     appSettings->showClock = json[KEY_SHOW_CLOCK] | appSettings->showClock;
     appSettings->inGameReset = json[KEY_IN_GAME_RESET] | appSettings->inGameReset;
     appSettings->inGameResetKeys = json[KEY_IN_GAME_RESET_KEYS] | appSettings->inGameResetKeys.GetString();
+    appSettings->music = json[KEY_MUSIC] | appSettings->music;
+    int musicVolume = json[KEY_MUSIC_VOLUME] | (int)appSettings->musicVolume;
+    appSettings->musicVolume = musicVolume < 0 ? 0 : (musicVolume > 100 ? 100 : musicVolume);
 
     RomBrowserLayout romBrowserLayout;
     if (tryParseRomBrowserLayout(json[KEY_ROM_BROWSER_LAYOUT].as<const char*>(),

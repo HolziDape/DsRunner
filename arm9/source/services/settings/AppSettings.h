@@ -19,6 +19,10 @@ public:
     bool inGameReset = true;
     /// DsRunner: keys of the in-game reset, e.g. "SELECT+START+DOWN" (DsRunnerInGameResetKeys).
     String<char, 48> inGameResetKeys = "L+R+DOWN+B";
+    /// DsRunner: play the background music of the theme (/_pico/themes/<theme>/bgm/*.bcstm).
+    bool music = true;
+    /// DsRunner: volume of the background music, 0 to 100.
+    u8 musicVolume = 100;
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;
