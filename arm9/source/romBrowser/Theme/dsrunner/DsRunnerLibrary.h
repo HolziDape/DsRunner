@@ -27,6 +27,21 @@ namespace DsRunnerPaths
     /// @return False when the path doesn't fit in \p result.
     bool MirrorPath(const char* root, const char* folderPath, const char* name, bool isFolder,
         char* result, u32 resultSize);
+
+    /// @brief Gets the console folder of a folder in the library: the first folder name of \p folderPath
+    ///        below \p libraryPath, e.g. "GBA" for "/Games/GBA/Hacks" in "/Games".
+    /// @return False when \p folderPath is not below \p libraryPath or the name doesn't fit.
+    bool GetConsoleFolderName(const char* libraryPath, const char* folderPath, char* result, u32 resultSize);
+}
+
+/// @brief Entries of the console level that are no real folders ("★ Favoriten", "• Suche").
+namespace DsRunnerVirtualEntries
+{
+    /// @brief Adds a folder entry called \p name to the files of the library root. Io thread.
+    void Add(SdFolder& libraryRoot, const char* name);
+
+    /// @brief Moves the entry called \p name to the front of a sorted file list.
+    void MoveToFront(const FileInfo** files, u32 count, const char* name);
 }
 
 /// @brief Play history: the most recently started files, newest first.
@@ -162,6 +177,9 @@ public:
     /// @return The number of games, or Unknown when not (yet) counted.
     int Get(const char* folderPath, const char* folderName) const;
 
+    /// @brief Gets the number of games of all console folders of \p libraryPath, or Unknown when not all are counted.
+    int GetTotal(const char* libraryPath) const;
+
 private:
     struct Entry
     {
@@ -185,6 +203,8 @@ struct DsRunnerLibrary
     char continuePath[256] = { 0 };
     /// The app settings, for views that show DsRunner options (set by the rom browser controller).
     const AppSettings* appSettings = nullptr;
+    /// True while the results of the search are shown (DsRunnerSearch), set by the rom browser controller.
+    bool searchResultsShown = false;
 };
 
 extern DsRunnerLibrary gDsRunnerLibrary;

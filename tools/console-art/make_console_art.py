@@ -318,6 +318,19 @@ def draw_fav(p: Painter, big: bool):
         p.poly(star_points(12, 12.6, 7.4, 3.1), WHITE_TONE)
 
 
+def draw_search(p: Painter, big: bool):
+    # the search: a magnifying glass, lens top left, handle to the bottom right
+    p.circle(9.5, 9.5, 9.5, BODY)
+    p.circle(9.5, 9.5, 6.2, SCREEN_IN if big else SCREEN)
+    if big:
+        # a light reflection on the glass
+        p.poly([(5.2, 9.6), (6.2, 6.4), (9.4, 4.8), (9.6, 6.2), (7.4, 7.4), (6.6, 9.8)], WHITE_TONE)
+    p.poly([(14.2, 17.0), (17.0, 14.2), (23.4, 20.6), (20.6, 23.4)], BODY)
+    p.circle(22.0, 22.0, 2.0, BODY)
+    if big:
+        p.poly([(15.6, 18.4), (18.4, 15.6), (19.6, 16.8), (16.8, 19.6)], ACCENT)
+
+
 def draw_folder(p: Painter, big: bool):
     p.rect(0, 0, 11, 6, BODY2, radius=1.5)
     p.rect(0, 2, 26, 20, BODY2, radius=2)
@@ -348,6 +361,7 @@ GLYPHS = {
     "PCE": ((24, 19), draw_pce),
     "APPS": ((23, 23), draw_apps),
     "FAV": ((24, 24), draw_fav),
+    "SEARCH": ((24, 24), draw_search),
     "FOLDER": ((26, 20), draw_folder),
     "CART": ((20, 24), draw_cart),
 }
@@ -529,7 +543,8 @@ def colorize(levels: Image.Image, color) -> Image.Image:
 def preview(files: dict[str, dict[str, bytes]], path: Path) -> None:
     """One row per key: top screen, cover, tile on its tinted body, icon on its tinted body (2x)."""
     colors = {console.folder_name: console for console in CONSOLES}
-    key_color = {"FAV": ((196, 146, 40), (150, 108, 24)), "FOLDER": (UNKNOWN_TILE, UNKNOWN_HERO),
+    key_color = {"FAV": ((196, 146, 40), (150, 108, 24)), "SEARCH": ((40, 150, 196), (28, 116, 156)),
+                 "FOLDER": (UNKNOWN_TILE, UNKNOWN_HERO),
                  "CART": ((192, 128, 32), (156, 104, 26))}
     for folder, key in ART_KEYS.items():
         if folder in colors and key not in key_color:

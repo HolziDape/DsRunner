@@ -1,6 +1,8 @@
 #include "common.h"
 #include <string.h>
 #include <algorithm>
+#include "core/mini-printf.h"
+#include "core/StringUtil.h"
 #include "gui/GraphicsContext.h"
 #include "services/settings/AppSettings.h"
 #include "gui/VramContext.h"
@@ -11,6 +13,7 @@
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "themes/dsrunner/DsRunnerHeroState.h"
 #include "DsRunnerLibrary.h"
+#include "DsRunnerSearch.h"
 #include "DsRunnerFileInfoCardView.h"
 
 // The top screen background is a gradient that ends in a flat DsRunnerColors::BgTop band
@@ -70,6 +73,12 @@ void DsRunnerFileInfoCardView::SetFileNameAsync(TaskQueueBase* taskQueue, const 
         BannerView::SetFileNameAsync(taskQueue, fileName, useAsTitle);
     }
 
+    if (console && DsRunnerSearch::IsEntry(fileName))
+    {
+        // the search tile: how to get there from anywhere
+        SetThirdLineAsync(taskQueue, u"Auch mit SELECT, aus jedem Ordner");
+    }
+
     if (_isFolder && useAsTitle && !ShowGameCount(taskQueue, fileName) &&
         strlen(fileName) < sizeof(_pendingCountFolder))
     {
@@ -105,14 +114,22 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
         memcpy(&text[sizeof(sPrefix) - 1], name, nameLength);
         strcpy(&text[sizeof(sPrefix) - 1 + nameLength], ")");
     }
-    else if (!_isFolder && gDsRunnerLibrary.favorites.Contains(_folderPath, _fileName))
-    {
-        strcpy(text, "\xE2\x98\x85 ");
-        strlcat(text, _fileName, sizeof(text));
-    }
     else
     {
-        strlcpy(text, _fileName, sizeof(text));
+        text[0] = 0;
+        if (!_isFolder && gDsRunnerLibrary.favorites.Contains(_folderPath, _fileName))
+            strcpy(text, "\xE2\x98\x85 ");
+        char consoleFolder[64];
+        if (!_isFolder && gDsRunnerLibrary.searchResultsShown && appSettings &&
+            DsRunnerPaths::GetConsoleFolderName(appSettings->libraryPath.GetString(), _folderPath,
+                consoleFolder, sizeof(consoleFolder)))
+        {
+            // the search results come from all consoles: say which one
+            const auto* console = DsRunnerConsoles::FindByFolderName(consoleFolder);
+            strlcat(text, console ? console->fullName : consoleFolder, sizeof(text));
+            strlcat(text, " \xC2\xB7 ", sizeof(text));
+        }
+        strlcat(text, _fileName, sizeof(text));
     }
 
     if (_fileNameTaskQueue)
@@ -135,6 +152,20 @@ void DsRunnerFileInfoCardView::RequestArt(const TCHAR* fileName)
 
 bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName)
 {
+    if (DsRunnerSearch::IsEntry(folderName))
+    {
+        // the search tile: the games of all consoles
+        int total = gDsRunnerLibrary.gameCounts.GetTotal(_folderPath);
+        if (total == DsRunnerGameCounts::Unknown)
+            return false;
+        char16_t text16[32];
+        char text[32];
+        mini_snprintf(text, sizeof(text), total == 1 ? "1 Spiel durchsuchen" : "%d Spiele durchsuchen", total);
+        StringUtil::Copy(text16, text, sizeof(text16) / sizeof(text16[0]));
+        SetSecondLineAsync(taskQueue, text16);
+        return true;
+    }
+
     // the favorites tile counts the favorites
     int count = DsRunnerFavoritesFolder::IsEntry(folderName)
         ? (int)gDsRunnerLibrary.favorites.GetCount()

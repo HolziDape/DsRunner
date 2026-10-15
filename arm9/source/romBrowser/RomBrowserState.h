@@ -8,5 +8,7 @@ enum class RomBrowserState
     LoadingFolder,
     Launching,
     DisplaySettings,
-    GoingToSettingsScreen
+    GoingToSettingsScreen,
+    // DsRunner: the search keyboard is shown (see DsRunnerSearchKeyboardView)
+    SearchInput
 };

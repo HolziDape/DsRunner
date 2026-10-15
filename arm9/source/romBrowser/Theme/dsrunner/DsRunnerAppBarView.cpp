@@ -11,7 +11,7 @@ DsRunnerAppBarView::DsRunnerAppBarView(int x, int y, Orientation orientation,
     const MaterialColorScheme* colorScheme,
     const IFontRepository* fontRepository)
     : AppBarView(x, y, orientation, startButtonCount, endButtonCount, colorScheme)
-    , _titleLabel(fontRepository ? Label2DView::CreateShared(120, 16, 64, fontRepository->GetFont(FontType::Medium10)) : nullptr)
+    , _titleLabel(fontRepository ? Label2DView::CreateShared(180, 16, 64, fontRepository->GetFont(FontType::Medium10)) : nullptr)
     , _colorScheme(colorScheme)
 {
     for (int i = 0; i < _startButtonCount + _endButtonCount; i++)
@@ -26,6 +26,8 @@ DsRunnerAppBarView::DsRunnerAppBarView(int x, int y, Orientation orientation,
 
     if (_titleLabel)
     {
+        // long titles (search results: "Suche: <query> · <console> (<count>)") end with "…"
+        _titleLabel->SetEllipsisStyle(LabelView::EllipsisStyle::Ellipsis);
         AddChildTail(_titleLabel.GetPointer());
     }
 }

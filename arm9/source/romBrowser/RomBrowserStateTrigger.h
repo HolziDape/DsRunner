@@ -11,5 +11,8 @@ enum class RomBrowserStateTrigger
     Launch,
     ShowDisplaySettings,
     HideDisplaySettings,
-    GotoSettingsScreen
+    GotoSettingsScreen,
+    // DsRunner: search keyboard
+    ShowSearch,
+    HideSearch
 };
