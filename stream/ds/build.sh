@@ -14,4 +14,6 @@ if [ -z "$BLOCKSDS" ]; then
 	exec docker run --rm -v "$ROOT":/DsRunner -w /DsRunner/stream/ds "$BLOCKSDS_IMAGE" sh ./build.sh "$@"
 fi
 
+# inside the container (CI) the working directory can be the repo root
+cd "$HERE"
 make -j"$(nproc)" DSSTREAM_VERSION="$(tr -d ' \t\r\n' < ../../VERSION)" "$@"

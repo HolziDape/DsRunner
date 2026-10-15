@@ -5,6 +5,7 @@
 class IFontRepository;
 
 /// @brief The built-in console images of the DsRunner theme: /_pico/themes/<theme>/consoles/<key>.bmp
+///        (or /_pico/themes/dsrunner/consoles when the theme has no consoles folder)
 ///        (top screen, 256x192), <key>-tile.bmp (3x2 grid, 64x64), <key>-icon.bmp (4x3 grid and the icon on
 ///        the top screen, 32x32 4 bpp) and <key>-cover.bmp (cover flow, 128x96), drawn by tools/console-art.
 ///        They are templates: gray palette colors are tinted with the console color (see Tint), so they fit
@@ -48,6 +49,8 @@ public:
     static constexpr const char* kCustomConsoleKey = "CART";
     /// Image of all other folders.
     static constexpr const char* kFolderKey = "FOLDER";
+    /// Theme whose console images are used when a theme has none.
+    static constexpr const char* kSharedThemeFolder = "dsrunner";
 
     /// @brief Remembers the theme folder and checks whether its console images exist.
     ///        Call when the theme is loaded, before the io thread runs (reads the sd card).
@@ -80,12 +83,15 @@ public:
         return console ? console->tile : DsRunnerConsoles::kUnknownTile;
     }
 
-    /// @brief Tints a template color: gray levels map 0 -> the theme background, 128 -> \p color,
-    ///        255 -> white. Colors that are not gray stay as they are.
-    static Color Tint(const Color& templateColor, const Color& color);
+    /// @brief Tints a template color: gray levels map 0 -> \p shade, 128 -> \p color, 255 -> white.
+    ///        Colors that are not gray stay as they are.
+    static Color Tint(const Color& templateColor, const Color& color, const Color& shade);
 
     /// @brief Converts a BMP palette (BGRA) to the DS format (BGR555), tinted with \p tint when given.
-    static void ConvertPalette(const u8* bmpPalette, u32 count, const Color* tint, u16* result);
+    /// @param shade Gray level 0 of the template: DsRunnerColors::ArtShade for the top screen images and
+    ///        covers, DsRunnerColors::TileShade for tiles and icons (both are the theme background
+    ///        unless theme.json sets them).
+    static void ConvertPalette(const u8* bmpPalette, u32 count, const Color* tint, u16* result, const Color& shade);
 
 private:
     bool _available = false;

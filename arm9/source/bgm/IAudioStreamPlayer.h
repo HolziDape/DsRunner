@@ -15,6 +15,9 @@ public:
 
     /// @brief Stops playback of the currently playing audio stream.
     virtual void StopPlayback() = 0;
+
+    /// @brief DsRunner: sets the volume (0 to 127) for the next StartPlayback.
+    virtual void SetVolume(u32 volume) = 0;
 };
 
 inline IAudioStreamPlayer::~IAudioStreamPlayer() { }

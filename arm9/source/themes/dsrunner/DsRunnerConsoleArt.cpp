@@ -26,13 +26,20 @@ static const char* imageSuffix(DsRunnerConsoleArt::ImageType type)
 void DsRunnerConsoleArt::Initialize(const char* themeFolderName, const IFontRepository* fontRepository)
 {
     _fontRepository = fontRepository;
-    mini_snprintf(_folder, sizeof(_folder), "/_pico/themes/%s/consoles/", themeFolderName);
 
-    // the generic folder icon stands for the whole set: without it the old badges stay
-    char path[128];
-    FILINFO fileInfo;
-    _available = GetImagePath("", ImageType::Icon, path, sizeof(path)) && f_stat(path, &fileInfo) == FR_OK;
-    LOG_INFO("DsRunner: console images %s\n", _available ? "found" : "not found");
+    // the generic folder icon stands for the whole set: without it the old badges stay.
+    // Themes without their own consoles folder (the color variants) share the one of the dsrunner theme.
+    const char* folders[] = { themeFolderName, kSharedThemeFolder };
+    for (const char* folder : folders)
+    {
+        mini_snprintf(_folder, sizeof(_folder), "/_pico/themes/%s/consoles/", folder);
+        char path[128];
+        FILINFO fileInfo;
+        _available = GetImagePath("", ImageType::Icon, path, sizeof(path)) && f_stat(path, &fileInfo) == FR_OK;
+        if (_available)
+            break;
+    }
+    LOG_INFO("DsRunner: console images %s%s\n", _available ? "found in " : "not found", _available ? _folder : "");
 }
 
 const char* DsRunnerConsoleArt::GetKey(const char* folderName)
@@ -54,23 +61,24 @@ bool DsRunnerConsoleArt::GetImagePath(const char* folderName, ImageType type, ch
     return length > 0 && (u32)length < resultSize;
 }
 
-DsRunnerConsoleArt::Color DsRunnerConsoleArt::Tint(const Color& templateColor, const Color& color)
+DsRunnerConsoleArt::Color DsRunnerConsoleArt::Tint(const Color& templateColor, const Color& color, const Color& shade)
 {
     if (templateColor.r != templateColor.g || templateColor.g != templateColor.b)
         return templateColor;
     int level = templateColor.r;
     if (level <= 128)
-        return RgbMixer::Lerp(DsRunnerColors::BgTop, color, level, 128);
+        return RgbMixer::Lerp(shade, color, level, 128);
     return RgbMixer::Lerp(color, DsRunnerColors::White, level - 128, 127);
 }
 
-void DsRunnerConsoleArt::ConvertPalette(const u8* bmpPalette, u32 count, const Color* tint, u16* result)
+void DsRunnerConsoleArt::ConvertPalette(const u8* bmpPalette, u32 count, const Color* tint, u16* result,
+    const Color& shade)
 {
     for (u32 i = 0; i < count; i++)
     {
         Color color(bmpPalette[i * 4 + 2], bmpPalette[i * 4 + 1], bmpPalette[i * 4 + 0]);
         if (tint)
-            color = Tint(color, *tint);
+            color = Tint(color, *tint, shade);
         result[i] = (color.r >> 3) | ((color.g >> 3) << 5) | ((color.b >> 3) << 10);
     }
 }

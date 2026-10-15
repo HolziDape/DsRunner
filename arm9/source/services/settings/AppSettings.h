@@ -24,6 +24,10 @@ public:
     /// DsRunner: language of the DsRunner UI, "de" or "en" (DsRunnerText). Separate from Pico's
     /// "language", which defaults to "english" and was never used by DsRunner.
     String<char, 8> uiLanguage = "de";
+    /// DsRunner: play the background music of the theme (/_pico/themes/<theme>/bgm/*.bcstm).
+    bool music = true;
+    /// DsRunner: volume of the background music, 0 to 100.
+    u8 musicVolume = 100;
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;

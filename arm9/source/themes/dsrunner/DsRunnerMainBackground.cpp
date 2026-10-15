@@ -22,8 +22,8 @@ void DsRunnerMainBackground::Draw(GraphicsContext& graphicsContext)
     graphicsContext.GetRgb6Palette()->ApplyColor(Rgb<6, 6, 6>(Rgb<8, 8, 8>(255, 255, 255)));
 
     // Vertical gradient from DsRunnerColors::BgTop to DsRunnerColors::BgBottom, in 5 bit vertex colors
-    constexpr auto top = Rgb<5, 5, 5>(DsRunnerColors::BgTop);
-    constexpr auto bottom = Rgb<5, 5, 5>(DsRunnerColors::BgBottom);
+    const auto top = Rgb<5, 5, 5>(DsRunnerColors::BgTop);
+    const auto bottom = Rgb<5, 5, 5>(DsRunnerColors::BgBottom);
     Gx::Begin(GX_PRIMITIVE_QUAD);
 
     Gx::TexCoord(0, 0);

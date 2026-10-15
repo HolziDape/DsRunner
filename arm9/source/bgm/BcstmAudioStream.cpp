@@ -50,6 +50,13 @@ bool BcstmAudioStream::TryLoadBcstm()
         return false;
     }
 
+    // DsRunner: only DSP-ADPCM is decoded below, other formats would play as noise
+    if (_streamInfo.format != BCSTM_FORMAT_DSP_ADPCM || _streamInfo.nrChannels == 0 ||
+        _streamInfo.blockSampleCount == 0)
+    {
+        return false;
+    }
+
     _dataOffset = header.dataBlockRef.offset + 8 + _streamInfo.dataRef.offset;
 
     _channels = std::min<u32>(_streamInfo.nrChannels, 2);
@@ -114,6 +121,15 @@ bool BcstmAudioStream::TryLoadBcstm()
 
         _loopEndBlockNumber = (_streamInfo.loopEnd - 1) / _streamInfo.blockSampleCount;
         _loopEndBlockEndSample = (_streamInfo.loopEnd - 1) % _streamInfo.blockSampleCount;
+    }
+    else
+    {
+        // DsRunner: without loop the stream starts again from the beginning (FetchBlock used these
+        // uninitialized)
+        _loopBlockNumber = 0;
+        _loopBlockStartSample = 0;
+        _loopEndBlockNumber = 0;
+        _loopEndBlockEndSample = 0;
     }
 
     return true;
@@ -197,7 +213,9 @@ void BcstmAudioStream::FetchBlock()
         _sampleNumberInBlock = _loopBlockStartSample;
         if (_streamInfo.format == BCSTM_FORMAT_DSP_ADPCM)
         {
-            if (_blockNumber == 0)
+            // DsRunner: the start context only fits a loop that starts at sample 0, a loop start
+            // later in the first block needs the loop context like in the other blocks
+            if (_blockNumber == 0 && _loopBlockStartSample == 0)
             {
                 for (u32 i = 0; i < _channels; i++)
                 {
@@ -287,7 +305,8 @@ ITCM_CODE void BcstmAudioStream::DecodeLoopAdpcmFrame(
     DspAdpcmContext& context, u32 scaleCoef, s16 last1, s16 last2, u32 sampleOffset)
 {
     const u8* data = context.data;
-    data += 2 + (sampleOffset >> 1);
+    // DsRunner: skip the frame header (1 byte), the nibbles of samples 2n and 2n + 1 are in byte 1 + n
+    data += 1 + (sampleOffset >> 1);
     u32 scale = (scaleCoef & 0xF) + 11;
     u32 coefIdx = scaleCoef >> 4;
     s16 coef1 = context.coefTable[coefIdx * 2];

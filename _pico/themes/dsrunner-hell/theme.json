@@ -1,0 +1,27 @@
+{
+    "type": "DsRunner",
+    "name": "DsRunner Hell",
+    "description": "Hell mit blauem Akzent",
+    "author": "HolziDape",
+    "primaryColor": {
+        "r": 18,
+        "g": 121,
+        "b": 212
+    },
+    "darkTheme": false,
+    "colors": {
+        "background": "#EEF1F6",
+        "backgroundBottom": "#DCE1EA",
+        "tile": "#FFFFFF",
+        "pill": "#D2D8E3",
+        "accent": "#1279D4",
+        "onAccent": "#FFFFFF",
+        "text": "#161B26",
+        "textDim": "#566074",
+        "textStrong": "#0B0F18",
+        "tileShade": "#2B3140",
+        "favorite": "#E8A300",
+        "batteryGood": "#1E9A48",
+        "batteryLow": "#D62E2E"
+    }
+}

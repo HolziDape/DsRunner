@@ -1,0 +1,22 @@
+{
+    "type": "DsRunner",
+    "name": "DsRunner Retro",
+    "description": "Warmes Bernstein",
+    "author": "HolziDape",
+    "primaryColor": {
+        "r": 255,
+        "g": 178,
+        "b": 63
+    },
+    "darkTheme": true,
+    "colors": {
+        "background": "#140E08",
+        "backgroundBottom": "#20170D",
+        "tile": "#2F2213",
+        "pill": "#3B2B19",
+        "accent": "#FFB23F",
+        "text": "#FFE8C4",
+        "textDim": "#BFA078",
+        "favorite": "#FFD24A"
+    }
+}

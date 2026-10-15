@@ -15,6 +15,8 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
   "inGameReset": true,
   "inGameResetKeys": "L+R+DOWN+B",
   "uiLanguage": "de",
+  "music": true,
+  "musicVolume": 100,
   "fileAssociations": {
     "gba": { "appPath": "/GBARunner2_arm7dldi_ds.nds" }
   }
@@ -23,7 +25,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 
 | Schlüssel | Bedeutung |
 |---|---|
-| `theme` | Ordnername in `/_pico/themes`. `dsrunner` ist das dunkle DsRunner-Theme. Mit `material` oder `raspberry` kommen Picos Themes zurück. |
+| `theme` | Ordnername in `/_pico/themes`. `dsrunner` ist das dunkle DsRunner-Theme, dazu gibt es `dsrunner-hell`, `dsrunner-oled`, `dsrunner-retro` und `dsrunner-blau` (siehe [Farb-Themes](#farb-themes)). Mit `material` oder `raspberry` kommen Picos Themes zurück. Umschalten im Menü (Zahnrad → Theme). |
 | `libraryPath` | Ordner, dessen Unterordner die Konsolen sind. DsRunner startet immer hier. Standard `/Games`. Leer lassen (`""`) für das Verhalten von Pico Launcher (letzter Ordner). Existiert der Ordner nicht, startet DsRunner im SD-Root. |
 | `romBrowserLayout` | `TileGrid3x2` (Standard: große Kacheln, 3 nebeneinander, 2 untereinander), `TileGrid4x3` (4 × 3 kleine Kacheln mit Icons) oder `CoverFlow` (Picos große Cover-Ansicht), siehe [Ansichten](#ansichten). Umschalten im Menü (Zahnrad → Ansicht), die Wahl wird hier gespeichert. Picos frühere Ansichten `HorizontalIconGrid`, `VerticalIconGrid`, `BannerList` und `FileList` gibt es nicht mehr: steht eine davon noch in der Datei, zeigt DsRunner das 3×2-Raster. |
 | `romBrowserSortMode` | `NameAscending` (A–Z), `NameDescending` (Z–A), `LastPlayed` (zuletzt gespielt zuerst, siehe [Spielverlauf](#spielverlauf)). Ordner stehen immer vorne und sind nach Namen sortiert. `LastModified` von Pico ist nicht umgesetzt und sortiert wie A–Z. |
@@ -33,6 +35,8 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | `inGameReset` | `true` (Standard): im Spiel L+R+Unten+B 2 s halten führt zurück zu DsRunner (nur mit dem Pico Loader aus dem M3-Paket, siehe [LOADER.md](LOADER.md)). `false`: DsRunner legt vor jedem Spielstart `/_pico/igr.off` an, Pico Loader baut den Hotkey dann nicht ein. Umschalten im Menü (Zahnrad → R oder `›` → „Zurück aus dem Spiel“), gilt ab dem nächsten Spielstart. |
 | `inGameResetKeys` | Tasten für „zurück zu DsRunner“, Standard `"L+R+DOWN+B"`. Mit `+`, Komma oder Leerzeichen getrennt, Groß-/Kleinschreibung egal: `A`, `B`, `SELECT`, `START`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `L`, `R` (auch `OBEN`, `UNTEN`, `LINKS`, `RECHTS`). Mindestens 3 Tasten, **X und Y gehen nicht**. Ungültig → Standard (steht im Log von DsRunner). Gut ohne L/R, z. B. bei ausgeleierten Schultertasten: `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`. Nicht `L+R+START+SELECT`, das ist in vielen Spielen der eigene Soft-Reset. Weicht die Angabe vom Standard ab, schreibt DsRunner vor jedem Spielstart `/_pico/igr.keys` (sonst wird die Datei gelöscht); welche Tasten Pico Loader benutzt hat, steht in `/_pico/igr-log.txt`. Im Menü (zweite Seite) lassen sich `L+R+DOWN+B`, `SELECT+START+DOWN` und `SELECT+DOWN+B` wählen; andere gültige Tasten aus der Datei erscheinen dort als „Eigene“ (bis zum nächsten Neustart von DsRunner auch nach dem Umschalten noch wählbar). |
 | `uiLanguage` | Sprache der Oberfläche: `"de"` (Standard, Deutsch) oder `"en"` (English, auch `"english"`). Umschalten im Menü (zweite Seite → Deutsch / English), wirkt sofort. Siehe [Sprache](#sprache). |
+| `music` | `true` (Standard): [Hintergrundmusik](#hintergrundmusik) spielen, wenn das Theme welche hat. `false`: immer still. |
+| `musicVolume` | Lautstärke der Hintergrundmusik von `0` bis `100` (Standard `100`, `0` = aus). Der Lautstärkeregler des DS wirkt zusätzlich. |
 | `language` | Stammt von Pico Launcher und wird nicht ausgewertet (Standard dort `"english"`, deshalb hat DsRunner mit `uiLanguage` einen eigenen Schlüssel). |
 | `fileAssociations` | Programm, das Dateien mit einer Endung öffnet (z.B. `gba`, `nes`). Der Dateipfad wird per argv übergeben. Hat Vorrang vor `systems.json` und den Emulatoren, die DsRunner selbst findet (siehe [Emulatoren](#emulatoren)). |
 
@@ -278,15 +282,43 @@ Picos Einstellung `language` gibt es weiterhin in der `settings.json`, sie wird 
 
 Die Schriften (NotoSansJP) enthalten ä, ö, ü, Ä, Ö, Ü und ß, Umlaute in Ordner- und Dateinamen werden richtig angezeigt. Texte, die aus Dateien kommen (Spieltitel aus dem NDS-Banner, Theme-Namen aus `theme.json`, Cheat-Namen aus `usrcheat.dat`), erscheinen so, wie sie dort stehen.
 
+## Farb-Themes
+
+DsRunner bringt fünf Farbvarianten mit. Alle sehen gleich aus (Kacheln, Konsolen-Bilder, Farbverlauf oben) und unterscheiden sich nur in den Farben:
+
+| Ordner | Name | Aussehen |
+|---|---|---|
+| `dsrunner` | DsRunner Dark | dunkles Blaugrau, Cyan-Akzent (Standard) |
+| `dsrunner-hell` | DsRunner Hell | hellgrau mit weißen Kacheln, dunkle Schrift, blauer Akzent |
+| `dsrunner-oled` | DsRunner OLED | reines Schwarz, Cyan-Akzent |
+| `dsrunner-retro` | DsRunner Retro | warmes Dunkelbraun, Bernstein-Akzent |
+| `dsrunner-blau` | DsRunner Blau | tiefes Blau, hellblauer Akzent |
+
+**Wechseln:** Zahnrad → Pinsel-Knopf oben rechts → Theme in der Liste wählen (oben ist eine Vorschau zu sehen). Oder `"theme"` in der `settings.json` auf den Ordnernamen setzen.
+
+**Eigenes Farb-Theme:** einen der Ordner kopieren (z. B. `/_pico/themes/dsrunner-blau` nach `/_pico/themes/mein-theme`), in der `theme.json` `name` und die Farben unter `"colors"` ändern, fertig. Farben als `"#RRGGBB"`; fehlende Farben mischt DsRunner aus den vorhandenen. Die wichtigsten Schlüssel: `background` (Hintergrund oben am unteren Bildschirm und das Textfeld oben), `backgroundBottom` (unteres Ende des Farbverlaufs), `tile` (Spiel-Kacheln), `accent` (Rahmen der Auswahl, Suchtaste), `text`, `textDim` (Untertitel), `pill` (Statusleiste, Knöpfe). Alle Schlüssel und Tipps für helle Themes: [Themes.md](Themes.md#dsrunner-type). `primaryColor` und `darkTheme` gelten weiter für Picos Menüs (Zahnrad-Menü, Cheats): `primaryColor` = Akzentfarbe, `darkTheme` = `false` für helle Themes. Die Konsolen-Bilder und die Hintergrundmusik nimmt eine Variante ohne eigene Ordner `consoles` bzw. `bgm` aus `/_pico/themes/dsrunner/`, deshalb muss der Ordner `dsrunner` liegen bleiben. Ohne `"colors"` sieht ein Theme vom Typ `DsRunner` genau aus wie DsRunner Dark.
+
+`icon.bmp` und `preview.bin` für die Theme-Liste erzeugt `tools/themes/make_theme_assets.py` (Icon aus den Farben, Vorschau aus einem Screenshot), siehe [Themes.md](Themes.md#theme-selector-preview-image).
+
 ## Hintergrundmusik
 
-Pico Launcher spielt Hintergrundmusik pro Theme, DsRunner übernimmt das unverändert:
+DsRunner spielt auf Wunsch Hintergrundmusik, solange man im Menü ist (Picos Musik pro Theme, bei DsRunner ein paar Fehler behoben). Beim Spielstart und beim Öffnen der Theme-Liste hört sie auf, zurück in DsRunner beginnt sie von vorn.
 
-- Musik als **`.bcstm`** mit **DSP-ADPCM**-Kodierung in den Ordner `bgm` des Themes legen, für das DsRunner-Theme also `/_pico/themes/dsrunner/bgm/`, z. B. `/_pico/themes/dsrunner/bgm/menu.bcstm`.
-- Schleifen (Loop-Punkte in der Datei) werden unterstützt. Liegen mehrere Dateien im Ordner, wählt DsRunner bei jedem Start zufällig eine aus. Deshalb nur `.bcstm`-Dateien in den Ordner legen, andere Dateien werden nicht aussortiert.
-- Mono und Stereo gehen (von mehr Kanälen werden nur die ersten zwei gespielt).
-- Umwandeln am PC z. B. mit [LoopingAudioConverter](https://github.com/libertyernie/LoopingAudioConverter) (Ausgabe „BCSTM“, Kodierung „DSP-ADPCM“). Mono und eine niedrige Abtastrate halten die Datei klein.
-- Ohne `bgm`-Ordner bleibt DsRunner still. Zum Abschalten den Ordner löschen oder umbenennen.
+- **Format:** `.bcstm` mit **DSP-ADPCM**-Kodierung (das Stream-Format des 3DS), Mono oder Stereo, Abtastrate bis 32768 Hz. Empfohlen: **22050 Hz Mono**, das sind etwa 12,6 KB pro Sekunde (3 Minuten ≈ 2,2 MB).
+- **Ort:** `/_pico/themes/<Theme>/bgm/`, für DsRunner also `/_pico/themes/dsrunner/bgm/menu.bcstm`. Die Farbvarianten (Typ `DsRunner`) ohne eigenen `bgm`-Ordner spielen die Musik aus `/_pico/themes/dsrunner/bgm/`. Liegen mehrere Dateien im Ordner, wählt DsRunner bei jedem Start zufällig eine aus; nur `.bcstm`-Dateien hineinlegen.
+- **Schleife:** Die Datei läuft endlos, ab dem Loop-Punkt in der Datei (ohne Loop-Punkt von vorn).
+- **Beispiel:** Im Paket liegt eine ruhige, selbst erzeugte Synthesizer-Schleife (24 s, frei verwendbar) in `/_pico/themes/dsrunner/musik-beispiel/ruhig.bcstm`. Zum Ausprobieren den Ordner `musik-beispiel` in `bgm` umbenennen. Standardmäßig ist also keine Musik an.
+- **Ein/aus und Lautstärke:** `"music": false` in der `settings.json` schaltet die Musik ab, ohne die Dateien zu löschen; `"musicVolume"` von `0` bis `100` (Standard `100`) macht sie leiser. Der Lautstärkeregler des DS wirkt zusätzlich.
+- **Speicher und Akku:** Die Musik wird von der SD-Karte gestreamt, nicht ganz geladen: etwa 8 KB Puffer pro Kanal, 4 KB Verwaltung und 32 KB Wiedergabepuffer (der ist immer reserviert), egal wie lang das Lied ist. Das Dekodieren kostet weniger als 2 % Rechenzeit des DS, etwas mehr Akku braucht vor allem der Lautsprecher. Sehr stark fragmentierte Dateien (mehr als ~500 Stücke auf der SD-Karte) spielt DsRunner nicht; dann die Datei einmal löschen und neu kopieren.
+
+**MP3/WAV umwandeln (Windows, macOS, Linux)** mit dem Skript `tools/bgm/wav2bcstm.py` aus dem Repository. Es braucht [Python 3](https://www.python.org/downloads/) und `numpy`, für MP3, OGG usw. zusätzlich [ffmpeg](https://ffmpeg.org/download.html) (unter Windows z. B. `winget install ffmpeg`):
+
+```bat
+py -m pip install numpy
+py tools\bgm\wav2bcstm.py lied.mp3 menu.bcstm --rate 22050 --mono
+```
+
+Unter macOS/Linux `python3` statt `py`. Das Skript zeigt danach Länge, Größe und Qualität (SNR) der Datei an. Weitere Optionen: `--loop-start 12.5` (nach dem Ende ab Sekunde 12,5 weiter, für Lieder mit Intro), `--volume 0.7` (leiser kodieren), `--decode probe.wav` (eine `.bcstm` zum Anhören zurückwandeln, so wie DsRunner sie dekodiert). WAV-Dateien mit 16 bit gehen auch ohne ffmpeg. Andere Werkzeuge, die DSP-ADPCM-BCSTM schreiben, funktionieren ebenfalls, z. B. [LoopingAudioConverter](https://github.com/libertyernie/LoopingAudioConverter) (Ausgabe „BCSTM“, Kodierung „DSP-ADPCM“) oder `VGAudioCli.exe -i lied.wav -o menu.bcstm`. Bitte nur Musik verwenden, die man verwenden darf.
 
 ## Artworks
 
@@ -353,7 +385,7 @@ Das DsRunner-Theme bringt für jeden Konsolen-Ordner eigene Bilder mit, damit di
 
 Namen der Bilder: `NDS` (Ordner `NDS`, `DS`), `GBA`, `GBC`, `GB`, `NES` (`NES`, `FC`), `SNES` (`SNES`, `SFC`), `SMS`, `GG`, `MD` (`MD`, `GEN`, `MEGADRIVE`), `PCE`, `APPS` (`Apps`, `Homebrew`), `FAV` (★ Favoriten), `SEARCH` (Lupe der Kachel Suche). Eigene Konsolen aus der [`systems.json`](#eigene-konsolen-systemsjson) zeigen `CART` (ein Modul), alle anderen Ordner `FOLDER`.
 
-**Farben:** Die Bilder sind Vorlagen in Graustufen. DsRunner färbt jede graue Palettenfarbe in der Farbe der Konsole ein: 0 = Hintergrund des Themes, 128 = Konsolenfarbe (`color` bzw. für oben `heroColor`), 255 = Weiß. Farbige Palettenfarben bleiben, wie sie sind. So passt ein Bild zu jeder Farbe, auch zu geänderten Farben aus der `systems.json`.
+**Farben:** Die Bilder sind Vorlagen in Graustufen. DsRunner färbt jede graue Palettenfarbe in der Farbe der Konsole ein: 0 = Hintergrund des Themes (bzw. `artShade` / `tileShade` aus der `theme.json`, siehe [Themes.md](Themes.md#dsrunner-type)), 128 = Konsolenfarbe (`color` bzw. für oben `heroColor`), 255 = Weiß. Farbige Palettenfarben bleiben, wie sie sind. So passt ein Bild zu jeder Farbe, auch zu geänderten Farben aus der `systems.json`.
 
 **Vorrang:** Eigene Bilder gewinnen immer:
 
@@ -362,7 +394,7 @@ Namen der Bilder: `NDS` (Ordner `NDS`, `DS`), `GBA`, `GBC`, `GB`, `NES` (`NES`, 
 - 4×3-Raster: `icon.bmp` im Ordner selbst (Pico, siehe [Customization.md](Customization.md#icons)) vor `NDS-icon.bmp`
 - Coverflow: `cover.bmp` im Ordner selbst (Pico) vor `NDS-cover.bmp`
 
-Wer die Bilder des Themes ändern will, ersetzt die Dateien (gleiches Format, Graustufen für die Einfärbung) oder ändert das Skript und lässt es neu laufen. Fehlt `FOLDER-icon.bmp`, nutzt DsRunner gar keine eingebauten Bilder und zeigt wie früher Kacheln mit Kürzel und den Farbverlauf. DsRunner liest den Ordner beim Start.
+Die [Farb-Themes](#farb-themes) haben keinen eigenen `consoles`-Ordner und nehmen den von `dsrunner` (ein eigener Ordner `consoles` im Theme hat Vorrang). Wer die Bilder des Themes ändern will, ersetzt die Dateien (gleiches Format, Graustufen für die Einfärbung) oder ändert das Skript und lässt es neu laufen. Fehlt `FOLDER-icon.bmp`, nutzt DsRunner gar keine eingebauten Bilder und zeigt wie früher Kacheln mit Kürzel und den Farbverlauf. DsRunner liest den Ordner beim Start.
 
 [DsRunner Art](ART-TOOL.md) erzeugt für Ordner mit eingebautem Bild kein eigenes Artwork mehr und löscht seine alten (siehe dort).
 
