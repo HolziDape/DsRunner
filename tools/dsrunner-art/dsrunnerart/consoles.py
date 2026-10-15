@@ -50,7 +50,7 @@ UNKNOWN_HERO: Rgb = (40, 48, 70)
 ART_KEYS: dict[str, str] = {
     "NDS": "NDS", "DS": "NDS", "GBA": "GBA", "GBC": "GBC", "GB": "GB", "NES": "NES", "FC": "NES",
     "SNES": "SNES", "SFC": "SNES", "SMS": "SMS", "GG": "GG", "GEN": "MD", "MD": "MD", "MEGADRIVE": "MD",
-    "PCE": "PCE", "APPS": "APPS", "HOMEBREW": "APPS", "★ Favoriten": "FAV",
+    "PCE": "PCE", "APPS": "APPS", "HOMEBREW": "APPS", "★ Favoriten": "FAV", "• Suche": "SEARCH",
 }
 # image of consoles from systems.json without a built-in image, and of all other folders
 ART_KEY_CUSTOM_CONSOLE = "CART"

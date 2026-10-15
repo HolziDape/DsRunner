@@ -41,8 +41,8 @@ class LauncherParityTests(unittest.TestCase):
         launcher = []
         for match in pattern.finditer(header):
             folder = _unescape(match.group(1))
-            if "Favoriten" in folder:
-                continue  # virtual folder of the launcher, no console
+            if folder in ("★ Favoriten", "• Suche"):
+                continue  # virtual folders of the launcher, no consoles
             numbers = [int(value) for value in match.groups()[3:]]
             launcher.append(consoles.Console(folder, match.group(2), match.group(3),
                                              tuple(numbers[:3]), tuple(numbers[3:])))

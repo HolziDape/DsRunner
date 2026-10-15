@@ -42,7 +42,7 @@ public:
         { "GEN", "MD" }, { "MD", "MD" }, { "MEGADRIVE", "MD" },
         { "PCE", "PCE" },
         { "APPS", "APPS" }, { "HOMEBREW", "APPS" },
-        { "\xE2\x98\x85 Favoriten", "FAV" },
+        { "\xE2\x98\x85 Favoriten", "FAV" }, { "\xE2\x80\xA2 Suche", "SEARCH" },
     };
     /// Image of consoles of systems.json that have no built-in image.
     static constexpr const char* kCustomConsoleKey = "CART";

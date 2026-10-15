@@ -21,7 +21,9 @@ public:
             || state == RomBrowserState::GameInfo
             || state == RomBrowserState::DisplaySettings
             || state == RomBrowserState::Launching
-            || state == RomBrowserState::GoingToSettingsScreen;
+            || state == RomBrowserState::GoingToSettingsScreen
+            // DsRunner: the search keyboard replaces the grid, the top screen stays
+            || state == RomBrowserState::SearchInput;
     }
 
     const SharedPtr<RomBrowserViewModel>& GetRomBrowserViewModel()

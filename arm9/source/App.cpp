@@ -289,6 +289,12 @@ void App::HandleTrigger(RomBrowserStateTrigger trigger, RomBrowserState newState
             _changeDisplayMode = true;
             break;
         }
+        case RomBrowserStateTrigger::ShowSearch:
+        case RomBrowserStateTrigger::HideSearch:
+        {
+            // DsRunner: see UpdateSearchKeyboard()
+            break;
+        }
     }
 }
 
@@ -375,6 +381,24 @@ void App::HandleChangeDisplayModeTrigger(RomBrowserState newState)
         _romBrowserBottomScreenView->Focus(_focusManager);
 }
 
+void App::UpdateSearchKeyboard(RomBrowserState state)
+{
+    // DsRunner: the search keyboard is shown in the SearchInput state, once a closing dialog is gone
+    if (state != RomBrowserState::SearchInput)
+    {
+        _searchKeyboardView.Reset();
+        return;
+    }
+    if (!_searchKeyboardView && !_dialogPresenter.IsBottomSheetVisible())
+    {
+        _searchKeyboardView = DsRunnerSearchKeyboardView::CreateShared(&_romBrowserController,
+            _theme->GetFontRepository());
+        // no dialog is shown, so its vram is free (the dialog presenter starts from the top again, too)
+        _mainObjDialogVram.SetState(128 * 1024);
+        _searchKeyboardView->InitVram(VramContext(nullptr, &_mainObjDialogVram, nullptr, nullptr));
+    }
+}
+
 void App::Update()
 {
     const auto& stateMachine = _romBrowserController.GetStateMachine();
@@ -389,6 +413,7 @@ void App::Update()
     {
         HandleTrigger(stateMachine.GetLastTrigger(), curState);
     }
+    UpdateSearchKeyboard(curState);
 
     bool isRomBrowserVisible = _romBrowserBottomScreenViewModel.IsRomBrowserVisible();
     if (isRomBrowserVisible && !_exit &&
@@ -406,6 +431,8 @@ void App::Update()
     _dialogPresenter.Update();
 
     _romBrowserBottomScreenView->Update();
+    if (_searchKeyboardView)
+        _searchKeyboardView->Update();
     if (isRomBrowserVisible)
     {
         _romBrowserTopScreenView->Update();
@@ -452,7 +479,12 @@ void App::Draw()
     }
 
     _dialogPresenter.ApplyClipArea(mainGraphicsContext);
-    if (!_changeDisplayMode)
+    if (_searchKeyboardView)
+    {
+        // DsRunner: the search keyboard replaces the rom browser on the bottom screen
+        _searchKeyboardView->Draw(mainGraphicsContext);
+    }
+    else if (!_changeDisplayMode)
     {
         _romBrowserBottomScreenView->Draw(mainGraphicsContext);
     }
@@ -494,6 +526,8 @@ void App::VBlank()
         _romBrowserTopScreenView->VBlank();
     }
     _romBrowserBottomScreenView->VBlank();
+    if (_searchKeyboardView)
+        _searchKeyboardView->VBlank();
 
     _vblankTextureLoader.VBlank();
 }
@@ -516,6 +550,19 @@ void App::RestoreVramState(const VramState& vramState)
 
 void App::HandleInput()
 {
+    // DsRunner: the search keyboard takes all input while it is shown. Otherwise SELECT opens it
+    // and L/R switch the console of the search results.
+    if (_romBrowserController.GetStateMachine().GetCurrentState() == RomBrowserState::SearchInput)
+    {
+        if (_searchKeyboardView)
+            _searchKeyboardView->HandleKeyboardInput(_inputRepeater);
+        return;
+    }
+    if (!_dialogPresenter.IsBottomSheetVisible() &&
+        DsRunnerSearchKeyboardView::HandleBrowserInput(_inputRepeater, &_romBrowserController))
+    {
+        return;
+    }
     _focusManager.Update(_inputRepeater);
     Point touchPoint;
     if (_inputRepeater.Triggered(InputKey::Touch) &&

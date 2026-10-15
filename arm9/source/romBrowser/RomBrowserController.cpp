@@ -13,6 +13,7 @@
 #include "Theme/dsrunner/DsRunnerLibrary.h"
 #include "Theme/dsrunner/DsRunnerSystems.h"
 #include "Theme/dsrunner/DsRunnerInGameReset.h"
+#include "core/mini-printf.h"
 #include "RomBrowserController.h"
 
 // Skips a drive prefix like "fat:" and the leading slashes of a path.
@@ -81,6 +82,12 @@ void RomBrowserController::NavigateUp()
         // the library root is the top level of the launcher
         return;
     }
+    if (_currentFolderIsSearch)
+    {
+        // DsRunner: back from the search results to the keyboard, with the query kept
+        OpenSearch();
+        return;
+    }
     if (_currentFolderIsFavorites)
     {
         // DsRunner: the favorites folder is virtual, it belongs to the library root
@@ -98,10 +105,17 @@ void RomBrowserController::NavigateUp()
 
 void RomBrowserController::NavigateToPath(const TCHAR* name)
 {
+    if (_currentFolderIsLibraryRoot && DsRunnerSearch::IsEntry(name))
+    {
+        // DsRunner: the search tile of the console level opens the keyboard
+        OpenSearch();
+        return;
+    }
     StringUtil::Copy(_navigatePath, name, sizeof(_navigatePath) / sizeof(_navigatePath[0]));
     _navigateSelect[0] = 0;
     // DsRunner: the favorites tile of the console level opens the virtual favorites folder
     _navigateToFavorites = _currentFolderIsLibraryRoot && DsRunnerFavoritesFolder::IsEntry(name);
+    _navigateToSearch = false;
     _launchAfterNavigate = false;
     _stateMachine.Fire(RomBrowserStateTrigger::Navigate);
 }
@@ -120,6 +134,12 @@ const TCHAR* RomBrowserController::GetItemFolderPath(const FileInfo& fileInfo) c
     if (_currentFolderIsFavorites && _favoritesFolder)
     {
         const char* folderPath = _favoritesFolder->GetFolderPath(&fileInfo);
+        if (folderPath)
+            return folderPath;
+    }
+    if (_currentFolderIsSearch && _searchResults)
+    {
+        const char* folderPath = _searchResults->GetFolderPath(&fileInfo);
         if (folderPath)
             return folderPath;
     }
@@ -153,6 +173,113 @@ void RomBrowserController::SetShowClock(bool showClock)
     {
         appSettings.showClock = showClock;
         _saveSettingsPending = true;
+    }
+}
+
+bool RomBrowserController::OpenSearch()
+{
+    if (_stateMachine.GetCurrentState() != RomBrowserState::Browser ||
+        _appSettingsService->GetAppSettings().libraryPath.GetString()[0] == 0)
+    {
+        return false;
+    }
+    // from the search results the keyboard keeps the query, otherwise a new search starts
+    if (!_currentFolderIsSearch)
+        _searchQuery[0] = 0;
+    StartSearchIndex();
+    _stateMachine.Fire(RomBrowserStateTrigger::ShowSearch);
+    return true;
+}
+
+void RomBrowserController::CloseSearch()
+{
+    if (_stateMachine.GetCurrentState() != RomBrowserState::SearchInput)
+        return;
+    if (_currentFolderIsSearch)
+    {
+        // the keyboard belongs to the search tile: back to the console level with the tile selected
+        NavigateToPath(_appSettingsService->GetAppSettings().libraryPath.GetString());
+        StringUtil::Copy(_navigateSelect, DsRunnerSearch::EntryName,
+            sizeof(_navigateSelect) / sizeof(_navigateSelect[0]));
+        return;
+    }
+    _stateMachine.Fire(RomBrowserStateTrigger::HideSearch);
+}
+
+void RomBrowserController::StartSearch(const char* query)
+{
+    if (_stateMachine.GetCurrentState() != RomBrowserState::SearchInput)
+        return;
+    StringUtil::Copy(_searchQuery, query, sizeof(_searchQuery));
+    _searchGroup = -1;
+    NavigateToSearch();
+}
+
+bool RomBrowserController::SwitchSearchFilter(int direction)
+{
+    if (!_currentFolderIsSearch || !_searchResults ||
+        _stateMachine.GetCurrentState() != RomBrowserState::Browser)
+    {
+        return false;
+    }
+    // "all", then every console with matches, around in a circle
+    int groupCount = gDsRunnerSearch.GetGroupCount();
+    int group = _searchGroup;
+    for (int i = 0; i <= groupCount; i++)
+    {
+        group += direction;
+        if (group >= groupCount)
+            group = -1;
+        else if (group < -1)
+            group = groupCount - 1;
+        if (group == -1 || _searchResults->GetGroupMatchCount(group) > 0)
+            break;
+    }
+    if (group != _searchGroup)
+    {
+        _searchGroup = group;
+        NavigateToSearch();
+    }
+    return true;
+}
+
+void RomBrowserController::NavigateToSearch()
+{
+    _navigateSelect[0] = 0;
+    _navigateToFavorites = false;
+    _navigateToSearch = true;
+    _launchAfterNavigate = false;
+    _stateMachine.Fire(RomBrowserStateTrigger::Navigate);
+}
+
+void RomBrowserController::StartSearchIndex()
+{
+    // DsRunner: read the games of the library for the search while the keyboard is open, once
+    if (gDsRunnerSearch.IsReady() || (_searchIndexTask.IsValid() && !_searchIndexTask.GetTask().IsCompleted()))
+        return;
+    _searchIndexTask = _ioTaskQueue->Enqueue([this] (const vu8& cancelRequested)
+    {
+        gDsRunnerSearch.Build(_appSettingsService->GetAppSettings().libraryPath.GetString(),
+            _fileTypeProvider, cancelRequested);
+        return TaskResult<void>::Completed();
+    });
+}
+
+void RomBrowserController::MakeSearchTitle()
+{
+    // "Suche: mario · GBA (3)", "Suche: mario · Alle (200 von 523)". Io thread, with the new results.
+    const char* filter = _searchGroup >= 0 ? gDsRunnerSearch.GetGroupLabel(_searchGroup) : "Alle";
+    u32 shown = _newSearchResults ? _newSearchResults->GetShownCount() : 0;
+    u32 matches = _newSearchResults ? _newSearchResults->GetFilterMatchCount() : 0;
+    if (shown < matches)
+    {
+        mini_snprintf(_newFolderName, sizeof(_newFolderName), "Suche: %s \xC2\xB7 %s (%d von %d)",
+            _searchQuery, filter, shown, matches);
+    }
+    else
+    {
+        mini_snprintf(_newFolderName, sizeof(_newFolderName), "Suche: %s \xC2\xB7 %s (%d)",
+            _searchQuery, filter, matches);
     }
 }
 
@@ -318,6 +445,24 @@ void RomBrowserController::HandleNavigateTrigger()
         u64 startTick = gTickCounter.GetValue();
         _newFavoritesFolder.reset();
         _newFolderIsFavorites = false;
+        _newSearchResults.reset();
+        _newFolderIsSearch = false;
+        if (_navigateToSearch)
+        {
+            // DsRunner: the search results, a virtual folder like the favorites. The current directory stays.
+            const char* libraryPath = _appSettingsService->GetAppSettings().libraryPath.GetString();
+            gDsRunnerSearch.Build(libraryPath, _fileTypeProvider, cancelRequested);
+            auto query = std::make_unique<char[]>(DsRunnerSearch::NormalizedSize);
+            DsRunnerSearch::Normalize(_searchQuery, strlen(_searchQuery), query.get());
+            _newSearchResults = gDsRunnerSearch.CreateResults(query.get(), _searchGroup, _newSdFolder);
+            _newFolderIsSearch = true;
+            _newFolderIsLibraryRoot = false;
+            MakeSearchTitle();
+            if (!DsRunnerPaths::Combine(libraryPath, DsRunnerSearch::EntryName, _newFolderPath, sizeof(_newFolderPath)))
+                _newFolderPath[0] = 0;
+            _navigateFileName = nullptr;
+            return TaskResult<void>::Completed();
+        }
         if (_navigateToFavorites)
         {
             // DsRunner: the virtual favorites folder. The current directory stays the library root.
@@ -377,8 +522,9 @@ void RomBrowserController::HandleNavigateTrigger()
         _newSdFolder = sdFolderFactory.CreateFromPath(".");
         if (_newFolderIsLibraryRoot && _newSdFolder)
         {
-            // DsRunner: the console level gets the favorites tile and knows the game START continues
+            // DsRunner: the console level gets the favorites and search tiles and knows the game START continues
             DsRunnerFavoritesFolder::AddEntry(*_newSdFolder, gDsRunnerLibrary.favorites);
+            DsRunnerSearch::AddEntry(*_newSdFolder);
             FindContinueGame();
         }
         u64 endTick = gTickCounter.GetValue();
@@ -397,6 +543,9 @@ void RomBrowserController::HandleFolderLoadDoneTrigger()
     _currentFolderIsLibraryRoot = _newFolderIsLibraryRoot;
     _currentFolderIsFavorites = _newFolderIsFavorites;
     _favoritesFolder = std::move(_newFavoritesFolder);
+    _currentFolderIsSearch = _newFolderIsSearch;
+    _searchResults = std::move(_newSearchResults);
+    gDsRunnerLibrary.searchResultsShown = _currentFolderIsSearch;
     if (_currentFolderIsLibraryRoot)
     {
         StringUtil::Copy(gDsRunnerLibrary.continuePath, _newContinuePath,
@@ -461,8 +610,9 @@ void RomBrowserController::StartGameCount()
 void RomBrowserController::HandleLaunchTrigger()
 {
     LOG_DEBUG("RomBrowserStateTrigger::Launch\n");
-    // don't let the game count delay the launch
+    // don't let the game count (or reading the games for the search) delay the launch
     _gameCountTask.CancelTask();
+    _searchIndexTask.CancelTask();
     _ioTaskQueue->Enqueue([this] (const vu8& cancelRequested)
     {
         UpdateLastUsedFilepath();
@@ -481,15 +631,17 @@ void RomBrowserController::HandleChangeDisplayModeTrigger()
 void RomBrowserController::HandleGotoSettingsScreenTrigger()
 {
     _gameCountTask.CancelTask();
+    _searchIndexTask.CancelTask();
     gProcessManager.Goto<SettingsProcess>();
 }
 
 void RomBrowserController::UpdateLastUsedFilepath()
 {
     f_getcwd(_navigatePath, sizeof(_navigatePath) / sizeof(_navigatePath[0]));
-    if (_currentFolderIsFavorites)
+    if (_currentFolderIsFavorites || _currentFolderIsSearch)
     {
-        // DsRunner: files of the favorites folder are not in the current directory. Keep its drive ("fat:").
+        // DsRunner: files of the favorites folder and of the search results are not in the current directory.
+        // Keep its drive ("fat:").
         char* colon = strchr(_navigatePath, ':');
         u32 driveLength = colon ? colon + 1 - _navigatePath : 0;
         DsRunnerPaths::Combine(_launchFolderPath, _triggerFileInfo.GetFileName(),

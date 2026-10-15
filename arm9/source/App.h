@@ -26,6 +26,7 @@
 #include "romBrowser/views/IconButton2DView.h"
 #include "romBrowser/views/ChipView.h"
 #include "romBrowser/RomBrowserController.h"
+#include "romBrowser/Theme/dsrunner/DsRunnerSearchKeyboardView.h"
 #include "DialogPresenter.h"
 #include "themes/ITheme.h"
 #include "animation/Animator.h"
@@ -85,6 +86,8 @@ private:
 
     SharedPtr<RomBrowserBottomScreenView> _romBrowserBottomScreenView;
     SharedPtr<RomBrowserTopScreenView> _romBrowserTopScreenView;
+    // DsRunner: the search keyboard, shown instead of the rom browser on the bottom screen
+    SharedPtr<DsRunnerSearchKeyboardView> _searchKeyboardView;
 
     RomBrowserController _romBrowserController;
 
@@ -120,6 +123,7 @@ private:
     void HandleNavigateTrigger();
     void HandleFolderLoadDoneTrigger();
     void HandleChangeDisplayModeTrigger(RomBrowserState newState);
+    void UpdateSearchKeyboard(RomBrowserState state);
 
     void MainLoop();
     void Update();

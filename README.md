@@ -16,6 +16,7 @@ Getestet ist DsRunner auf dem DS Lite mit der Flashkarte **M3 DS Real**. Laufen 
 - **Bilder für jedes Spiel** auf dem oberen Bildschirm und in den Kacheln, automatisch geladen mit dem PC-Programm [DsRunner Art](#bilder-für-die-spiele)
 - **Andere Konsolen:** GBA, NES, Game Boy und SNES laufen sofort, die Emulatoren sind im Paket. Master System, Game Gear, Mega Drive und PC Engine mit einem zusätzlichen Download
 - **Favoriten** (Taste X), **zuletzt gespielt** als Sortierung und **Weiterspielen** mit START
+- **Suche** über alle Spiele mit Bildschirmtastatur (Kachel „Suche“ oder SELECT), Treffer nach Konsole geordnet und mit L / R filterbar
 - **Zurück zu DsRunner aus dem Spiel**, ohne den DS auszuschalten
 - Cheats über `usrcheat.dat`, Uhr und Akkuanzeige, Oberfläche auf Deutsch
 - **Experimentell:** Browser-Spiele über einen Raspberry Pi auf dem DS spielen ([DsRunner Stream](#dsrunner-stream-experimentell))
@@ -89,10 +90,11 @@ DS-Spiele startet DsRunner direkt. Für andere Konsolen braucht es einen Emulato
 | Steuerkreuz | Auswahl bewegen |
 | A | Konsole öffnen / Spiel starten |
 | B | zurück zu den Konsolen |
-| L / R | eine Seite weiterblättern |
+| L / R | eine Seite weiterblättern, in den Suchergebnissen: nur eine Konsole / alle zeigen |
 | X | Spiel zu den Favoriten hinzufügen / entfernen |
 | Y | Cheats für das ausgewählte Spiel |
 | START | auf der Konsolen-Ebene: das zuletzt gespielte Spiel weiterspielen |
+| SELECT | Suche öffnen (auch über die Kachel „Suche“). Auf der Tastatur: Steuerkreuz + A tippen, B löschen, X Leerzeichen, START suchen, SELECT zurück |
 | Zahnrad (oben rechts) | Ansicht, Sortierung und Uhr einstellen |
 
 Der Touchscreen funktioniert ebenfalls.

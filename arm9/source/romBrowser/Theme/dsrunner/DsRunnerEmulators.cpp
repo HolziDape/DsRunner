@@ -8,6 +8,9 @@ using namespace DsRunnerEmulators;
 
 static_assert(kSearchFolderCount <= 8, "the found folders are kept as bits of a u8");
 
+/// Smaller files with an emulator's name are not taken (empty copies, placeholders).
+static constexpr u32 kMinEmulatorSize = 16 * 1024;
+
 void DsRunnerEmulatorFinder::Scan()
 {
     // found[emulator][file name]: bit n set when the file is in kSearchFolders[n]
@@ -25,6 +28,17 @@ void DsRunnerEmulatorFinder::Scan()
         {
             if (fileInfo->fattrib & AM_DIR)
                 continue;
+            // empty or broken copies (Pico Loader stops with "Failed to load rom header"
+            // for files shorter than a rom header); a real emulator has hundreds of KB
+            if (fileInfo->fsize < kMinEmulatorSize)
+            {
+                for (u32 e = 0; e < kEmulatorCount; e++)
+                    for (u32 n = 0; n < 3 && kEmulators[e].fileNames[n]; n++)
+                        if (!strcasecmp(fileInfo->fname, kEmulators[e].fileNames[n]))
+                            LOG_WARNING("DsRunner: %s/%s ignored, only %u bytes\n",
+                                kSearchFolders[folder], fileInfo->fname, (unsigned)fileInfo->fsize);
+                continue;
+            }
             for (u32 e = 0; e < kEmulatorCount; e++)
             {
                 for (u32 n = 0; n < 3 && kEmulators[e].fileNames[n]; n++)
