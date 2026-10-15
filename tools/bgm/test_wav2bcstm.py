@@ -150,7 +150,7 @@ class StreamModel:
         return out
 
 
-def test_signal(count, rate=16000):
+def make_signal(count, rate=16000):
     t = np.arange(count) / rate
     signal = 9000 * np.sin(2 * np.pi * 220 * t) + 4000 * np.sin(2 * np.pi * 1330 * t + 1)
     return np.round(signal).astype(np.int32)[None, :]
@@ -158,7 +158,7 @@ def test_signal(count, rate=16000):
 
 class Wav2BcstmTest(unittest.TestCase):
     def test_roundtrip_quality(self):
-        samples = test_signal(20000)
+        samples = make_signal(20000)
         decoded, rate, loops = w.decode_bcstm(w.encode(samples, 16000))
         self.assertEqual((rate, loops), (16000, True))
         self.assertEqual(decoded.shape, samples.shape)
@@ -167,7 +167,7 @@ class Wav2BcstmTest(unittest.TestCase):
         self.assertGreater(snr, 30)
 
     def test_stereo_layout(self):
-        left = test_signal(30000)[0]
+        left = make_signal(30000)[0]
         right = -left // 2
         blob = w.encode(np.stack([left, right]), 16000)
         decoded, _, _ = w.decode_bcstm(blob)
@@ -176,7 +176,7 @@ class Wav2BcstmTest(unittest.TestCase):
         self.assertLess(np.abs(decoded[1] - right).mean(), 200)
 
     def check_playback(self, count, loop_start, channels=1):
-        signal = test_signal(count)
+        signal = make_signal(count)
         samples = np.concatenate([signal, signal // 3])[:channels]
         blob = w.encode(samples, 16000, loop_start)
         reference, _, _ = w.decode_bcstm(blob)
