@@ -30,7 +30,7 @@ jobs:
     name: Release notes from CHANGELOG.md
     # after the builds: their upload step writes the release description back as it was
     # when it started, so this job comes last (and also runs when a build failed)
-    needs: [version, pico_loader, pico_loader_platforms, pico_launcher, dsrunner_art]
+    needs: [version, pico_loader, pico_loader_platforms, dsrunner_stream, pico_launcher, stream_host, dsrunner_art]
     if: always() && needs.version.result == 'success'
     permissions:
       contents: write
@@ -56,10 +56,14 @@ jobs:
           esac
           # without leading blank lines
           existing="${existing#"${existing%%[![:space:]]*}"}"
+          # the notes are literal Markdown with backticks, not shell expansions
+          # shellcheck disable=SC2016
           {
             sh tools/version.sh notes "$VERSION" || true
             echo
             echo '**Installation:** Für die M3 DS Real `DsRunner_M3DSReal.zip` entpacken und den Inhalt ins Hauptverzeichnis der SD-Karte kopieren (Anleitung in `LIESMICH.txt`). Die Emulatoren für GBA, NES, Game Boy und SNES sind dabei (`_dsrunner/emulators`). **Update:** `_nds/TWiLightMenu/main.srldr` ersetzen; ändert sich Pico Loader (steht dann oben), auch die fünf `.bin`-Dateien in `_pico`. **Andere Flashkarten** (ungetestet): `DsRunner.zip` plus `PicoLoader-DsRunner_<Plattform>.zip` für deine Karte, siehe [Kompatible Flashkarten](https://github.com/HolziDape/DsRunner#kompatible-flashkarten). Mehr im [README](https://github.com/HolziDape/DsRunner#readme).'
+            echo
+            echo '**DsRunner Stream** (experimentell, Browser-Spiele vom Raspberry Pi 5 auf den DS): Die DS-App liegt in beiden Paketen unter `Games/Apps/DsRunnerStream.nds`. Für den Pi `DsRunnerStream-Host.zip` entpacken und `bash tools/install-pi.sh` ausführen, Schritte in `QUICKSTART.txt`, Anleitung im [Stream-README](https://github.com/HolziDape/DsRunner/blob/main/stream/README.md).'
             echo
             echo "$marker"
             if [ -n "$existing" ]; then
@@ -167,10 +171,65 @@ jobs:
         with:
           files: PicoLoader-DsRunner_${{ matrix.platform }}.zip
 
+  dsrunner_stream:
+    runs-on: ubuntu-latest
+    needs: version
+    # same toolchain as DsRunner, the image ships DSWiFi
+    container: skylyrac/blocksds:slim-v1.16.0
+    name: Build DsRunner Stream (stream/ds)
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Version from the tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: sh tools/version.sh release "$TAG" > /dev/null
+      - name: Build DsRunnerStream.nds
+        # inside the container (BLOCKSDS is set) build.sh runs make directly
+        run: sh stream/ds/build.sh
+      - name: Publish build to GH Actions
+        uses: actions/upload-artifact@v4
+        with:
+          path: stream/ds/DsRunnerStream.nds
+          name: DsRunnerStream
+
+  stream_host:
+    runs-on: ubuntu-latest
+    needs: version
+    name: DsRunner Stream host (tests + DsRunnerStream-Host.zip)
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Version from the tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: sh tools/version.sh release "$TAG" > /dev/null
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install -r stream/host/requirements.txt pytest
+      - name: Run tests
+        # without a browser; also builds the DS decoder for the PC (stream/ds/hosttest)
+        working-directory: stream/host
+        run: python -m pytest -q tests
+      - name: Pack DsRunnerStream-Host.zip
+        env:
+          DSRUNNER_RELEASE: "1"
+        run: sh stream/host/tools/make-host-bundle.sh DsRunnerStream-Host.zip
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DsRunnerStream-Host.zip
+
   pico_launcher:
     runs-on: ubuntu-latest
-    # the M3 DS Real package contains the Pico Loader built by the job pico_loader
-    needs: [version, pico_loader]
+    # the M3 DS Real package contains the Pico Loader built by the job pico_loader,
+    # both packages DsRunner Stream from the job dsrunner_stream (Games/Apps)
+    needs: [version, pico_loader, dsrunner_stream]
     # the job attaches the zips to the release, the default token can only read
     permissions:
       contents: write
@@ -199,6 +258,11 @@ jobs:
         with:
           name: PicoLoader_M3DS_DsRunner
           path: loader/out
+      - name: Get the DsRunner Stream build
+        uses: actions/download-artifact@v4
+        with:
+          name: DsRunnerStream
+          path: stream/ds
       - name: Publish build to GH Actions
         uses: actions/upload-artifact@v4
         with:
@@ -210,6 +274,9 @@ jobs:
         run: |
           mkdir DsRunner
           cp -r _pico/ DsRunner.nds DsRunner
+          # DsRunner Stream (experimental), like in DsRunner_M3DSReal.zip
+          mkdir -p DsRunner/Games/Apps
+          cp stream/ds/DsRunnerStream.nds DsRunner/Games/Apps/
           # same emulators and licenses as in DsRunner_M3DSReal.zip
           sh tools/fetch-emulators.sh DsRunner
           cd DsRunner && zip -r $PWD.zip *
@@ -219,6 +286,7 @@ jobs:
           DSRUNNER_LOADER: custom
         run: |
           sh tools/make-sd-package.sh DsRunner_M3DSReal
+          test -f DsRunner_M3DSReal/Games/Apps/DsRunnerStream.nds
           cd DsRunner_M3DSReal && zip -r $PWD.zip *
       - name: Release
         uses: softprops/action-gh-release@v2

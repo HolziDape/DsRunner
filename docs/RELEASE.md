@@ -4,8 +4,9 @@ Anleitung für den Maintainer. Ein Release besteht aus einem Git-Tag `vX.Y.Z` un
 
 | Datei | Inhalt |
 |---|---|
-| `DsRunner_M3DSReal.zip` | fertiges SD-Paket für die M3 DS Real: DsRunner als `_nds/TWiLightMenu/main.srldr` und `BOOT.NDS`, `_pico` mit dem DsRunner-Build von Pico Loader (M3DS, aus `loader/`), Autostart-Dateien aus TWiLight Menu++, `LIESMICH.txt` |
-| `DsRunner.zip` | `DsRunner.nds` und `_pico` für andere Flashkarten |
+| `DsRunner_M3DSReal.zip` | fertiges SD-Paket für die M3 DS Real: DsRunner als `_nds/TWiLightMenu/main.srldr` und `BOOT.NDS`, `_pico` mit dem DsRunner-Build von Pico Loader (M3DS, aus `loader/`), Autostart-Dateien aus TWiLight Menu++, Emulatoren, DsRunner Stream als `Games/Apps/DsRunnerStream.nds`, `LIESMICH.txt` |
+| `DsRunner.zip` | `DsRunner.nds` und `_pico` für andere Flashkarten, dazu Emulatoren und `Games/Apps/DsRunnerStream.nds` |
+| `DsRunnerStream-Host.zip` | Host von DsRunner Stream für den Raspberry Pi (`stream/host` ohne Tests und Caches, mit `tools/install-pi.sh`), dazu `README.md` (= `stream/README.md`), `PROTOCOL.md`, `QUICKSTART.txt`, `VERSION.txt`; gepackt von `stream/host/tools/make-host-bundle.sh` |
 | `PicoLoader-DsRunner_<PLATTFORM>.zip` | 17 Dateien, eine pro Pico-Loader-Plattform (die des Pico-Loader-Releases ohne `ISNITRO`/`MELONDS`): `_pico/` mit den fünf Loader-Dateien aus `loader/` und `picoLoader-DsRunner.txt`, für andere Flashkarten ([FLASHCARDS.md](FLASHCARDS.md)) |
 | `DsRunnerArt.exe` | PC-Programm DsRunner Art für Windows |
 
@@ -67,12 +68,15 @@ Die Datei **`VERSION`** im Hauptverzeichnis ist die einzige Quelle, Format `X.Y.
    | Check version | `tools/version.sh release <tag>`: Version aus dem Tag, Warnungen, wenn `VERSION` oder Changelog nicht passen; nur bei einem Tag ohne Version laufen die anderen nicht |
    | Build Pico Loader (loader/) | `loader/build.sh` im Container BlocksDS 1.20 mit .NET 9: klont pico-loader am festen Commit, wendet `loader/patches` an, baut M3DS; Artefakt `PicoLoader_M3DS_DsRunner` |
    | Build Pico Loader `<PLATTFORM>` | dasselbe für jede der 17 Plattformen (Matrix), packt `PicoLoader-DsRunner_<PLATTFORM>.zip` und hängt sie an. Schlägt eine Plattform fehl, laufen die anderen weiter |
-   | Build DsRunner | `make` im BlocksDS-Container mit `DSRUNNER_RELEASE=1`, packt `DsRunner.zip` und mit `tools/make-sd-package.sh` `DsRunner_M3DSReal.zip` (Pico Loader aus dem Artefakt, TWiLight Menu++ mit fester Version und SHA-256), in beide mit `tools/fetch-emulators.sh` die Emulatoren, und hängt beide an. Wartet auf den Loader-Job |
+   | Build DsRunner Stream (stream/ds) | `stream/ds/build.sh` im selben BlocksDS-Container wie DsRunner (bringt DSWiFi mit); Artefakt `DsRunnerStream` mit `DsRunnerStream.nds` |
+   | DsRunner Stream host | Tests des Hosts (`stream/host/tests`, ohne Browser, mit dem DS-Dekoder für den PC), packt `DsRunnerStream-Host.zip` mit `DSRUNNER_RELEASE=1` und hängt es an |
+   | Build DsRunner | `make` im BlocksDS-Container mit `DSRUNNER_RELEASE=1`, packt `DsRunner.zip` und mit `tools/make-sd-package.sh` `DsRunner_M3DSReal.zip` (Pico Loader aus dem Artefakt, TWiLight Menu++ mit fester Version und SHA-256), in beide mit `tools/fetch-emulators.sh` die Emulatoren und `DsRunnerStream.nds` aus dem Artefakt nach `Games/Apps`, und hängt beide an. Wartet auf den Loader- und den Stream-Job |
    | Build DsRunner Art (Windows) | Tests, `DsRunnerArt.exe` mit PyInstaller, hängt sie an |
    | Release notes from CHANGELOG.md | setzt den Changelog-Abschnitt an den Anfang der Release-Beschreibung (läuft zuletzt, auch wenn ein Build fehlschlägt) |
 
 8. **Ergebnis prüfen** auf der Release-Seite:
-   - `DsRunner.zip`, `DsRunner_M3DSReal.zip`, `DsRunnerArt.exe` und 17 Dateien `PicoLoader-DsRunner_<PLATTFORM>.zip`
+   - `DsRunner.zip`, `DsRunner_M3DSReal.zip`, `DsRunnerStream-Host.zip`, `DsRunnerArt.exe` und 17 Dateien `PicoLoader-DsRunner_<PLATTFORM>.zip`
+   - beide SD-Pakete enthalten `Games/Apps/DsRunnerStream.nds`; `DsRunnerStream-Host.zip` enthält den Ordner `DsRunnerStream-Host/`, `VERSION.txt` darin nennt die Version ohne „Entwicklungsstand“
    - die Beschreibung beginnt mit dem Changelog-Abschnitt
    - `DsRunner_M3DSReal.zip` herunterladen: `LIESMICH.txt` beginnt mit „DsRunner 0.2.0 fuer M3 DS Real“ (ohne „Entwicklungsstand“)
    - auf dem DS: `_nds/TWiLightMenu/main.srldr` auf die Karte kopieren, im Menü „Anzeige“ steht `v0.2.0`
