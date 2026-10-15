@@ -135,6 +135,7 @@ void AudioStreamPlayer::FillRingBlock(u32 block)
 
     _audioStream->ReadSamples(blockPtrL, blockPtrR, AUDIO_STREAM_PLAYER_BLOCK_SAMPLES);
 
-    DC_FlushRange(&blockPtrL, AUDIO_STREAM_PLAYER_BLOCK_SAMPLES * sizeof(s16));
-    DC_FlushRange(&blockPtrR, AUDIO_STREAM_PLAYER_BLOCK_SAMPLES * sizeof(s16));
+    // DsRunner: flush the samples themselves (Pico flushed the pointer variables), the arm7 reads them
+    DC_FlushRange(blockPtrL, AUDIO_STREAM_PLAYER_BLOCK_SAMPLES * sizeof(s16));
+    DC_FlushRange(blockPtrR, AUDIO_STREAM_PLAYER_BLOCK_SAMPLES * sizeof(s16));
 }

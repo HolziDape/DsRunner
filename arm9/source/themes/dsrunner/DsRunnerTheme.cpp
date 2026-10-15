@@ -9,9 +9,9 @@ DsRunnerTheme::DsRunnerTheme(const TCHAR* folderName, const Rgb<8, 8, 8>& primar
     , _themeFileIconFactory(&_materialColorScheme, &_fontRepository)
     , _romBrowserViewFactory(&_materialColorScheme, &_fontRepository, &_heroState)
 {
-    // Apply DsRunner dark colors to the color scheme
-    DsRunnerColors::ApplyDarkScheme(_materialColorScheme);
-    // the io thread doesn't run yet: the console images can be looked up on the sd card here
+    // the io thread doesn't run yet: theme.json and the console images can be read from the sd card here
+    DsRunnerColors::LoadFromThemeFolder(folderName);
+    DsRunnerColors::ApplyToMaterialScheme(_materialColorScheme);
     gDsRunnerConsoleArt.Initialize(folderName, &_fontRepository);
 }
 

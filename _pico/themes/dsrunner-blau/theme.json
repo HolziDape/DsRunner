@@ -1,0 +1,21 @@
+{
+    "type": "DsRunner",
+    "name": "DsRunner Blau",
+    "description": "Tiefblau mit Hellblau",
+    "author": "HolziDape",
+    "primaryColor": {
+        "r": 142,
+        "g": 211,
+        "b": 255
+    },
+    "darkTheme": true,
+    "colors": {
+        "background": "#0A1F44",
+        "backgroundBottom": "#112C5A",
+        "tile": "#1B3B6E",
+        "pill": "#244985",
+        "accent": "#8ED3FF",
+        "text": "#EFF5FF",
+        "textDim": "#9EB4D6"
+    }
+}

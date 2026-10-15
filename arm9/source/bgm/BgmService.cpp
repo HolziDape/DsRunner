@@ -5,7 +5,16 @@
 #include "romBrowser/SdFolder.h"
 #include "romBrowser/SdFolderFactory.h"
 #include "romBrowser/FileType/NullFileTypeProvider.h"
+#include "themes/ThemeInfoFactory.h"
 #include "BgmService.h"
+
+// DsRunner: color variants of the DsRunner theme (type DsRunner) without their own bgm folder
+// play the music of the dsrunner theme, like they share its console images
+static bool isDsRunnerTheme(const char* themeFolderName)
+{
+    auto themeInfo = ThemeInfoFactory().CreateFromThemeFolder(themeFolderName);
+    return themeInfo && themeInfo->GetType() == ThemeType::DsRunner;
+}
 
 bool BgmService::StartBgm(const TCHAR* filePath)
 {
@@ -18,10 +27,21 @@ bool BgmService::StartBgm(const TCHAR* filePath)
 
 void BgmService::StartBgmFromConfig()
 {
+    // DsRunner: "music": false in settings.json switches the music off, "musicVolume" is 0 to 100
+    const auto& appSettings = _appSettingsService.GetAppSettings();
+    if (!appSettings.music || appSettings.musicVolume == 0)
+    {
+        StopBgm();
+        return;
+    }
+    _audioStreamPlayer->SetVolume((appSettings.musicVolume * 127 + 50) / 100);
+
     TCHAR pathBuffer[128];
-    mini_snprintf(pathBuffer, sizeof(pathBuffer), "/_pico/themes/%s/bgm", _appSettingsService.GetAppSettings().theme.GetString());
+    mini_snprintf(pathBuffer, sizeof(pathBuffer), "/_pico/themes/%s/bgm", appSettings.theme.GetString());
     NullFileTypeProvider fileTypeProvider;
     auto bgmFolder = SdFolderFactory(&fileTypeProvider).CreateFromPath(pathBuffer);
+    if ((!bgmFolder || bgmFolder->GetFileCount() == 0) && isDsRunnerTheme(appSettings.theme.GetString()))
+        bgmFolder = SdFolderFactory(&fileTypeProvider).CreateFromPath("/_pico/themes/dsrunner/bgm");
     if (!bgmFolder || bgmFolder->GetFileCount() == 0)
     {
         StopBgm();

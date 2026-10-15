@@ -1,0 +1,21 @@
+{
+    "type": "DsRunner",
+    "name": "DsRunner OLED",
+    "description": "Reines Schwarz",
+    "author": "HolziDape",
+    "primaryColor": {
+        "r": 76,
+        "g": 194,
+        "b": 255
+    },
+    "darkTheme": true,
+    "colors": {
+        "background": "#000000",
+        "backgroundBottom": "#000000",
+        "tile": "#16181D",
+        "pill": "#1F2229",
+        "accent": "#4CC2FF",
+        "text": "#F2F4F8",
+        "textDim": "#8D94A4"
+    }
+}

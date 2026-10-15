@@ -4,7 +4,7 @@ Using themes, the look and feel of Pico Launcher can be customized. Themes are p
 ## JSON file
 Each theme has a `theme.json` file with information about the theme.
 
-- **type** - Type of theme. Currently `material` and `custom` are supported. See below for information about each type.
+- **type** - Type of theme. Currently `material`, `custom` and `DsRunner` are supported. See below for information about each type.
 - **name** - The name of the theme.
 - **description** - Description of the theme.
 - **author** - Author of the theme.
@@ -127,11 +127,67 @@ Blend colors are used to fake translucency. They should be set to an approximati
 }
 ```
 
+## DsRunner type
+The `DsRunner` type is the look of DsRunner: big console tiles, the built-in console images and the gradient on the top screen. It needs no image files: the console images come from the theme's own `consoles` folder or, when it has none, from `/_pico/themes/dsrunner/consoles`. The colors are set in `theme.json` under `"colors"`; without `"colors"` the theme looks exactly like DsRunner Dark. DsRunner ships `dsrunner` (Dark), `dsrunner-hell` (light), `dsrunner-oled`, `dsrunner-retro` and `dsrunner-blau` as examples.
+
+`primaryColor` and `darkTheme` still color Pico's own parts (display settings sheet, cheats, theme list): use the accent color as `primaryColor` and `"darkTheme": false` for light themes.
+
+Colors are `"#RRGGBB"`, `[r, g, b]` or `{ "r": .., "g": .., "b": .. }`. All keys are optional. When a theme has `"colors"`, missing keys are mixed from the others (column "Default with colors").
+
+| Key | Used for | DsRunner Dark | Default with colors |
+|---|---|---|---|
+| `background` | Info band of the top screen, top of the bottom screen gradient, app bar | `#0F1117` | `#0F1117` |
+| `backgroundBottom` | Bottom of the bottom screen gradient | `#181C26` | halfway `background` → `tile` |
+| `tile` | Game tiles, search keys | `#232838` | `#232838` |
+| `tileDim` | Bottom of unselected game tiles | `#1C202D` | `tile` 3/8 towards `background` |
+| `tileTop` | Top of unselected game tiles | `#212635` | `tile` 1/8 towards `background` |
+| `tileSelected` / `tileSelectedBottom` | Selected game tile (top / bottom) | `#3A425A` / `#282E40` | `tile` 1/8 resp. 1/32 towards `text` |
+| `tileShade` | Unselected console tiles fade into it; gray level 0 of the tile and icon images | `background` | `background` |
+| `artShade` | Gray level 0 of the top screen and cover console images | `background` | `background` |
+| `accent` | Selection ring and glow, search key, cursor | `#4CC2FF` | `#4CC2FF` |
+| `accentDim` | Bottom of the search key | `#3096D6` | `accent` 1/5 towards `background` |
+| `onAccent` | Text on the search key, Pico's `onPrimary` | `background` | `background` |
+| `text` | Titles, labels | `#EBEEF5` | `#EBEEF5` |
+| `textDim` | Subtitles, hints | `#969EB2` | `text` 3/8 towards `background` |
+| `textStrong` | Search text, selected key | `#FFFFFF` | `text` |
+| `pill` | Status bar, buttons, special keys | `#2C3244` | `tile` 1/20 towards `text` |
+| `favorite` | Star of favorites | `#FFC440` | `#FFC440` |
+| `batteryGood` / `batteryLow` | Battery symbol | `#78E68C` / `#FF5050` | same |
+
+Tips:
+- Labels on console tiles are always white, the tiles keep the console colors. For a **light theme** set `tileShade` to a dark color (`dsrunner-hell` uses `#2B3140`), so unselected console tiles stay dark enough for the white labels and the screens in the console drawings stay dark. Keep `artShade` at the light background, the top screen images fade into it.
+- The DS Lite screen loses contrast at the dark end: keep `textDim` clearly brighter than `background` in dark themes.
+- Change `batteryGood` for light themes, the default green is meant for a dark status bar.
+
+```json
+{
+    "type": "DsRunner",
+    "name": "DsRunner Blau",
+    "description": "Tiefblau mit Hellblau",
+    "author": "HolziDape",
+    "primaryColor": { "r": 142, "g": 211, "b": 255 },
+    "darkTheme": true,
+    "colors": {
+        "background": "#0A1F44",
+        "backgroundBottom": "#112C5A",
+        "tile": "#1B3B6E",
+        "pill": "#244985",
+        "accent": "#8ED3FF",
+        "text": "#EFF5FF",
+        "textDim": "#9EB4D6"
+    }
+}
+```
+
 ## Background music
 All themes support background music by placing DSP-ADPCM encoded `.bcstm` files in a `bgm` folder inside the theme folder. Looping is supported. When multiple `.bcstm` files are provided, the background music will be selected at random each time Pico Launcher is started.
+
+DsRunner additions: themes of type `DsRunner` without a `bgm` folder play the music of `/_pico/themes/dsrunner/bgm`; `"music": false` and `"musicVolume"` (0-100) in `settings.json` switch it off or make it quieter. `tools/bgm/wav2bcstm.py` converts WAV (or MP3 etc. with ffmpeg) to a looping DSP-ADPCM `.bcstm`, see [CONFIG.md](CONFIG.md#hintergrundmusik).
 
 ## Theme selector icon
 A theme can have an `icon.bmp` file that is shown in the theme list when selecting a theme. It must be **32×32 pixels, 4 bpp (16 colors), uncompressed `.bmp`** file, with the first palette color treated as transparent.
 
 ## Theme selector preview image
 A theme can have a `preview.bin` file that is shown on the top screen in the theme selection screen. It must be a 256x192 pixels 15 bpp bitmap (same format as `topbg.bin` and `bottombg.bin`). When it is not provided, `topbg.bin` is displayed instead. If that does not exist either, nothing is shown on the top screen.
+
+For DsRunner themes, `tools/themes/make_theme_assets.py <theme folder> --screenshot shot.png` writes `icon.bmp` (drawn from the theme colors) and `preview.bin` (both screens of the screenshot, scaled down; the screenshot shows both screens stacked, 256x384 or a multiple of it, e.g. from `tools/desmume/screenshot.sh`).

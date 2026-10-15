@@ -102,7 +102,7 @@ bool DsRunnerFolderIcon::UploadConsoleIcon()
     alignas(4) u8 pixels[32 * 32 / 2];
     if (dataOffset < sizeof(header) || file->Seek(dataOffset) != FR_OK || !file->ReadExact(pixels, sizeof(pixels)))
         return false;
-    DsRunnerConsoleArt::ConvertPalette(&header[0x36], 16, &_badgeColor, _iconPalette);
+    DsRunnerConsoleArt::ConvertPalette(&header[0x36], 16, &_badgeColor, _iconPalette, DsRunnerColors::TileShade);
 
     // BMP rows (high nibble first) -> 8x8 tiles (low nibble first), written to vram 32 bits at a time
     bool topDown = BmpHeader::IsTopDown(header);
