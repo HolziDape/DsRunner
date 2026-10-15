@@ -7,6 +7,8 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 ## Unveröffentlicht
 
 ### Hinzugefügt
+- **Spielstatistik:** Oben unter dem Spielnamen steht jetzt, wie oft ein Spiel gestartet wurde und wann zuletzt, z. B. „12× gespielt · zuletzt gestern“, „zuletzt am 03.10.“ oder „Noch nie gespielt“. DsRunner zählt die Starts in der neuen Datei `/_dsrunner/stats.txt` (höchstens 500 Spiele, Datum von der Uhr des DS); die Zählung beginnt mit diesem Update. Details: [docs/CONFIG.md](docs/CONFIG.md#spielstatistik).
+- Einstellung `cleanNames` in `/_pico/settings.json` (Standard `true`): Spielnamen ohne Region, Sprachen und Dump-Zusätze von No-Intro und GoodTools, z. B. „Golden Sun“ statt „Golden Sun (Europe) (En,Fr,De)“. `(Rev 1)`, `(Beta)` und ähnliche bleiben. Details: [docs/CONFIG.md](docs/CONFIG.md#spielnamen).
 - **Suche über alle Spiele:** Die neue Kachel „Suche“ auf der Konsolen-Ebene (mit Lupe) oder SELECT in jedem Ordner öffnet eine Bildschirmtastatur (Touchscreen oder Steuerkreuz + A; B löscht, X Leerzeichen, START sucht, SELECT zurück). Schon beim Tippen steht da, wie viele Spiele pro Konsole passen. Die Treffer erscheinen wie ein Ordner, nach Konsole geordnet und in der Farbe der Konsole; L / R zeigen nur eine Konsole oder alle. Gesucht wird im Dateinamen, ohne Groß-/Kleinschreibung, Akzente und Satzzeichen. Höchstens 200 Treffer werden gezeigt. Details: [docs/CONFIG.md](docs/CONFIG.md#suche).
 - **DsRunner Stream im Release:** Die DS-App liegt jetzt in beiden SD-Paketen (`DsRunner_M3DSReal.zip`, `DsRunner.zip`) unter `Games/Apps/DsRunnerStream.nds`. Für den Raspberry Pi gibt es `DsRunnerStream-Host.zip` (ohne git herunterladen) mit `QUICKSTART.txt` und dem Installer `tools/install-pi.sh`: ein Befehl installiert Chromium und die Python-Pakete, setzt bei Bedarf das WLAN-Land, legt den Hotspot für den DS an, schreibt `~/.config/dsstream.env` (Adresse des Spiels) und das Start-Skript `~/dsstream.sh`, auf Wunsch auch den Autostart. Er fragt vor jeder Änderung und darf mehrmals laufen. Anleitung: [stream/README.md](stream/README.md#schnellstart).
 - DsRunner Stream: Option `--jpeg` (Chromium liefert JPEG statt PNG; optional, auf dem Raspberry Pi 5 brachte es im Test keine zusätzlichen Bilder pro Sekunde). Das leichte JPEG-Rauschen wird beim Vergleich der Bildkacheln ignoriert, damit nicht jedes Bild neu übertragen wird.
@@ -17,6 +19,7 @@ Downloads: [Releases](https://github.com/HolziDape/DsRunner/releases). Wie ein R
 
 ### Geändert
 - DsRunner Stream: Der Host schickt jetzt höchstens 30 statt 20 Bilder pro Sekunde (`--fps`). Der DS Lite zeigt 25-30 problemlos an, der Browser auf dem Pi 5 liefert etwa 25.
+- Spiele anderer Konsolen (und DS-Spiele ohne Banner) heißen oben jetzt ohne Dateiendung, also „Zelda“ statt „Zelda.nes“, auch bei „START: Weiterspielen“ und in den Suchergebnissen. Die unterste Zeile zeigt weiter den vollständigen Dateinamen.
 - Die Liste ★ Favoriten folgt jetzt auch der Sortierung „zuletzt gespielt“: die zuletzt gespielten Favoriten zuerst, die übrigen danach von A bis Z. Bisher war sie dann nach Namen sortiert.
 - „Zurück zu DsRunner“ (L + R + Unten + B) ist jetzt auf DS Lite + M3 DS Real getestet und funktioniert.
 - Fehlt beim Start der eigene Pfad, merkt sich DsRunner als Rückkehrziel jetzt auch `/_picoboot.nds` (so startet die DSpico DsRunner).

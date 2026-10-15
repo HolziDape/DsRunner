@@ -437,8 +437,9 @@ void RomBrowserController::HandleNavigateTrigger()
         }
         // DsRunner: consoles of /_dsrunner/systems.json and emulators on the sd card, once (before file types are needed)
         gDsRunnerSystems.Load(_appSettingsService->GetAppSettings());
-        // DsRunner: the play history is needed for sorting by last played
+        // DsRunner: the play history is needed for sorting by last played, the statistics for the info card
         gDsRunnerLibrary.playHistory.Load();
+        gDsRunnerLibrary.playStats.Load();
         gDsRunnerLibrary.favorites.Load();
         _newContinuePath[0] = 0;
 
@@ -659,6 +660,8 @@ void RomBrowserController::UpdateLastUsedFilepath()
     _appSettingsService->GetAppSettings().lastUsedFilePath = _navigatePath;
     _appSettingsService->Save();
     gDsRunnerLibrary.playHistory.Add(_navigatePath);
+    // DsRunner: count the start (/_dsrunner/stats.txt)
+    gDsRunnerLibrary.playStats.Add(_navigatePath);
 }
 
 void RomBrowserController::SetPicoLoaderParams() const
