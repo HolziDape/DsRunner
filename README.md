@@ -60,20 +60,20 @@
 
 | | |
 |---|---|
-| 🚀 **Startet automatisch** | beim Einschalten, ohne Umweg über ein anderes Menü (fertig für die M3 DS Real, für viele andere Karten [von Hand](docs/FLASHCARDS.md#autostart)) |
-| 🎮 **Konsolen und Spiele** | erst NDS, GBA, NES & Co. als Kacheln mit gezeichneter Konsole, dann die Spiele der Konsole |
-| 🖼️ **Drei Ansichten** | große Kacheln (3×2), kleine Kacheln (4×3) und Coverflow |
-| 🕹️ **Andere Konsolen** | GBA, NES, Game Boy / Color und SNES laufen sofort, die Emulatoren sind im Paket. Master System, Game Gear, Mega Drive und PC Engine mit einem zusätzlichen Download |
-| 🔍 **Suche** | über alle Spiele mit Bildschirmtastatur, Treffer nach Konsole geordnet |
-| ⭐ **Favoriten und Verlauf** | Favoriten mit X, Sortierung „zuletzt gespielt“, **Weiterspielen** mit START |
-| 📊 **Spielstatistik** | wie oft und wann zuletzt gespielt, z. B. „12× gespielt · zuletzt gestern“ |
-| 🏷️ **Saubere Namen** | „Golden Sun“ statt „Golden Sun (Europe) (En,Fr,De).gba“ |
-| ↩️ **Zurück aus dem Spiel** | Tastenkombination im Spiel startet DsRunner neu, ohne den DS auszuschalten |
-| 🎨 **Fünf Farb-Themes** | Dark, Hell, OLED, Retro und Blau, dazu eigene Farben per `theme.json` |
-| 🎵 **Hintergrundmusik** | optional, eigene Lieder per Konverter-Skript |
-| 🌍 **Deutsch und Englisch** | im Menü umschaltbar, wirkt sofort |
-| 🖥️ **DsRunner Art** | PC-Programm, lädt Bilder und Cover für alle Spiele automatisch |
-| 📡 **DsRunner Stream** | Browser-Spiele vom Raspberry Pi per WLAN auf dem DS spielen (experimentell) |
+|  **Startet automatisch** | beim Einschalten, ohne Umweg über ein anderes Menü (fertig für die M3 DS Real, für viele andere Karten [von Hand](docs/FLASHCARDS.md#autostart)) |
+|  **Konsolen und Spiele** | erst NDS, GBA, NES & Co. als Kacheln mit gezeichneter Konsole, dann die Spiele der Konsole |
+|  **Drei Ansichten** | große Kacheln (3×2), kleine Kacheln (4×3) und Coverflow |
+|  **Andere Konsolen** | GBA, NES, Game Boy / Color und SNES laufen sofort, die Emulatoren sind im Paket. Master System, Game Gear, Mega Drive und PC Engine mit einem zusätzlichen Download |
+|  **Suche** | über alle Spiele mit Bildschirmtastatur, Treffer nach Konsole geordnet |
+|  **Favoriten und Verlauf** | Favoriten mit X, Sortierung „zuletzt gespielt“, **Weiterspielen** mit START |
+|  **Spielstatistik** | wie oft und wann zuletzt gespielt, z. B. „12× gespielt · zuletzt gestern“ |
+|  **Saubere Namen** | „Golden Sun“ statt „Golden Sun (Europe) (En,Fr,De).gba“ |
+|  **Zurück aus dem Spiel** | Tastenkombination im Spiel startet DsRunner neu, ohne den DS auszuschalten |
+|  **Fünf Farb-Themes** | Dark, Hell, OLED, Retro und Blau, dazu eigene Farben per `theme.json` |
+|  **Hintergrundmusik** | optional, eigene Lieder per Konverter-Skript |
+|  **Deutsch und Englisch** | im Menü umschaltbar, wirkt sofort |
+|  **DsRunner Art** | PC-Programm, lädt Bilder und Cover für alle Spiele automatisch |
+|  **DsRunner Stream** | Browser-Spiele vom Raspberry Pi per WLAN auf dem DS spielen (experimentell) |
 
 Dazu Cheats über `usrcheat.dat`, Uhr, Akkuanzeige und Touchscreen-Bedienung.
 
