@@ -19,6 +19,9 @@ public:
     bool inGameReset = true;
     /// DsRunner: keys of the in-game reset, e.g. "SELECT+START+DOWN" (DsRunnerInGameResetKeys).
     String<char, 48> inGameResetKeys = "L+R+DOWN+B";
+    /// DsRunner: language of the DsRunner UI, "de" or "en" (DsRunnerText). Separate from Pico's
+    /// "language", which defaults to "english" and was never used by DsRunner.
+    String<char, 8> uiLanguage = "de";
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;

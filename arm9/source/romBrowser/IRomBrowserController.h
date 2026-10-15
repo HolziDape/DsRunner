@@ -73,6 +73,17 @@ public:
     virtual void SetShowClock(bool showClock) = 0;
     virtual bool GetShowClock() const = 0;
 
+    /// @brief DsRunner: the settings of settings.json, for the options of the display settings.
+    ///        Call SaveSettingsLater() after a change.
+    virtual AppSettings& GetAppSettings() = 0;
+
+    /// @brief DsRunner: saves the settings when the display settings close.
+    virtual void SaveSettingsLater() = 0;
+
+    /// @brief DsRunner: builds the views of the browser again, with the same item selected
+    ///        (after the language changed).
+    virtual void RefreshViews() = 0;
+
     /// @brief DsRunner: opens the search keyboard (DsRunnerSearchKeyboardView).
     /// @return True when it opens.
     virtual bool OpenSearch() = 0;

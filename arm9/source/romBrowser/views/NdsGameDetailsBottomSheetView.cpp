@@ -7,6 +7,8 @@
 #include "smallHeartIcon.h"
 #include "smallHeartIconFilled.h"
 #include "../IRomBrowserController.h"
+#include "core/StringUtil.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "NdsGameDetailsBottomSheetView.h"
 
 NdsGameDetailsBottomSheetView::NdsGameDetailsBottomSheetView(
@@ -19,7 +21,10 @@ NdsGameDetailsBottomSheetView::NdsGameDetailsBottomSheetView(
     _cheatsChip->SetText(u"Cheats");
     _cheatsChip->SetSelected(false);
     AddChildTail(_cheatsChip.GetPointer());
-    _favoriteChip->SetText(u"Favorit"); // DsRunner: German text
+    // DsRunner: text of DsRunnerText (German or English)
+    char16_t favoriteText[16];
+    StringUtil::Copy(favoriteText, DsRunnerText::Get(DsRunnerText::Id::FavoriteChip), sizeof(favoriteText) / sizeof(favoriteText[0]));
+    _favoriteChip->SetText(favoriteText);
     _favoriteChip->SetSelected(true);
     AddChildTail(_favoriteChip.GetPointer());
 }

@@ -12,6 +12,7 @@
 #include "themes/dsrunner/DsRunnerConsoles.h"
 #include "themes/dsrunner/DsRunnerConsoleArt.h"
 #include "themes/dsrunner/DsRunnerHeroState.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "DsRunnerLibrary.h"
 #include "DsRunnerSearch.h"
 #include "DsRunnerFileInfoCardView.h"
@@ -64,7 +65,7 @@ void DsRunnerFileInfoCardView::SetFileNameAsync(TaskQueueBase* taskQueue, const 
     {
         // a console folder: use its full name instead of the folder name as title
         _lines = 1;
-        SetFirstLineAsync(taskQueue, console->fullName, true);
+        SetFirstLineAsync(taskQueue, DsRunnerText::Localize(console->fullName), true);
         SetSecondLineAsync(taskQueue, u"", 0);
         SetThirdLineAsync(taskQueue, u"", 0);
     }
@@ -76,7 +77,9 @@ void DsRunnerFileInfoCardView::SetFileNameAsync(TaskQueueBase* taskQueue, const 
     if (console && DsRunnerSearch::IsEntry(fileName))
     {
         // the search tile: how to get there from anywhere
-        SetThirdLineAsync(taskQueue, u"Auch mit SELECT, aus jedem Ordner");
+        char16_t hint[48];
+        StringUtil::Copy(hint, DsRunnerText::Get(DsRunnerText::Id::SearchTileHint), sizeof(hint) / sizeof(hint[0]));
+        SetThirdLineAsync(taskQueue, hint);
     }
 
     if (_isFolder && useAsTitle && !ShowGameCount(taskQueue, fileName) &&
@@ -108,11 +111,12 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
         name = name ? name + 1 : continuePath;
         const char* extension = strrchr(name, '.');
         u32 nameLength = extension && extension != name ? extension - name : strlen(name);
-        static constexpr char sPrefix[] = "START: Weiterspielen (";
-        nameLength = std::min<u32>(nameLength, sizeof(text) - sizeof(sPrefix) - 1);
-        memcpy(text, sPrefix, sizeof(sPrefix) - 1);
-        memcpy(&text[sizeof(sPrefix) - 1], name, nameLength);
-        strcpy(&text[sizeof(sPrefix) - 1 + nameLength], ")");
+        const char* prefix = DsRunnerText::Get(DsRunnerText::Id::ContinuePrefix);
+        u32 prefixLength = strlen(prefix);
+        nameLength = std::min<u32>(nameLength, sizeof(text) - prefixLength - 2);
+        memcpy(text, prefix, prefixLength);
+        memcpy(&text[prefixLength], name, nameLength);
+        strcpy(&text[prefixLength + nameLength], ")");
     }
     else
     {
@@ -126,10 +130,12 @@ void DsRunnerFileInfoCardView::UpdateFileNameLine()
         {
             // the search results come from all consoles: say which one
             const auto* console = DsRunnerConsoles::FindByFolderName(consoleFolder);
-            strlcat(text, console ? console->fullName : consoleFolder, sizeof(text));
+            strlcat(text, console ? DsRunnerText::Localize(console->fullName) : consoleFolder, sizeof(text));
             strlcat(text, " \xC2\xB7 ", sizeof(text));
         }
-        strlcat(text, _fileName, sizeof(text));
+        // the favorites and search entries have German internal names
+        bool isEntry = DsRunnerFavoritesFolder::IsEntry(_fileName) || DsRunnerSearch::IsEntry(_fileName);
+        strlcat(text, isEntry ? DsRunnerText::Localize(_fileName) : _fileName, sizeof(text));
     }
 
     if (_fileNameTaskQueue)
@@ -160,7 +166,8 @@ bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCH
             return false;
         char16_t text16[32];
         char text[32];
-        mini_snprintf(text, sizeof(text), total == 1 ? "1 Spiel durchsuchen" : "%d Spiele durchsuchen", total);
+        DsRunnerText::FormatCount(text, sizeof(text), DsRunnerText::Id::SearchGamesOne,
+            DsRunnerText::Id::SearchGamesMany, total);
         StringUtil::Copy(text16, text, sizeof(text16) / sizeof(text16[0]));
         SetSecondLineAsync(taskQueue, text16);
         return true;
@@ -175,19 +182,9 @@ bool DsRunnerFileInfoCardView::ShowGameCount(TaskQueueBase* taskQueue, const TCH
 
     char text[24];
     if (count == 0)
-        strcpy(text, "Keine Spiele");
-    else if (count == 1)
-        strcpy(text, "1 Spiel");
+        strcpy(text, DsRunnerText::Get(DsRunnerText::Id::NoGames));
     else
-    {
-        // digits backwards, then reversed
-        int length = 0;
-        for (int value = count; value > 0; value /= 10)
-            text[length++] = '0' + value % 10;
-        for (int i = 0; i < length / 2; i++)
-            std::swap(text[i], text[length - 1 - i]);
-        strcpy(&text[length], " Spiele");
-    }
+        DsRunnerText::FormatCount(text, sizeof(text), DsRunnerText::Id::GamesOne, DsRunnerText::Id::GamesMany, count);
     char16_t text16[24];
     int i = 0;
     for (; text[i] != 0; i++)

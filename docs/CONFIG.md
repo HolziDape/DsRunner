@@ -13,6 +13,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
   "showClock": true,
   "inGameReset": true,
   "inGameResetKeys": "L+R+DOWN+B",
+  "uiLanguage": "de",
   "fileAssociations": {
     "gba": { "appPath": "/GBARunner2_arm7dldi_ds.nds" }
   }
@@ -27,9 +28,10 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | `romBrowserSortMode` | `NameAscending` (A–Z), `NameDescending` (Z–A), `LastPlayed` (zuletzt gespielt zuerst, siehe [Spielverlauf](#spielverlauf)). Ordner stehen immer vorne und sind nach Namen sortiert. `LastModified` von Pico ist nicht umgesetzt und sortiert wie A–Z. |
 | `lastUsedFilePath` | Zuletzt gestartetes Spiel, wird automatisch gesetzt. |
 | `showClock` | `true` (Standard): Uhrzeit oben rechts in der Statusleiste. `false`: nur die Akkuanzeige. Umschalten im Menü (Zahnrad → Uhr). Gilt nur im DsRunner-Theme. |
-| `inGameReset` | `true` (Standard): im Spiel L+R+Unten+B 2 s halten führt zurück zu DsRunner (nur mit dem Pico Loader aus dem M3-Paket, siehe [LOADER.md](LOADER.md)). `false`: DsRunner legt vor jedem Spielstart `/_pico/igr.off` an, Pico Loader baut den Hotkey dann nicht ein. |
-| `inGameResetKeys` | Tasten für „zurück zu DsRunner“, Standard `"L+R+DOWN+B"`. Mit `+`, Komma oder Leerzeichen getrennt, Groß-/Kleinschreibung egal: `A`, `B`, `SELECT`, `START`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `L`, `R` (auch `OBEN`, `UNTEN`, `LINKS`, `RECHTS`). Mindestens 3 Tasten, **X und Y gehen nicht**. Ungültig → Standard (steht im Log von DsRunner). Gut ohne L/R, z. B. bei ausgeleierten Schultertasten: `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`. Nicht `L+R+START+SELECT`, das ist in vielen Spielen der eigene Soft-Reset. Weicht die Angabe vom Standard ab, schreibt DsRunner vor jedem Spielstart `/_pico/igr.keys` (sonst wird die Datei gelöscht); welche Tasten Pico Loader benutzt hat, steht in `/_pico/igr-log.txt`. |
-| `language` | Stammt von Pico Launcher und wird nicht ausgewertet. Die Oberfläche von DsRunner ist immer deutsch (siehe [Sprache](#sprache)). |
+| `inGameReset` | `true` (Standard): im Spiel L+R+Unten+B 2 s halten führt zurück zu DsRunner (nur mit dem Pico Loader aus dem M3-Paket, siehe [LOADER.md](LOADER.md)). `false`: DsRunner legt vor jedem Spielstart `/_pico/igr.off` an, Pico Loader baut den Hotkey dann nicht ein. Umschalten im Menü (Zahnrad → R oder `›` → „Zurück aus dem Spiel“), gilt ab dem nächsten Spielstart. |
+| `inGameResetKeys` | Tasten für „zurück zu DsRunner“, Standard `"L+R+DOWN+B"`. Mit `+`, Komma oder Leerzeichen getrennt, Groß-/Kleinschreibung egal: `A`, `B`, `SELECT`, `START`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `L`, `R` (auch `OBEN`, `UNTEN`, `LINKS`, `RECHTS`). Mindestens 3 Tasten, **X und Y gehen nicht**. Ungültig → Standard (steht im Log von DsRunner). Gut ohne L/R, z. B. bei ausgeleierten Schultertasten: `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`. Nicht `L+R+START+SELECT`, das ist in vielen Spielen der eigene Soft-Reset. Weicht die Angabe vom Standard ab, schreibt DsRunner vor jedem Spielstart `/_pico/igr.keys` (sonst wird die Datei gelöscht); welche Tasten Pico Loader benutzt hat, steht in `/_pico/igr-log.txt`. Im Menü (zweite Seite) lassen sich `L+R+DOWN+B`, `SELECT+START+DOWN` und `SELECT+DOWN+B` wählen; andere gültige Tasten aus der Datei erscheinen dort als „Eigene“ (bis zum nächsten Neustart von DsRunner auch nach dem Umschalten noch wählbar). |
+| `uiLanguage` | Sprache der Oberfläche: `"de"` (Standard, Deutsch) oder `"en"` (English, auch `"english"`). Umschalten im Menü (zweite Seite → Deutsch / English), wirkt sofort. Siehe [Sprache](#sprache). |
+| `language` | Stammt von Pico Launcher und wird nicht ausgewertet (Standard dort `"english"`, deshalb hat DsRunner mit `uiLanguage` einen eigenen Schlüssel). |
 | `fileAssociations` | Programm, das Dateien mit einer Endung öffnet (z.B. `gba`, `nes`). Der Dateipfad wird per argv übergeben. Hat Vorrang vor `systems.json` und den Emulatoren, die DsRunner selbst findet (siehe [Emulatoren](#emulatoren)). |
 
 ## Tasten
@@ -44,7 +46,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | Y | Cheats für das ausgewählte NDS-Spiel |
 | START | auf der Konsolen-Ebene: [Weiterspielen](#weiterspielen) |
 | SELECT | [Suche](#suche) öffnen (überall) |
-| Zahnrad (oben rechts) | Menü „Anzeige“: Ansicht, Sortierung, Uhr ein/aus, Theme |
+| Zahnrad (oben rechts) | [Menü](#menü): Ansicht, Sortierung, Uhr ein/aus, Theme; zweite Seite: zurück aus dem Spiel, Tasten dafür, Sprache |
 
 ## Ordnerstruktur der Bibliothek
 
@@ -157,6 +159,19 @@ Regeln:
 - DsRunner liest die Datei einmal beim Start. Nach Änderungen DsRunner neu starten.
 - Texte (`name`, `label`) ohne `–` (Gedankenstrich) schreiben, die Schrift kennt ihn nicht.
 
+## Menü
+
+Das Zahnrad oben rechts öffnet das Menü. Es hat zwei Seiten, **L / R** oder der Pfeil `›` / `‹` neben dem Pinsel wechseln zwischen ihnen. Der Pinsel öffnet die Theme-Auswahl, B schließt das Menü. Änderungen werden beim Schließen in `/_pico/settings.json` gespeichert.
+
+| Seite | Einstellung | Schlüssel |
+|---|---|---|
+| **Anzeige** | Ansicht: 3 × 2, 4 × 3, CoverFlow ([Ansichten](#ansichten)) | `romBrowserLayout` |
+| | Sortieren: A–Z, Z–A, zuletzt gespielt | `romBrowserSortMode` |
+| | Uhr ein/aus, daneben die Version von DsRunner | `showClock` |
+| **Spiel & Sprache** | Zurück aus dem Spiel ein/aus (Haus-Symbol) | `inGameReset` |
+| | Tasten dafür: L+R+↓+B (Standard), SELECT+START+↓, SELECT+↓+B, „Eigene“ (nur wenn die Datei andere gültige Tasten enthält) | `inGameResetKeys` |
+| | Sprache: Deutsch / English, wirkt sofort | `uiLanguage` |
+
 ## Ansichten
 
 Im Menü „Anzeige“ (Zahnrad) gibt es drei Ansichten. Jede zeigt ein Bild in dem Stil, der zu ihrer Größe passt:
@@ -227,7 +242,11 @@ Das Spiel kommt aus dem [Spielverlauf](#spielverlauf) (der neueste der ersten dr
 
 ## Sprache
 
-Die Oberfläche von DsRunner ist deutsch. Die Schriften (NotoSansJP) enthalten ä, ö, ü, Ä, Ö, Ü und ß, Umlaute in Ordner- und Dateinamen werden richtig angezeigt. Picos Einstellung `language` gibt es weiterhin in der `settings.json`, sie wird aber (wie in Pico Launcher) nicht ausgewertet. Eine englische Oberfläche ist nicht vorgesehen. Texte, die aus Dateien kommen (Spieltitel aus dem NDS-Banner, Theme-Namen aus `theme.json`, Cheat-Namen aus `usrcheat.dat`), erscheinen so, wie sie dort stehen.
+Die Oberfläche von DsRunner ist deutsch oder englisch. Umschalten im [Menü](#menü) (zweite Seite → Deutsch / English) oder mit `"uiLanguage": "de"` bzw. `"en"` in der `settings.json`; Standard ist Deutsch. Im Menü wirkt die Wahl sofort, nur der Titel bereits angezeigter Suchergebnisse bleibt bis zur nächsten Suche in der alten Sprache. Im Englischen hat die Such-Tastatur Y und Z vertauscht (QWERTY statt QWERTZ).
+
+Picos Einstellung `language` gibt es weiterhin in der `settings.json`, sie wird aber nicht ausgewertet: Pico Launcher schreibt dort von sich aus `"english"`, das hätte bestehende Installationen ungefragt auf Englisch umgestellt. Namen aus `systems.json` (`name`, `label`) und Ordnernamen erscheinen in beiden Sprachen so, wie sie dort stehen; die eingebauten Namen „Favoriten“, „Suche“ und „Apps und Homebrew“ werden übersetzt.
+
+Die Schriften (NotoSansJP) enthalten ä, ö, ü, Ä, Ö, Ü und ß, Umlaute in Ordner- und Dateinamen werden richtig angezeigt. Texte, die aus Dateien kommen (Spieltitel aus dem NDS-Banner, Theme-Namen aus `theme.json`, Cheat-Namen aus `usrcheat.dat`), erscheinen so, wie sie dort stehen.
 
 ## Hintergrundmusik
 

@@ -7,6 +7,7 @@
 #include "romBrowser/FileType/FileType.h"
 #include "romBrowser/FileType/IFileTypeProvider.h"
 #include "themes/dsrunner/DsRunnerConsoles.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "DsRunnerLibrary.h"
 #include "DsRunnerSearch.h"
 
@@ -236,6 +237,16 @@ void DsRunnerSearch::SortGroups()
         _folders[i].group = rank[_folders[i].group];
 }
 
+const char* DsRunnerSearch::GetGroupLabel(u32 group) const
+{
+    if (group >= _groupCount)
+        return "";
+    // the games directly in the library folder
+    if (_groups[group].folderName[0] == 0)
+        return DsRunnerText::Get(DsRunnerText::Id::SearchGroupOther);
+    return _groups[group].label;
+}
+
 bool DsRunnerSearch::Build(const char* libraryPath, const IFileTypeProvider& fileTypeProvider,
     const vu8& cancelRequested)
 {
@@ -250,8 +261,9 @@ bool DsRunnerSearch::Build(const char* libraryPath, const IFileTypeProvider& fil
     AddFolder(_libraryPath, nullptr, 0, 0);
     ReadFolder(0, fileTypeProvider, cancelRequested);
     auto& rootGroup = _groups[_groupCount++];
+    // the label of this group ("Weitere") comes from GetGroupLabel, in the current language
     rootGroup.folderName[0] = 0;
-    strcpy(rootGroup.label, "Weitere");
+    rootGroup.label[0] = 0;
     _folders[0].group = _groupCount - 1;
     SortGroups();
 

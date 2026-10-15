@@ -179,7 +179,7 @@ Ein eigener Launcher als Ersatz für YSMenu:
 - **Build und Test:** In der Sitzung, in der Phase 6 entstand, war Docker nicht erreichbar. Der Code ist nur mit dem Host-Compiler auf Syntax geprüft. Vor dem Merge: `./build.sh`, DeSmuME-Screenshots (Konsolen-Ebene mit Favoriten-Kachel, Stern auf Kacheln, Menü mit Uhr) und Test auf dem DS (Spielstart aus den Favoriten und mit START, auch GBA).
 - Favoriten-Stern nur in den Kachelrastern, nicht in Picos Ansichten (dort nur der ★ oben).
 - Ein Favorit, der in der Favoriten-Liste mit X entfernt wird, bleibt bis zum nächsten Öffnen sichtbar.
-- Englische Oberfläche über `language`: bei Bedarf eine kleine Texttabelle statt der festen deutschen Texte.
+- ~~Englische Oberfläche~~: erledigt (15.10.2026), Texttabelle `DsRunnerText` (Deutsch/Englisch), eigener Schlüssel `uiLanguage` statt Picos `language` (Standard dort `"english"`), umschaltbar auf der zweiten Menüseite, siehe [CONFIG.md](CONFIG.md#sprache).
 
 **Suche (15.10.2026):** Wunsch: alle Spiele durchsuchen, nach Konsole geordnet ([CONFIG.md](CONFIG.md#suche)).
 - Kachel „Suche“ (Lupe, `SEARCH` in den eingebauten Bildern) auf der Konsolen-Ebene nach ★ Favoriten, außerdem SELECT in jedem Ordner. Eigener Zustand `SearchInput`: die Tastatur (`DsRunnerSearchKeyboardView`, QWERTZ ohne Umlaute, Tasten als 3D-Polygone, Text als ein Sprite pro Taste, höchstens 4 OBJ-Palettenzeilen pro Bildschirmzeile, OBJ-VRAM aus dem Bereich der Dialoge) ersetzt das Raster.
