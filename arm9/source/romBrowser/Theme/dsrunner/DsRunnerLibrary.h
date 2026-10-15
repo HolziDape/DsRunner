@@ -76,6 +76,63 @@ private:
     void Save() const;
 };
 
+/// @brief A date and time of the DS clock (local time, as set in the DS settings).
+struct DsRunnerDateTime
+{
+    u16 year = 0;
+    u8 month = 0;
+    u8 day = 0;
+    u8 hour = 0;
+    u8 minute = 0;
+
+    /// @brief Reads the DS clock (an ipc request to the arm7 that blocks the caller for a moment).
+    static DsRunnerDateTime Now();
+
+    /// @brief False for an unknown date (year 0).
+    bool IsValid() const { return year != 0 && month >= 1 && month <= 12 && day >= 1 && day <= 31; }
+
+    /// @brief Gets the number of days since 1970-01-01, for the days between two dates.
+    int GetDayNumber() const;
+};
+
+/// @brief Play statistics: how often each file was started and when the last time.
+///        Stored in /_dsrunner/stats.txt, one file per line, the last played first:
+///        "<path>|<count>|<YYYY-MM-DD HH:MM>" ("|" can't be part of a file name on FAT).
+///        Files that were never started are not in the list, at most MaxEntries files are kept.
+class DsRunnerPlayStats
+{
+public:
+    static constexpr u32 MaxEntries = 500;
+    static constexpr u32 MaxCount = 9999;
+
+    struct Entry
+    {
+        /// Full path without drive prefix.
+        std::unique_ptr<char[]> path;
+        u16 count = 0;
+        DsRunnerDateTime lastPlayed;
+    };
+
+    /// @brief Reads the statistics file once. Call from the io thread.
+    void Load();
+
+    /// @brief Counts a start of \p path at the current time and writes the statistics file. Call from the io thread.
+    void Add(const char* path);
+
+    /// @brief Gets the statistics of the file \p fileName in \p folderPath, or nullptr when it was never started
+    ///        (or was started before DsRunner kept statistics).
+    const Entry* Find(const char* folderPath, const char* fileName) const;
+
+    u32 GetCount() const { return _count; }
+
+private:
+    bool _loaded = false;
+    u32 _count = 0;
+    Entry _entries[MaxEntries];
+
+    void Save() const;
+};
+
 /// @brief Favorite games, toggled with X. Stored as one path per line in /_dsrunner/favorites.txt
 ///        in the order they were added.
 class DsRunnerFavorites
@@ -196,6 +253,7 @@ private:
 struct DsRunnerLibrary
 {
     DsRunnerPlayHistory playHistory;
+    DsRunnerPlayStats playStats;
     DsRunnerGameCounts gameCounts;
     DsRunnerFavorites favorites;
     /// The game START continues on the console level ("Weiterspielen"), empty when there is none.

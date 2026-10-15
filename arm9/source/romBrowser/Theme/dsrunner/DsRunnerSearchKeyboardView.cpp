@@ -16,6 +16,7 @@
 #include "gui/input/InputProvider.h"
 #include "themes/IFontRepository.h"
 #include "themes/dsrunner/DsRunnerColorScheme.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "romBrowser/IRomBrowserController.h"
 #include "DsRunnerShapes.h"
 #include "DsRunnerSearchKeyboardView.h"
@@ -74,7 +75,8 @@ static constexpr Rgb888 sSelectedBottom = Rgb888(46, 53, 74);
 static constexpr Rgb888 sFieldTop = Rgb888(17, 19, 26);
 static constexpr Rgb888 sFieldBottom = Rgb888(22, 25, 34);
 
-// QWERTZ like a German keyboard, no umlauts: the search treats ä as a, ß as ss
+// QWERTZ like a German keyboard, no umlauts: the search treats ä as a, ß as ss.
+// In English Y and Z swap places (QWERTY) and the words come from DsRunnerText, see GetKeyText.
 const DsRunnerSearchKeyboardView::Key DsRunnerSearchKeyboardView::sKeys[] =
 {
     { "1", 0, 0, 1, KeyAction::Character }, { "2", 0, 1, 1, KeyAction::Character },
@@ -117,9 +119,9 @@ DsRunnerSearchKeyboardView::DsRunnerSearchKeyboardView(IRomBrowserController* ro
 {
     static_assert(sizeof(sKeys) / sizeof(sKeys[0]) <= sizeof(_keyVramOffsets) / sizeof(_keyVramOffsets[0]));
     StringUtil::Copy(_query, romBrowserController->GetSearchQuery(), sizeof(_query));
-    _titleLabel->SetText("Suche");
+    _titleLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::Search));
     _statusLabel->SetEllipsisStyle(LabelView::EllipsisStyle::Ellipsis);
-    _hintLabel->SetText("B: L\xC3\xB6schen \xC2\xB7 X: Leerzeichen \xC2\xB7 START: Suchen \xC2\xB7 SELECT: Zur\xC3\xBC" "ck");
+    _hintLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::KeyboardHint));
     UpdateQueryLabel();
     UpdateStatus();
 }
@@ -143,11 +145,33 @@ void DsRunnerSearchKeyboardView::InitVram(const VramContext& vramContext)
             ? FontType::Medium11 : FontType::Medium7_5;
         if (sKeys[i].action == KeyAction::Search)
             fontType = FontType::Medium10;
-        RenderText(sKeys[i].text, fontType, width, objVramManager->GetVramAddress(_keyVramOffsets[i]));
+        RenderText(GetKeyText(sKeys[i]), fontType, width, objVramManager->GetVramAddress(_keyVramOffsets[i]));
     }
     _cancelVramOffset = objVramManager->Alloc(64 * CELL_HEIGHT / 2);
-    RenderText("Abbrechen", FontType::Regular10, 64, objVramManager->GetVramAddress(_cancelVramOffset));
+    RenderText(DsRunnerText::Get(DsRunnerText::Id::KeyboardCancel), FontType::Regular10, 64,
+        objVramManager->GetVramAddress(_cancelVramOffset));
     _hasVram = true;
+}
+
+const char* DsRunnerSearchKeyboardView::GetKeyText(const Key& key)
+{
+    switch (key.action)
+    {
+        case KeyAction::Space:
+            return DsRunnerText::Get(DsRunnerText::Id::KeySpace);
+        case KeyAction::Search:
+            return DsRunnerText::Get(DsRunnerText::Id::KeySearch);
+        default:
+            break;
+    }
+    if (DsRunnerText::IsEnglish() && key.text[1] == 0)
+    {
+        if (key.text[0] == 'Z')
+            return "Y";
+        if (key.text[0] == 'Y')
+            return "Z";
+    }
+    return key.text;
 }
 
 void DsRunnerSearchKeyboardView::RenderText(const char* text, FontType fontType, u32 width, vu16* vram) const
@@ -179,7 +203,7 @@ void DsRunnerSearchKeyboardView::RenderText(const char* text, FontType fontType,
 void DsRunnerSearchKeyboardView::UpdateQueryLabel()
 {
     if (_query[0] == 0)
-        _queryLabel->SetText("Name des Spiels");
+        _queryLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::KeyboardPlaceholder));
     else
         _queryLabel->SetText(_query);
 }
@@ -191,7 +215,7 @@ void DsRunnerSearchKeyboardView::UpdateStatus()
     char text[128];
     if (!search.IsReady())
     {
-        strcpy(text, "Spiele werden gelesen\xE2\x80\xA6");
+        strlcpy(text, DsRunnerText::Get(DsRunnerText::Id::KeyboardReadingGames), sizeof(text));
         _statusLabel->SetText(text);
         return;
     }
@@ -200,7 +224,8 @@ void DsRunnerSearchKeyboardView::UpdateStatus()
     DsRunnerSearch::Normalize(_query, strlen(_query), query);
     if (query[0] == 0)
     {
-        mini_snprintf(text, sizeof(text), "%d Spiele durchsuchen", search.GetGameCount());
+        DsRunnerText::FormatCount(text, sizeof(text), DsRunnerText::Id::SearchGamesOne,
+            DsRunnerText::Id::SearchGamesMany, search.GetGameCount());
         _statusLabel->SetText(text);
         return;
     }
@@ -209,7 +234,7 @@ void DsRunnerSearchKeyboardView::UpdateStatus()
     u32 count = search.Count(query, groupCounts);
     if (count == 0)
     {
-        mini_snprintf(text, sizeof(text), "Keine Treffer f\xC3\xBCr \xE2\x80\x9E%s\xE2\x80\x9C", _query);
+        mini_snprintf(text, sizeof(text), DsRunnerText::Get(DsRunnerText::Id::KeyboardNoMatches), _query);
         _statusLabel->SetText(text);
         return;
     }
@@ -217,9 +242,16 @@ void DsRunnerSearchKeyboardView::UpdateStatus()
     // "12 Treffer: NDS 3 · GBA 5 · NES 4"
     int length;
     if (count > DsRunnerSearch::MaxResults)
-        length = mini_snprintf(text, sizeof(text), "Mehr als %d Treffer (%d):", DsRunnerSearch::MaxResults, count);
+    {
+        length = mini_snprintf(text, sizeof(text), DsRunnerText::Get(DsRunnerText::Id::KeyboardMoreMatches),
+            DsRunnerSearch::MaxResults, count);
+    }
     else
-        length = mini_snprintf(text, sizeof(text), count == 1 ? "1 Treffer:" : "%d Treffer:", count);
+    {
+        DsRunnerText::FormatCount(text, sizeof(text), DsRunnerText::Id::KeyboardMatchesOne,
+            DsRunnerText::Id::KeyboardMatchesMany, count);
+        length = strlen(text);
+    }
     bool first = true;
     for (u32 group = 0; group < search.GetGroupCount() && length > 0 && length < (int)sizeof(text); group++)
     {
@@ -437,7 +469,7 @@ void DsRunnerSearchKeyboardView::Type(const Key& key)
         {
             if (length >= DsRunnerSearch::MaxQueryLength)
                 return;
-            char c = key.text[0];
+            char c = GetKeyText(key)[0];
             _query[length] = c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
             _query[length + 1] = 0;
             break;

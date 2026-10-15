@@ -68,3 +68,48 @@ jobs:
             _pico/
             DsRunner.nds
           name: DsRunner
+
+  dsrunner_stream:
+    runs-on: ubuntu-latest
+    # same toolchain as DsRunner, the image ships DSWiFi
+    container: skylyrac/blocksds:slim-v1.16.0
+    name: Build DsRunner Stream (stream/ds)
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Build DsRunnerStream.nds
+        # inside the container (BLOCKSDS is set) build.sh runs make directly
+        run: sh stream/ds/build.sh
+      - name: Publish build to GH Actions
+        uses: actions/upload-artifact@v4
+        with:
+          path: stream/ds/DsRunnerStream.nds
+          name: DsRunnerStream
+
+  stream_host:
+    runs-on: ubuntu-latest
+    name: DsRunner Stream host (tests + DsRunnerStream-Host.zip)
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: python -m pip install -r stream/host/requirements.txt pytest
+      - name: Run tests
+        # without a browser; also builds the DS decoder for the PC (stream/ds/hosttest)
+        working-directory: stream/host
+        run: python -m pytest -q tests
+      - name: Check the shell scripts
+        # shellcheck is preinstalled on the GitHub Ubuntu runners
+        run: shellcheck stream/host/start.sh stream/host/tools/*.sh
+      - name: Pack DsRunnerStream-Host.zip
+        run: sh stream/host/tools/make-host-bundle.sh DsRunnerStream-Host.zip
+      - name: Publish build to GH Actions
+        uses: actions/upload-artifact@v4
+        with:
+          # the artifact zip contains DsRunnerStream-Host.zip as it is attached to releases
+          path: DsRunnerStream-Host.zip
+          name: DsRunnerStream-Host

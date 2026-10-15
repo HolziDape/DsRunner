@@ -3,6 +3,8 @@
 #include "fat/File.h"
 #include "fat/Directory.h"
 #include "core/task/TaskQueue.h"
+#include "core/mini-printf.h"
+#include "rtcIpc.h"
 #include "romBrowser/SdFolder.h"
 #include "romBrowser/FileInfo.h"
 #include "romBrowser/FileType/FileType.h"
@@ -14,6 +16,9 @@
 #define DSRUNNER_FOLDER         "/_dsrunner"
 #define PLAY_HISTORY_PATH       "/_dsrunner/recent.txt"
 #define FAVORITES_PATH          "/_dsrunner/favorites.txt"
+#define PLAY_STATS_PATH         "/_dsrunner/stats.txt"
+// "|<count>|YYYY-MM-DD HH:MM" after the path of a statistics line
+#define PLAY_STATS_SUFFIX_SIZE  24
 // longer lines are not valid paths for the launcher anyway
 #define MAX_LINE_LENGTH         256
 
@@ -226,6 +231,193 @@ int DsRunnerPlayHistory::GetRank(const char* folderPath, const char* fileName) c
             return i;
     }
     return -1;
+}
+
+static int fromBcd(u8 value)
+{
+    return (value >> 4) * 10 + (value & 0x0F);
+}
+
+DsRunnerDateTime DsRunnerDateTime::Now()
+{
+    rtc_datetime_t rtc;
+    rtc_readDateTime(&rtc);
+    DsRunnerDateTime result;
+    result.year = 2000 + fromBcd(rtc.date.year);
+    result.month = fromBcd(rtc.date.month);
+    result.day = fromBcd(rtc.date.monthDay);
+    result.hour = fromBcd(rtc.time.hour);
+    result.minute = fromBcd(rtc.time.minute);
+    // a DS whose clock was never set starts at 2000-01-01; save no date then
+    if (result.year == 2000 && result.month == 1 && result.day == 1)
+        result.year = 0;
+    return result;
+}
+
+int DsRunnerDateTime::GetDayNumber() const
+{
+    // days from the civil date (gregorian calendar), see http://howardhinnant.github.io/date_algorithms.html
+    int y = year - (month <= 2 ? 1 : 0);
+    int era = y / 400;
+    int yearOfEra = y - era * 400;
+    int dayOfYear = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+    int dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
+    return era * 146097 + dayOfEra - 719468;
+}
+
+// Reads a number of at most \p maxDigits digits at \p p, -1 when there is none.
+static int parseNumber(const char*& p, u32 maxDigits)
+{
+    int value = -1;
+    for (u32 i = 0; i < maxDigits && *p >= '0' && *p <= '9'; i++)
+        value = (value < 0 ? 0 : value * 10) + (*p++ - '0');
+    return value;
+}
+
+// Parses "YYYY-MM-DD HH:MM" (the time may be missing), an unknown date when it isn't one.
+static DsRunnerDateTime parseDateTime(const char* p)
+{
+    DsRunnerDateTime result;
+    int year = parseNumber(p, 4);
+    if (*p++ != '-')
+        return result;
+    int month = parseNumber(p, 2);
+    if (*p++ != '-')
+        return result;
+    int day = parseNumber(p, 2);
+    int hour = 0;
+    int minute = 0;
+    if (*p == ' ')
+    {
+        p++;
+        hour = parseNumber(p, 2);
+        if (*p++ != ':')
+            return result;
+        minute = parseNumber(p, 2);
+    }
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31 ||
+        hour < 0 || hour > 23 || minute < 0 || minute > 59)
+    {
+        return result;
+    }
+    result.year = year;
+    result.month = month;
+    result.day = day;
+    result.hour = hour;
+    result.minute = minute;
+    return result;
+}
+
+void DsRunnerPlayStats::Load()
+{
+    if (_loaded)
+        return;
+    _loaded = true;
+
+    auto file = std::make_unique<File>();
+    if (file->Open(PLAY_STATS_PATH, FA_READ | FA_OPEN_EXISTING) != FR_OK)
+        return;
+    // larger files are cut off
+    u32 size = std::min<u32>(file->GetSize(), MaxEntries * (MAX_LINE_LENGTH + PLAY_STATS_SUFFIX_SIZE));
+    auto text = std::make_unique<char[]>(size + 1);
+    u32 bytesRead = 0;
+    if (file->Read(text.get(), size, bytesRead) != FR_OK)
+        return;
+    text[bytesRead] = 0;
+
+    char* line = text.get();
+    while (*line != 0 && _count < MaxEntries)
+    {
+        char* end = line;
+        while (*end != 0 && *end != '\n' && *end != '\r')
+            end++;
+        char next = *end;
+        *end = 0;
+        // "<path>|<count>|<date>", lines that are no absolute path are skipped
+        char* separator = strchr(line, '|');
+        if (separator)
+            *separator = 0; // before SkipDrive(), the time has a colon too
+        const char* path = DsRunnerPaths::SkipDrive(line);
+        if (separator && path[0] == '/')
+        {
+            const char* p = separator + 1;
+            int count = parseNumber(p, 4);
+            auto& entry = _entries[_count++];
+            entry.path = copyString(path, separator - path);
+            entry.count = count < 0 ? 0 : count;
+            entry.lastPlayed = *p == '|' ? parseDateTime(p + 1) : DsRunnerDateTime();
+        }
+        line = next != 0 ? end + 1 : end;
+    }
+    LOG_DEBUG("Play statistics: %d entries\n", _count);
+}
+
+void DsRunnerPlayStats::Add(const char* path)
+{
+    Load();
+    path = DsRunnerPaths::SkipDrive(path);
+
+    // take the entry out if it is already in the list, otherwise drop the oldest one
+    u32 index = 0;
+    while (index < _count && strcasecmp(_entries[index].path.get(), path) != 0)
+        index++;
+    Entry entry;
+    if (index < _count)
+    {
+        entry = std::move(_entries[index]);
+    }
+    else
+    {
+        entry.path = copyString(path, strlen(path));
+        if (_count < MaxEntries)
+            _count++;
+        index = _count - 1;
+    }
+    for (u32 i = index; i > 0; i--)
+        _entries[i] = std::move(_entries[i - 1]);
+    if (entry.count < MaxCount)
+        entry.count++;
+    entry.lastPlayed = DsRunnerDateTime::Now();
+    _entries[0] = std::move(entry);
+
+    Save();
+}
+
+void DsRunnerPlayStats::Save() const
+{
+    // the whole file in one write instead of many small ones
+    u32 size = 0;
+    for (u32 i = 0; i < _count; i++)
+        size += strlen(_entries[i].path.get()) + PLAY_STATS_SUFFIX_SIZE + 1;
+    auto text = std::make_unique<char[]>(size + 1);
+    u32 length = 0;
+    for (u32 i = 0; i < _count; i++)
+    {
+        const auto& entry = _entries[i];
+        const auto& date = entry.lastPlayed;
+        if (date.IsValid())
+        {
+            length += mini_snprintf(&text[length], size + 1 - length, "%s|%d|%04d-%02d-%02d %02d:%02d\n",
+                entry.path.get(), entry.count, date.year, date.month, date.day, date.hour, date.minute);
+        }
+        else
+        {
+            length += mini_snprintf(&text[length], size + 1 - length, "%s|%d|\n", entry.path.get(), entry.count);
+        }
+    }
+    writeTextFile(PLAY_STATS_PATH, text.get(), length);
+}
+
+const DsRunnerPlayStats::Entry* DsRunnerPlayStats::Find(const char* folderPath, const char* fileName) const
+{
+    folderPath = DsRunnerPaths::SkipDrive(folderPath);
+    u32 length = folderLength(folderPath);
+    for (u32 i = 0; i < _count; i++)
+    {
+        if (isFileInFolder(_entries[i].path.get(), folderPath, length, fileName))
+            return &_entries[i];
+    }
+    return nullptr;
 }
 
 void DsRunnerFavorites::Load()

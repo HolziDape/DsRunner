@@ -65,7 +65,7 @@ public:
     u32 GetGroupCount() const { return _groupCount; }
 
     /// @brief Gets the short name of a group, e.g. "GBA" (index ready).
-    const char* GetGroupLabel(u32 group) const { return group < _groupCount ? _groups[group].label : ""; }
+    const char* GetGroupLabel(u32 group) const;
 
     /// @brief Counts the games that match a normalized query (index ready).
     /// @param normalizedQuery The query, see Normalize(). An empty query matches nothing.

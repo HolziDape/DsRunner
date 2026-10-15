@@ -1,0 +1,50 @@
+DsRunner Stream - Schnellstart (Raspberry Pi 5)
+===============================================
+
+Browser-Spiele auf dem Nintendo DS: Der Pi zeigt das Spiel in Chromium an und
+schickt das Bild per WLAN an den DS, die Tasten des DS gehen zurueck an den Pi.
+Experimentell. Gemessen auf DS Lite + Pi 5: etwa 18-25 Bilder pro Sekunde.
+
+Du brauchst
+-----------
+- Raspberry Pi 5 mit Raspberry Pi OS Bookworm (64 Bit, mit Desktop),
+  per Ethernet-Kabel am Router (das WLAN des Pi wird der Hotspot fuer den DS)
+- DsRunner auf der Flashkarte des DS. DsRunnerStream.nds liegt im
+  DsRunner-Paket (DsRunner_M3DSReal.zip bzw. DsRunner.zip) unter Games/Apps.
+
+1. Einrichten (einmal)
+----------------------
+DsRunnerStream-Host.zip (beim DsRunner-Release) auf dem Pi herunterladen und
+im Terminal entpacken, das ergibt den Ordner ~/DsRunnerStream-Host:
+
+    unzip ~/Downloads/DsRunnerStream-Host.zip -d ~
+    cd ~/DsRunnerStream-Host
+    bash tools/install-pi.sh
+
+Das Skript installiert Chromium und die Python-Pakete, setzt bei Bedarf das
+WLAN-Land, legt das offene WLAN "DsRunner-Stream" fuer den DS an und schreibt
+das Start-Skript ~/dsstream.sh. Es fragt vor jeder Aenderung am System und
+kann jederzeit erneut laufen.
+(Mit git statt zip: git clone https://github.com/HolziDape/DsRunner.git, der
+Ordner ist dann ~/DsRunner/stream/host, die Anleitung ~/DsRunner/stream/README.md.)
+
+2. Spiel eintragen
+------------------
+    nano ~/.config/dsstream.env
+
+Die Zeile DSSTREAM_URL='...' auf die Adresse des Spiels setzen (mit https://),
+"test" zeigt eine Testseite.
+
+3. Spielen
+----------
+    sudo ~/DsRunnerStream-Host/tools/hotspot.sh on     (falls der Hotspot aus ist)
+    ~/dsstream.sh
+
+Im Terminal steht "Warte auf den DS an UDP-Port 7770". Am DS in DsRunner den
+Ordner Apps oeffnen und "DsRunner Stream" starten. SELECT + START eine Sekunde
+halten oeffnet das Pause-Menue.
+
+Hilfe
+-----
+Ausfuehrliche Anleitung, Tastenbelegung und Fehlerbehebung: README.md in
+diesem Ordner, oder https://github.com/HolziDape/DsRunner/blob/main/stream/README.md

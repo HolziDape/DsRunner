@@ -16,10 +16,16 @@
 #include "tileGrid3x2Icon.h"
 #include "tileGrid4x3Icon.h"
 #include "clockIcon.h"
+#include "pageNextIcon.h"
+#include "pagePrevIcon.h"
+#include "radioOnIcon.h"
+#include "radioOffIcon.h"
+#include "inGameResetIcon.h"
 #include "../IRomBrowserController.h"
 #include "gui/input/InputProvider.h"
 #include "themes/material/MaterialColorScheme.h"
 #include "themes/IFontRepository.h"
+#include "themes/dsrunner/DsRunnerText.h"
 #include "DisplaySettingsBottomSheetView.h"
 
 // DsRunner: labels 4 px further left, so the German "Sortieren" fits in front of the buttons
@@ -28,6 +34,9 @@
 
 #define THEME_BUTTON_X      212
 #define THEME_BUTTON_Y      (TITLE_LABEL_Y - 7)
+
+// DsRunner: page button left of the theme button
+#define PAGE_BUTTON_X       180
 
 #define LAYOUT_LABEL_X      16
 #define LAYOUT_LABEL_Y      46
@@ -47,6 +56,21 @@
 #define FILTERS_LABEL_X     20
 #define FILTERS_LABEL_Y     112
 
+// DsRunner: the second page has buttons on the left with their text next to them, in two columns:
+// return from games, 2x2 key combinations, language. The sheet shows 160 lines, the last row ends at 155.
+#define PAGE2_COLUMN0_X     12
+#define PAGE2_COLUMN1_X     132
+#define PAGE2_TEXT_X        32      // text right of its button
+#define PAGE2_TEXT_Y        8       // text below the top of its button
+#define PAGE2_TEXT_WIDTH    88      // "SELECT+START+↓" is 85 pixels wide
+#define IN_GAME_RESET_Y     38
+#define KEYS_Y              66
+#define KEYS_STEP_Y         28
+#define LANGUAGE_Y          126
+
+// DsRunner: the page that is not shown is moved off the screen
+#define HIDDEN_PAGE_OFFSET  256
+
 // DsRunner: only the tile grids and the cover flow (Pico's icon grids and banner list are gone,
 // see JsonAppSettingsSerializer for old settings)
 static RomBrowserLayout sRomBrowserDisplayModes[3] =
@@ -63,6 +87,18 @@ static RomBrowserSortMode sRomBrowserSortModes[3] =
     [1] = RomBrowserSortMode::NameDescending,
     [2] = RomBrowserSortMode::LastPlayed
 };
+
+// DsRunner: the key combinations as they are shown, in the order of DisplaySettingsViewModel::InGameResetKeyPresets.
+// The custom keys of settings.json are shown as "Eigene" ("Custom").
+static const char* const sKeyPresetTexts[DisplaySettingsViewModel::InGameResetKeyPresetCount] =
+{
+    "L+R+\xE2\x86\x93+B",
+    "SELECT+START+\xE2\x86\x93",
+    "SELECT+\xE2\x86\x93+B",
+};
+
+// DsRunner: language names stay in their own language
+static const char* const sLanguageTexts[2] = { "Deutsch", "English" };
 
 // x of the first layout / sort option button and the distance between the buttons
 #define OPTIONS_X           62
@@ -81,19 +117,18 @@ DisplaySettingsBottomSheetView::DisplaySettingsBottomSheetView(
         IconButtonView::State::NoToggle,
         md::sys::color::inverseOnSurface,
         materialColorScheme))
+    , _pageButton(IconButton2DView::CreateShared(
+        IconButtonView::Type::Standard,
+        IconButtonView::State::NoToggle,
+        md::sys::color::inverseOnSurface,
+        materialColorScheme))
     , _layoutLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Regular10)))
     , _sortingLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Regular10)))
     , _clockLabel(Label2DView::CreateShared(64, 16, 25, fontRepository->GetFont(FontType::Regular10)))
-    , _clockButton(IconButton2DView::CreateShared(
-        IconButtonView::Type::Tonal,
-        IconButtonView::State::ToggleUnselected,
-        md::sys::color::surfaceContainerLow,
-        materialColorScheme))
     , _versionLabel(Label2DView::CreateShared(VERSION_LABEL_WIDTH, 16, 32, fontRepository->GetFont(FontType::Regular10)))
+    , _inGameResetLabel(Label2DView::CreateShared(128, 16, 25, fontRepository->GetFont(FontType::Regular10)))
     , _materialColorScheme(materialColorScheme)
 {
-    // DsRunner: German texts
-    _titleLabel->SetText(u"Anzeige");
     AddChildTail(_titleLabel.GetPointer());
 
     _themeButton->SetAction([] (IconButtonView*, void* arg)
@@ -102,18 +137,21 @@ DisplaySettingsBottomSheetView::DisplaySettingsBottomSheetView(
     }, this);
     AddChildTail(_themeButton.GetPointer());
 
-    _layoutLabel->SetText(u"Ansicht");
+    _pageButton->SetAction([] (IconButtonView*, void* arg)
+    {
+        ((DisplaySettingsBottomSheetView*)arg)->SwitchPage(nullptr);
+    }, this);
+    AddChildTail(_pageButton.GetPointer());
+
     AddChildTail(_layoutLabel.GetPointer());
-    _sortingLabel->SetText(u"Sortieren");
     AddChildTail(_sortingLabel.GetPointer());
-    _clockLabel->SetText(u"Uhr");
     AddChildTail(_clockLabel.GetPointer());
 
-    _clockButton->SetAction([] (IconButtonView*, void* arg)
+    _clockButton = CreateToggleIconButton([] (IconButtonView*, void* arg)
     {
         auto viewModel = ((DisplaySettingsBottomSheetView*)arg)->_viewModel;
         viewModel->SetShowClock(!viewModel->GetShowClock());
-    }, this);
+    });
     AddChildTail(_clockButton.GetPointer());
 
     char versionText[40];
@@ -133,6 +171,78 @@ DisplaySettingsBottomSheetView::DisplaySettingsBottomSheetView(
         sortOption = CreateSortOptionIconButton();
         AddChildTail(sortOption.GetPointer());
     }
+
+    // DsRunner: second page
+    _inGameResetButton = CreateToggleIconButton([] (IconButtonView*, void* arg)
+    {
+        auto viewModel = ((DisplaySettingsBottomSheetView*)arg)->_viewModel;
+        viewModel->SetInGameReset(!viewModel->GetInGameReset());
+    });
+    AddChildTail(_inGameResetButton.GetPointer());
+    AddChildTail(_inGameResetLabel.GetPointer());
+
+    for (u32 i = 0; i < _keyOptions.size(); i++)
+    {
+        _keyOptions[i] = CreateToggleIconButton([] (IconButtonView* sender, void* arg)
+        {
+            auto self = reinterpret_cast<DisplaySettingsBottomSheetView*>(arg);
+            for (u32 i = 0; i < self->_keyOptions.size(); i++)
+            {
+                if (self->_keyOptions[i].GetPointer() == sender)
+                {
+                    self->_viewModel->SetInGameResetKeysIndex(i);
+                    break;
+                }
+            }
+        });
+        AddChildTail(_keyOptions[i].GetPointer());
+        _keyLabels[i] = Label2DView::CreateShared(PAGE2_TEXT_WIDTH, 16, 20, fontRepository->GetFont(FontType::Regular10));
+        if (i < DisplaySettingsViewModel::InGameResetKeyPresetCount)
+            _keyLabels[i]->SetText(sKeyPresetTexts[i]);
+        AddChildTail(_keyLabels[i].GetPointer());
+    }
+
+    for (u32 i = 0; i < LanguageCount; i++)
+    {
+        _languageOptions[i] = CreateToggleIconButton([] (IconButtonView* sender, void* arg)
+        {
+            auto self = reinterpret_cast<DisplaySettingsBottomSheetView*>(arg);
+            self->_viewModel->SetEnglish(sender == self->_languageOptions[1].GetPointer());
+        });
+        AddChildTail(_languageOptions[i].GetPointer());
+        _languageLabels[i] = Label2DView::CreateShared(PAGE2_TEXT_WIDTH, 16, 20, fontRepository->GetFont(FontType::Regular10));
+        _languageLabels[i]->SetText(sLanguageTexts[i]);
+        AddChildTail(_languageLabels[i].GetPointer());
+    }
+
+    UpdateTexts();
+}
+
+void DisplaySettingsBottomSheetView::UpdateTexts()
+{
+    // DsRunner: texts of DsRunnerText, again when the language changes on the second page
+    _textsEnglish = DsRunnerText::IsEnglish();
+    _titleLabel->SetText(DsRunnerText::Get(_page == 0
+        ? DsRunnerText::Id::MenuDisplayTitle : DsRunnerText::Id::MenuGameTitle));
+    _layoutLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::MenuLayout));
+    _sortingLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::MenuSort));
+    _clockLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::MenuClock));
+    _inGameResetLabel->SetText(DsRunnerText::Get(DsRunnerText::Id::MenuInGameReset));
+    _keyLabels[DisplaySettingsViewModel::InGameResetKeysCustom]->SetText(
+        DsRunnerText::Get(DsRunnerText::Id::MenuKeysCustom));
+}
+
+SharedPtr<IconButton2DView> DisplaySettingsBottomSheetView::CreateToggleIconButton(
+    IconButtonView::button_action_t action)
+{
+    auto button = IconButton2DView::CreateShared(
+        IconButtonView::Type::Tonal,
+        IconButtonView::State::ToggleUnselected,
+        md::sys::color::surfaceContainerLow,
+        _materialColorScheme
+    );
+    button->SetAction(action, this);
+    return button;
 }
 
 SharedPtr<IconButton2DView> DisplaySettingsBottomSheetView::CreateLayoutOptionIconButton()
@@ -189,6 +299,8 @@ void DisplaySettingsBottomSheetView::InitVram(const VramContext& vramContext)
     if (objVramManager)
     {
         _themeButton->SetIconVramOffset(LoadIcon(*objVramManager, themeIconTiles, themeIconTilesLen));
+        _pageNextIconVramOffset = LoadIcon(*objVramManager, pageNextIconTiles, pageNextIconTilesLen);
+        _pagePrevIconVramOffset = LoadIcon(*objVramManager, pagePrevIconTiles, pagePrevIconTilesLen);
 
         // layout options
         _layoutOptions[0]->SetIconVramOffset(LoadIcon(*objVramManager, tileGrid3x2IconTiles, tileGrid3x2IconTilesLen));
@@ -201,25 +313,41 @@ void DisplaySettingsBottomSheetView::InitVram(const VramContext& vramContext)
         _sortOptions[2]->SetIconVramOffset(LoadIcon(*objVramManager, recentIconTiles, recentIconTilesLen));
 
         _clockButton->SetIconVramOffset(LoadIcon(*objVramManager, clockIconTiles, clockIconTilesLen));
+
+        // DsRunner: second page
+        _inGameResetButton->SetIconVramOffset(LoadIcon(*objVramManager, inGameResetIconTiles, inGameResetIconTilesLen));
+        _radioOnIconVramOffset = LoadIcon(*objVramManager, radioOnIconTiles, radioOnIconTilesLen);
+        _radioOffIconVramOffset = LoadIcon(*objVramManager, radioOffIconTiles, radioOffIconTilesLen);
     }
 }
 
 void DisplaySettingsBottomSheetView::UpdateLabels()
 {
     _titleLabel->SetPosition(TITLE_LABEL_X, _position.y + TITLE_LABEL_Y);
-    _layoutLabel->SetPosition(LAYOUT_LABEL_X, _position.y + LAYOUT_LABEL_Y);
-    _sortingLabel->SetPosition(SORTING_LABEL_X, _position.y + SORTING_LABEL_Y);
-    _clockLabel->SetPosition(CLOCK_LABEL_X, _position.y + CLOCK_LABEL_Y);
-    _versionLabel->SetPosition(VERSION_LABEL_X, _position.y + VERSION_LABEL_Y);
+    int x = _page == 0 ? 0 : HIDDEN_PAGE_OFFSET;
+    _layoutLabel->SetPosition(x + LAYOUT_LABEL_X, _position.y + LAYOUT_LABEL_Y);
+    _sortingLabel->SetPosition(x + SORTING_LABEL_X, _position.y + SORTING_LABEL_Y);
+    _clockLabel->SetPosition(x + CLOCK_LABEL_X, _position.y + CLOCK_LABEL_Y);
+    _versionLabel->SetPosition(x + VERSION_LABEL_X, _position.y + VERSION_LABEL_Y);
 }
 
 void DisplaySettingsBottomSheetView::Update()
 {
+    if (_textsEnglish != DsRunnerText::IsEnglish())
+        UpdateTexts();
     BottomSheetView::Update();
     _themeButton->SetPosition(THEME_BUTTON_X, _position.y + THEME_BUTTON_Y);
+    _pageButton->SetPosition(PAGE_BUTTON_X, _position.y + THEME_BUTTON_Y);
+    _pageButton->SetIconVramOffset(_page == 0 ? _pageNextIconVramOffset : _pagePrevIconVramOffset);
     UpdateLabels();
+    UpdateFirstPage(_page == 0 ? 0 : HIDDEN_PAGE_OFFSET);
+    UpdateSecondPage(_page == 1 ? 0 : HIDDEN_PAGE_OFFSET);
+}
+
+void DisplaySettingsBottomSheetView::UpdateFirstPage(int pageX)
+{
     auto selectedDisplayMode = _viewModel->GetRomBrowserDisplayMode();
-    int x = OPTIONS_X;
+    int x = pageX + OPTIONS_X;
     u32 idx = 0;
     for (auto& layoutOption : _layoutOptions)
     {
@@ -231,7 +359,7 @@ void DisplaySettingsBottomSheetView::Update()
         idx++;
     }
     auto selectedSortMode = _viewModel->GetRomBrowserSortMode();
-    x = OPTIONS_X;
+    x = pageX + OPTIONS_X;
     idx = 0;
     for (auto& sortOption : _sortOptions)
     {
@@ -242,10 +370,52 @@ void DisplaySettingsBottomSheetView::Update()
         x += OPTIONS_STEP;
         idx++;
     }
-    _clockButton->SetPosition(OPTIONS_X, _position.y + 102);
+    _clockButton->SetPosition(pageX + OPTIONS_X, _position.y + 102);
     _clockButton->SetState(_viewModel->GetShowClock()
         ? IconButtonView::State::ToggleSelected
         : IconButtonView::State::ToggleUnselected);
+}
+
+void DisplaySettingsBottomSheetView::SetRadioState(IconButton2DView& button, bool selected) const
+{
+    button.SetState(selected ? IconButtonView::State::ToggleSelected : IconButtonView::State::ToggleUnselected);
+    button.SetIconVramOffset(selected ? _radioOnIconVramOffset : _radioOffIconVramOffset);
+}
+
+bool DisplaySettingsBottomSheetView::IsKeyOptionVisible(u32 index) const
+{
+    return index != DisplaySettingsViewModel::InGameResetKeysCustom || _viewModel->HasCustomInGameResetKeys();
+}
+
+void DisplaySettingsBottomSheetView::UpdateSecondPage(int pageX)
+{
+    int y = _position.y + IN_GAME_RESET_Y;
+    _inGameResetButton->SetPosition(pageX + PAGE2_COLUMN0_X, y);
+    _inGameResetButton->SetState(_viewModel->GetInGameReset()
+        ? IconButtonView::State::ToggleSelected
+        : IconButtonView::State::ToggleUnselected);
+    _inGameResetLabel->SetPosition(pageX + PAGE2_COLUMN0_X + PAGE2_TEXT_X, y + PAGE2_TEXT_Y);
+
+    // the key combinations in two columns, the custom one only when settings.json has one
+    int keysIndex = _viewModel->GetInGameResetKeysIndex();
+    for (u32 i = 0; i < _keyOptions.size(); i++)
+    {
+        int x = (IsKeyOptionVisible(i) ? pageX : HIDDEN_PAGE_OFFSET) + ((i & 1) ? PAGE2_COLUMN1_X : PAGE2_COLUMN0_X);
+        y = _position.y + KEYS_Y + (i >> 1) * KEYS_STEP_Y;
+        _keyOptions[i]->SetPosition(x, y);
+        SetRadioState(*_keyOptions[i], (int)i == keysIndex);
+        _keyLabels[i]->SetPosition(x + PAGE2_TEXT_X, y + PAGE2_TEXT_Y);
+    }
+
+    bool english = _viewModel->GetEnglish();
+    y = _position.y + LANGUAGE_Y;
+    for (u32 i = 0; i < LanguageCount; i++)
+    {
+        int x = pageX + (i == 0 ? PAGE2_COLUMN0_X : PAGE2_COLUMN1_X);
+        _languageOptions[i]->SetPosition(x, y);
+        SetRadioState(*_languageOptions[i], (i == 1) == english);
+        _languageLabels[i]->SetPosition(x + PAGE2_TEXT_X, y + PAGE2_TEXT_Y);
+    }
 }
 
 void DisplaySettingsBottomSheetView::Draw(GraphicsContext& graphicsContext)
@@ -253,20 +423,49 @@ void DisplaySettingsBottomSheetView::Draw(GraphicsContext& graphicsContext)
     graphicsContext.SetClipArea(GetBounds());
     u32 oldPrio = graphicsContext.SetPriority(1);
     {
-        _titleLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
+        // all labels but the title share one palette row
+        const auto& background = _materialColorScheme->GetColor(md::sys::color::surfaceContainerLow);
+        const auto& text = _materialColorScheme->onSurfaceVariant;
+        _titleLabel->SetBackgroundColor(background);
         _titleLabel->SetForegroundColor(_materialColorScheme->onSurface);
-        _layoutLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
-        _layoutLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
-        _sortingLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
-        _sortingLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
-        _clockLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
-        _clockLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
-        _versionLabel->SetBackgroundColor(_materialColorScheme->GetColor(md::sys::color::surfaceContainerLow));
-        _versionLabel->SetForegroundColor(_materialColorScheme->onSurfaceVariant);
+        for (auto* label : { &_layoutLabel, &_sortingLabel, &_clockLabel, &_versionLabel, &_inGameResetLabel })
+        {
+            (*label)->SetBackgroundColor(background);
+            (*label)->SetForegroundColor(text);
+        }
+        for (auto& label : _keyLabels)
+        {
+            label->SetBackgroundColor(background);
+            label->SetForegroundColor(text);
+        }
+        for (auto& label : _languageLabels)
+        {
+            label->SetBackgroundColor(background);
+            label->SetForegroundColor(text);
+        }
         BottomSheetView::Draw(graphicsContext);
     }
     graphicsContext.SetPriority(oldPrio);
     graphicsContext.ResetClipArea();
+}
+
+void DisplaySettingsBottomSheetView::SwitchPage(FocusManager* focusManager)
+{
+    _page = 1 - _page;
+    _titleLabel->SetText(DsRunnerText::Get(_page == 0
+        ? DsRunnerText::Id::MenuDisplayTitle : DsRunnerText::Id::MenuGameTitle));
+    if (!focusManager)
+        return;
+    // the focus leaves the page that is hidden now, the buttons of the title row stay
+    auto currentFocus = focusManager->GetCurrentFocus();
+    if (currentFocus.GetPointer() != _pageButton.GetPointer() &&
+        currentFocus.GetPointer() != _themeButton.GetPointer())
+    {
+        if (_page == 0)
+            focusManager->Focus(_layoutOptions[0]);
+        else
+            focusManager->Focus(_inGameResetButton);
+    }
 }
 
 bool DisplaySettingsBottomSheetView::HandleInput(
@@ -277,23 +476,85 @@ bool DisplaySettingsBottomSheetView::HandleInput(
         _viewModel->Close();
         return true;
     }
+    // DsRunner: L and R switch the page
+    if (inputProvider.Triggered(InputKey::L | InputKey::R))
+    {
+        SwitchPage(&focusManager);
+        return true;
+    }
     return false;
+}
+
+SharedPtr<View> DisplaySettingsBottomSheetView::MoveFocusOnSecondPage(View* currentFocus,
+    FocusMoveDirection direction)
+{
+    // DsRunner: rows of the second page: return from games, two rows of key combinations, language
+    constexpr int rowCount = 4;
+    SharedPtr<View> rows[rowCount][2] =
+    {
+        { _inGameResetButton, nullptr },
+        { _keyOptions[0], _keyOptions[1] },
+        { _keyOptions[2], IsKeyOptionVisible(3) ? SharedPtr<View>(_keyOptions[3]) : SharedPtr<View>() },
+        { _languageOptions[0], _languageOptions[1] },
+    };
+    for (int row = 0; row < rowCount; row++)
+    {
+        for (int column = 0; column < 2; column++)
+        {
+            if (rows[row][column].GetPointer() != currentFocus)
+                continue;
+            switch (direction)
+            {
+                case FocusMoveDirection::Left:
+                case FocusMoveDirection::Right:
+                {
+                    // two columns at most: left and right both go to the other one
+                    return rows[row][1 - column];
+                }
+                case FocusMoveDirection::Up:
+                {
+                    if (row == 0)
+                        return _pageButton;
+                    return rows[row - 1][column] ? rows[row - 1][column] : rows[row - 1][0];
+                }
+                case FocusMoveDirection::Down:
+                default:
+                {
+                    if (row == rowCount - 1)
+                        return nullptr;
+                    return rows[row + 1][column] ? rows[row + 1][column] : rows[row + 1][0];
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 
 SharedPtr<View> DisplaySettingsBottomSheetView::MoveFocus(const SharedPtr<View>& currentFocus,
     FocusMoveDirection direction, View* source)
 {
-    if (currentFocus.GetPointer() == _themeButton.GetPointer())
+    // DsRunner: the title row has the page and the theme button
+    if (currentFocus.GetPointer() == _themeButton.GetPointer() ||
+        currentFocus.GetPointer() == _pageButton.GetPointer())
     {
         if (direction == FocusMoveDirection::Down)
         {
-            return _layoutOptions[0];
+            if (_page == 0)
+                return _layoutOptions[0];
+            return _inGameResetButton;
+        }
+        else if (direction == FocusMoveDirection::Left || direction == FocusMoveDirection::Right)
+        {
+            return currentFocus.GetPointer() == _themeButton.GetPointer() ? _pageButton : _themeButton;
         }
         else
         {
             return nullptr;
         }
     }
+
+    if (_page == 1)
+        return MoveFocusOnSecondPage(currentFocus.GetPointer(), direction);
 
     int idx = 0;
     for (auto& layoutOption : _layoutOptions)
@@ -314,7 +575,7 @@ SharedPtr<View> DisplaySettingsBottomSheetView::MoveFocus(const SharedPtr<View>&
             }
             else if (direction == FocusMoveDirection::Up)
             {
-                return _themeButton;
+                return _pageButton;
             }
             else //if (direction == FocusMoveDirection::Down)
             {
@@ -366,6 +627,7 @@ void DisplaySettingsBottomSheetView::SetGraphics(
     const IconButton2DView::VramToken& iconButtonVramToken)
 {
     _themeButton->SetGraphics(iconButtonVramToken);
+    _pageButton->SetGraphics(iconButtonVramToken);
     for (auto& layoutOption : _layoutOptions)
     {
         layoutOption->SetGraphics(iconButtonVramToken);
@@ -375,6 +637,15 @@ void DisplaySettingsBottomSheetView::SetGraphics(
         sortOption->SetGraphics(iconButtonVramToken);
     }
     _clockButton->SetGraphics(iconButtonVramToken);
+    _inGameResetButton->SetGraphics(iconButtonVramToken);
+    for (auto& keyOption : _keyOptions)
+    {
+        keyOption->SetGraphics(iconButtonVramToken);
+    }
+    for (auto& languageOption : _languageOptions)
+    {
+        languageOption->SetGraphics(iconButtonVramToken);
+    }
 }
 
 void DisplaySettingsBottomSheetView::Close()

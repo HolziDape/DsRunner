@@ -5,6 +5,7 @@
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CONF="${DSSTREAM_CONF:-$HOME/.config/dsstream.env}"
 if [ -f "$CONF" ]; then
+	# shellcheck source=/dev/null
 	. "$CONF"
 fi
 PY="${DSSTREAM_PYTHON:-$HOME/dsstream-venv/bin/python}"

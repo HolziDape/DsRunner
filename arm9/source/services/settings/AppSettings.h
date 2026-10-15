@@ -15,10 +15,15 @@ public:
     String<char, 256> libraryPath = "/Games";
     /// DsRunner: show the clock in the status bar of the DsRunner theme.
     bool showClock = true;
+    /// DsRunner: show games without the No-Intro/GoodTools tags like "(Europe)" or "[!]" (only the shown name).
+    bool cleanNames = true;
     /// DsRunner: L+R+Down+B held for two seconds in a game returns to DsRunner (DsRunner Pico Loader).
     bool inGameReset = true;
     /// DsRunner: keys of the in-game reset, e.g. "SELECT+START+DOWN" (DsRunnerInGameResetKeys).
     String<char, 48> inGameResetKeys = "L+R+DOWN+B";
+    /// DsRunner: language of the DsRunner UI, "de" or "en" (DsRunnerText). Separate from Pico's
+    /// "language", which defaults to "english" and was never used by DsRunner.
+    String<char, 8> uiLanguage = "de";
     RomBrowserDisplaySettings romBrowserDisplaySettings;
 
     std::unique_ptr<FileAssociation[]> fileAssociations;

@@ -101,5 +101,7 @@ private:
     int FindKey(int row, int column) const;
     int FindKeyAt(const Point& point) const;
     static Rectangle GetKeyBounds(const Key& key);
+    /// @brief The text of a key in the current language (QWERTY instead of QWERTZ in English).
+    static const char* GetKeyText(const Key& key);
     void DrawKey(GraphicsContext& graphicsContext, const Key& key, u32 vramOffset, bool isSelected);
 };
