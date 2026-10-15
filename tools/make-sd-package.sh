@@ -192,6 +192,17 @@ Im Spiel L + R + Unten + B zwei Sekunden lang halten: der DS startet DsRunner ne
 
 EOF
 fi
+if [ -f "$OUT/Games/Apps/DsRunnerStream.nds" ]; then
+	cat >> "$OUT/LIESMICH.txt" <<'EOF'
+DsRunner Stream (experimentell)
+-------------------------------
+Games\Apps\DsRunnerStream.nds spielt Browser-Spiele, die ein Raspberry Pi 5 per
+WLAN auf den DS streamt. Fuer den Pi: DsRunnerStream-Host.zip (beim selben
+Release) entpacken und bash tools/install-pi.sh ausfuehren, Schritte in
+QUICKSTART.txt. Am DS: Ordner Apps, DsRunner Stream.
+
+EOF
+fi
 cat >> "$OUT/LIESMICH.txt" <<'EOF'
 Bilder fuer den oberen Bildschirm und die Kacheln
 -------------------------------------------------

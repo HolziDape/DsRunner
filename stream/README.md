@@ -4,11 +4,33 @@ Browser-Spiele auf dem Nintendo DS spielen: Ein **Raspberry Pi 5** (oder ein PC)
 
 Der DS selbst könnte solche Spiele nie ausführen (67 MHz, 4 MB RAM, WLAN nur 802.11b mit WEP/offen). Er zeigt nur Bilder an, wie ein kleiner Fernseher mit Controller.
 
-> **Experimentell.** Getestet ist bisher nur die Software am PC (Host, Testseite, ein simulierter DS, der DS-Teil im Emulator DeSmuME). Auf echtem DS Lite + Raspberry Pi 5 ist es noch **nicht** getestet. Rückmeldungen willkommen.
+> **Experimentell.** Läuft auf echtem DS Lite (M3 DS Real) mit Raspberry Pi 5: etwa 18-25 Bilder pro Sekunde. Rückmeldungen willkommen.
 
-Was du erwarten kannst:
+## Schnellstart
 
-- Bild: 256×192 Pixel mit 256 Farben, je nach Spiel etwa 10-20 Bilder pro Sekunde. Bei viel Bewegung (Scrollen, 3D) weniger; dann hilft der Modus `128x96`.
+1. **DS:** Das DsRunner-Paket (`DsRunner_M3DSReal.zip` bzw. `DsRunner.zip` vom [Release](https://github.com/HolziDape/DsRunner/releases/latest)) bringt die DS-App schon mit: `Games/Apps/DsRunnerStream.nds`. Wer DsRunner schon installiert hat, kopiert nur diese Datei auf die Karte.
+2. **Pi vorbereiten:** Raspberry Pi 5 mit Raspberry Pi OS Bookworm (64 Bit, mit Desktop), per **Ethernet** am Router. Dort `DsRunnerStream-Host.zip` vom selben Release herunterladen und entpacken:
+   ```sh
+   unzip ~/Downloads/DsRunnerStream-Host.zip -d ~
+   cd ~/DsRunnerStream-Host
+   ```
+   Oder mit git: `git clone https://github.com/HolziDape/DsRunner.git` und `cd ~/DsRunner/stream/host`.
+3. **Einrichten** (einmal, fragt vor jeder Änderung, darf mehrmals laufen):
+   ```sh
+   bash tools/install-pi.sh
+   ```
+   Installiert Chromium und die Python-Pakete (`~/dsstream-venv`), setzt bei Bedarf das WLAN-Land, legt den offenen Hotspot „DsRunner-Stream“ für den DS an, schreibt `~/.config/dsstream.env` und das Start-Skript `~/dsstream.sh`, auf Wunsch auch den Autostart.
+4. **Spiel eintragen:** `nano ~/.config/dsstream.env`, Zeile `DSSTREAM_URL='https://…'` (`test` = Testseite).
+5. **Starten:** Hotspot an (`sudo tools/hotspot.sh on`, falls nicht beim Booten), dann `~/dsstream.sh`.
+6. **Am DS** in DsRunner den Ordner **Apps** öffnen und **DsRunner Stream** starten.
+
+Beides ist in Releases **nach 0.3.1** dabei. Bis dahin: Host per git wie oben, die DS-App aus dem Artefakt `DsRunnerStream` der CI ([Actions](https://github.com/HolziDape/DsRunner/actions/workflows/nightly.yml), ein Lauf auf `main`) oder selbst bauen ([Für Entwickler](#für-entwickler)).
+
+Klappt etwas nicht: [Fehlerbehebung](#fehlerbehebung). Die Abschnitte darunter erklären jeden Schritt einzeln und von Hand.
+
+## Was du erwarten kannst
+
+- Bild: 256×192 Pixel mit 256 Farben. Auf DS Lite + Pi 5 gemessen: etwa 18-25 Bilder pro Sekunde. Bei viel Bewegung (Scrollen, 3D) weniger; dann hilft der Modus `128x96`.
 - Verzögerung: etwa 100-200 ms. Für Rätsel-, Klick-, Karten- und Strategiespiele gut, für schnelle Reaktionsspiele eher nicht.
 - **Kein Ton auf dem DS.** Der Ton kommt am Pi raus (HDMI oder Klinke), falls du dort Lautsprecher anschließt.
 - Es funktioniert mit jeder Webseite, die in Chromium läuft. Spiele, die nur mit Maus und Tastatur gehen, brauchen eine passende [Tastenbelegung](#tastenbelegung).
@@ -27,10 +49,12 @@ Internet ── Router ══ Ethernet ══ Raspberry Pi 5 ─ ─ WLAN "DsRun
 ## Was du brauchst
 
 - Raspberry Pi 5 mit **Raspberry Pi OS (Bookworm, 64 Bit, mit Desktop)**, per Ethernet am Router. Ein Pi 4 geht auch, ist aber langsamer.
-- Den DS mit DsRunner (getestet wird mit der M3 DS Real, andere Karten siehe [Kompatible Flashkarten](../docs/FLASHCARDS.md)) und die Datei `DsRunnerStream.nds`.
+- Den DS mit DsRunner (getestet wird mit der M3 DS Real, andere Karten siehe [Kompatible Flashkarten](../docs/FLASHCARDS.md)) und die Datei `DsRunnerStream.nds` (im DsRunner-Paket unter `Games/Apps`).
 - Am Pi: Bildschirm und Tastatur für die Einrichtung, oder SSH.
 
 ## 1. Pi einrichten
+
+`tools/install-pi.sh` (siehe [Schnellstart](#schnellstart)) erledigt die Schritte dieses Abschnitts, die von [2.](#2-hotspot-für-den-ds-wlan0) und den Autostart. Hier steht, was es tut, falls du es lieber von Hand machst. Die Befehle gehen vom git-Klon in `~/DsRunner` aus; mit `DsRunnerStream-Host.zip` heißt der Ordner statt `~/DsRunner/stream/host` dann `~/DsRunnerStream-Host`.
 
 ### WLAN-Land setzen
 
@@ -97,8 +121,8 @@ sudo nmcli connection up DsRunner-Stream
 
 ## 3. DS einrichten
 
-1. `DsRunnerStream.nds` nach `Games/Apps/` auf die SD-Karte kopieren (im DsRunner-Paket ist sie dort schon drin, falls sie mitgebaut wurde).
-2. Die Datei `/_dsrunner/stream.ini` anlegen (Text, z. B. mit dem Windows-Editor):
+1. `DsRunnerStream.nds` liegt im DsRunner-Paket (ab dem nächsten Release) schon unter `Games/Apps/`. Sonst die Datei dorthin auf die SD-Karte kopieren.
+2. Optional die Datei `/_dsrunner/stream.ini` anlegen (Text, z. B. mit dem Windows-Editor):
 
 ```ini
 ; DsRunner Stream
@@ -115,14 +139,14 @@ screen=bottom          ; Bild unten (Touch trifft das Bild) oder top
 
 ## 4. Spielen
 
-1. Am Pi den Host starten, mit der Adresse des Spiels:
+1. Am Pi den Host starten: `~/dsstream.sh` (vom Installer, nimmt die Adresse aus `~/.config/dsstream.env`). Von Hand mit der Adresse des Spiels:
 
    ```sh
    cd ~/DsRunner/stream/host
    ~/dsstream-venv/bin/python -m dsstream --url "ADRESSE-DES-SPIELS" --headful --gpu
    ```
 
-   Für `ADRESSE-DES-SPIELS` die Adresse einsetzen, die du sonst im Browser eintippst (mit `https://`).
+   Für `ADRESSE-DES-SPIELS` die Adresse einsetzen, die du sonst im Browser eintippst (mit `https://`). Eine andere Seite nur für dieses Mal: `~/dsstream.sh --url "ADRESSE"`.
 
 2. Am DS in DsRunner den Ordner **Apps** öffnen und **DsRunner Stream** starten. Nach 2 Sekunden verbindet er sich (oder sofort mit A), sucht den Pi und zeigt das Bild.
 3. Bedienung am DS:
@@ -141,12 +165,15 @@ screen=bottom          ; Bild unten (Touch trifft das Bild) oder top
 | `--mode 256x384` | beide Bildschirme (Seite im Hochformat), Touch auf der unteren Hälfte |
 | `--mapping datei.json` | Tastenbelegung (Dateien in `stream/host/mappings/`) |
 | `--viewport 640x480` | Fenstergröße der Seite im Browser (Standard 512×384, bei 256x384: 512×768). Größer = mehr vom Spiel, aber kleinere Schrift auf dem DS |
-| `--fps 15` | höchstens so viele Bilder pro Sekunde (Standard 20) |
+| `--fps 15` | höchstens so viele Bilder pro Sekunde (Standard 30; DS Lite + Pi 5 schaffen etwa 18-25, der Browser auf dem Pi etwa 25) |
 | `--headful` | Chromium mit Fenster. Auf dem Pi empfohlen, dort rechnet die GPU |
 | `--gpu` | GPU-Optionen für Chromium (WebGL) |
 | `--palette fixed` | feste Farben statt passend zum Bild: weniger Rechenarbeit, sieht schlechter aus |
 | `--rate 120 --max-rate 200` | Start- und Höchstrate in KB/s. Der Host passt die Rate selbst an Verluste an |
 | `--mute` | Ton am Pi aus |
+| `--packet-size 1200` | größtes UDP-Paket in Byte (Standard 1200, höchstens 1272, siehe [1300-Byte-Grenze](#fehlerbehebung)) |
+| `--broadcast` | Bilder als Broadcast senden (mit der langsamsten WLAN-Rate, siehe Fehlerbehebung) |
+| `--jpeg` | Chromium liefert JPEG statt PNG. Optional: Auf dem Pi 5 brachte es im Test keine zusätzlichen Bilder pro Sekunde |
 | `--port 7770` | UDP-Port (am DS dann `port=` gleich setzen) |
 
 Alle Optionen: `python -m dsstream --help`.
@@ -193,9 +220,12 @@ Eigene Belegung: eine der Dateien kopieren und ändern, dann `--mapping meine.js
 - Die meiste Arbeit hat **Chromium mit dem Spiel**. 2D-Spiele laufen auf dem Pi 5 meist gut. **3D/WebGL-Spiele können ruckeln.** Mit `--headful --gpu` rechnet die GPU des Pi 5 (VideoCore VII). Ob das klappt, zeigt `--url chrome://gpu` (direkt auf dem DS oder im Fenster): bei „WebGL“ sollte „Hardware accelerated“ stehen.
 - Ohne Fenster (Standard ohne `--headful`, z. B. als Dienst ohne Desktop) rechnet Chromium meist ohne GPU (Software). Für 2D reicht das oft, für 3D kaum.
 - Der Engpass ist meist das WLAN des DS: 802.11b mit 1-2 Mbit/s, real etwa 100-180 KB/s. Ruhige Spiele brauchen 30-60 KB/s, viel Bewegung 100 KB/s und mehr. Dann `--mode 128x96` oder `--fps 15` probieren.
-- Gemessen am PC mit der Testseite und dem Schein-DS: 256×192 normal 20 fps bei ~50 KB/s, viel Bewegung 20 fps bei ~100 KB/s, 128×96 viel Bewegung 20 fps bei ~40 KB/s, beide Bildschirme 20 fps bei ~70 KB/s.
+- Gemessen auf echtem DS Lite mit Pi 5 (Hotspot aus `hotspot.sh`, Pakete 1200 Byte): etwa 18-25 Bilder pro Sekunde. Der DS selbst zeigt 25-30 problemlos an; der Browser auf dem Pi liefert etwa 25 (Zeile „Browser … fps“ im Terminal). Deshalb ist `--fps 30` der Standard. `--jpeg` brachte auf dem Pi nichts.
+- Gemessen am PC mit der Testseite und dem Schein-DS (bei `--fps 20`): 256×192 normal 20 fps bei ~50 KB/s, viel Bewegung 20 fps bei ~100 KB/s, 128×96 viel Bewegung 20 fps bei ~40 KB/s, beide Bildschirme 20 fps bei ~70 KB/s.
 
 ## Automatisch starten
+
+`tools/install-pi.sh` fragt danach und legt dafür `~/.config/autostart/dsstream.desktop` an (startet `~/dsstream.sh` nach der Desktop-Anmeldung, mit Fenster und GPU); abschalten mit `rm ~/.config/autostart/dsstream.desktop`. Von Hand geht es so:
 
 Die Einstellungen stehen in einer Datei, die das Start-Skript `stream/host/start.sh` liest:
 
@@ -242,10 +272,11 @@ WEP statt offen ist auf dem Pi meist nicht möglich (der WLAN-Treiber des Pi unt
 |---|---|
 | DS findet das Netz nicht | Hotspot an? (`hotspot.sh status`) WLAN-Land gesetzt? Anderen Kanal versuchen (1, 6, 11). Manche Hotspots lassen keine 802.11b-Geräte zu; dann hilft ggf. ein USB-WLAN-Stick mit hostapd (`hw_mode=g`, ohne `ieee80211n`). |
 | „hole IP-Adresse (DHCP)“, dann „Zeitueberschreitung“ | Der DS ist im WLAN, bekommt aber keine Adresse vom Pi. Im Netz „DsRunner-Stream“ nimmt die App nach 8 s von selbst die feste Adresse 192.168.4.5 („DHCP antwortet nicht, feste Adresse“). Anderes Netz: in `stream.ini` `ip=` mit einer freien Adresse und ggf. `gateway=` eintragen. Prüfen, ob DHCP-Anfragen ankommen: `sudo tcpdump -ni wlan0 port 67 or port 68`. |
-| DS im WLAN, aber „Noch kein Host“ oder im Terminal nach wenigen Sekunden „DS getrennt (keine Eingaben mehr)“ | Beim DS kommt vom Pi kaum etwas an. Der DS Lite versteht nur 1 und 2 Mbit/s; sendet der WLAN-Chip des Pi schneller, gehen die Pakete verloren. Kleinere Pakete probieren (`--packet-size 1000`, dann `600`; Standard ist 1200, weil der DS nur Pakete bis 1300 Byte annimmt) und `--broadcast`: Die Bilder gehen dann mit der langsamsten Rate raus, die jedes Gerät versteht. DS nah an den Pi. Hilft das nicht, einen USB-WLAN-Stick oder alten Router als offenes Netz nehmen. |
+| DS im WLAN, aber „Noch kein Host“ oder im Terminal nach wenigen Sekunden „DS getrennt (keine Eingaben mehr)“ | Beim DS kommt vom Pi kaum etwas an. Zuerst die **1300-Byte-Grenze** prüfen (nächste Zeile). Sonst: Der DS Lite versteht nur 1 und 2 Mbit/s; sendet der WLAN-Chip des Pi schneller, gehen die Pakete verloren. Kleinere Pakete probieren (`--packet-size 1000`, dann `600`) und `--broadcast`: Die Bilder gehen dann mit der langsamsten Rate raus, die jedes Gerät versteht. DS nah an den Pi. Hilft das nicht, einen USB-WLAN-Stick oder alten Router als offenes Netz nehmen. |
+| **1300-Byte-Grenze:** Der DS findet den Pi und schickt Tasten, zeigt aber keine Bilder („Keine Bilder vom Host“, Verluste steigen) | Der WLAN-Stack des DS (DSWiFi) nimmt nur IP-Pakete bis 1300 Byte an (MTU 1300), größere verwirft er still, ohne Fehlermeldung. Für ein UDP-Bild-Paket bleiben davon 1272 Byte. Genau daran lag es beim ersten Test auf echter Hardware: Mit 1400-Byte-Paketen kam nichts an, mit 1200 Byte liefen 18-25 Bilder pro Sekunde. Deshalb ist `--packet-size` jetzt standardmäßig 1200 und höchstens 1272. Wer den Host ändert (oder ein eigenes Programm an den DS senden lässt): Pakete unter 1300 Byte halten, inklusive 28 Byte IP- und UDP-Kopf. |
 | DS verbindet, „Noch kein Host“ | Läuft `dsstream`? Firewall am Pi (falls `ufw` installiert: `sudo ufw allow in on wlan0 to any port 7770 proto udp`). Sonst in `stream.ini` `host=192.168.4.1` eintragen. |
 | „Keine Bilder vom Host“ | Seite lädt noch oder hängt; Ausgabe im Terminal ansehen. Mit `--url test` prüfen. |
-| Mehr Bilder pro Sekunde | Standard sind höchstens 20 (`--fps`). `--fps 30` probieren. Schafft der Browser auf dem Pi nicht mehr (Zeile „Browser … fps“ im Terminal), hilft `--jpeg`: Chromium liefert die Bilder dann als JPEG, das geht auf dem Pi oft schneller. `--mode 128x96` braucht noch weniger Daten. |
+| Mehr Bilder pro Sekunde | Standard sind höchstens 30 (`--fps`). Begrenzt meist der Browser auf dem Pi (Zeile „Browser … fps“ im Terminal, auf dem Pi 5 etwa 25): kleinere Seite (`--viewport 384x288`), ein ruhigeres Spiel oder `--mode 128x96`, das braucht auch weniger Daten. `--jpeg` (JPEG statt PNG aus Chromium) kann man probieren, auf dem Pi 5 brachte es im Test aber nichts. |
 | Bild ruckelt stark | `--mode 128x96`, `--fps 15`, DS näher an den Pi, anderer Kanal. Bei 3D-Spielen: `--headful --gpu`. |
 | Tasten wirken nicht | Erst einmal ins Spiel tippen (Fokus). Passt die Belegung? Manche Spiele wollen WASD (`--mapping wasd.json`). |
 | Bild friert ein, im Terminal „Target page, context or browser has been closed“ | Die Seite wurde geschlossen oder ist abgestürzt (z. B. durch ein Werbe-Pop-up). dsstream öffnet sie jetzt von selbst neu („oeffne sie neu“ im Terminal). Pop-ups werden automatisch geschlossen; braucht ein Spiel ein neues Fenster, mit `--allow-popups` starten. Das Chromium-Fenster auf dem Pi nicht von Hand schließen. |
@@ -257,5 +288,6 @@ WEP statt offen ist auf dem Pi meist nicht möglich (der WLAN-Treiber des Pi unt
 - Protokoll und Bildformat: [PROTOCOL.md](PROTOCOL.md).
 - DS-Programm bauen (Docker, gleiches BlocksDS-Image wie DsRunner, bringt DSWiFi mit): `stream/ds/build.sh` → `stream/ds/DsRunnerStream.nds`.
 - Tests des Hosts (ohne Browser): `cd stream/host && python -m pytest tests` (oder `python -m unittest discover -s tests -t tests`). Sie bauen auch den Dekoder des DS für den PC (`stream/ds/hosttest`) und vergleichen ihn mit dem Python-Dekoder.
+- Release-Dateien: Die CI baut `DsRunnerStream.nds` (Job „Build DsRunner Stream“) und legt sie in beide SD-Pakete unter `Games/Apps`; `./build.sh package` macht das lokal genauso. Der Job „DsRunner Stream host“ lässt die Tests laufen und packt mit `stream/host/tools/make-host-bundle.sh` das Paket `DsRunnerStream-Host.zip` (Host ohne Tests und Caches, dazu dieses README, `PROTOCOL.md`, `QUICKSTART.txt`, `VERSION.txt`). Bei jedem Push gibt es beides als Artefakt, beim Release hängt `DsRunnerStream-Host.zip` am Release.
 - Testaufnahme für Messungen: `python -m dsstream.record --url test --out packets.bin`; daraus sind die Daten für den Geschwindigkeitstest des DS (`stream/ds/data`, Taste Y im Startbildschirm).
 - Windows als Host geht auch (`py -m dsstream ...`, vorher `py -m playwright install chromium`); Windows-Firewall für UDP 7770 freigeben. Der Hotspot muss dann ein anderes offenes Gerät sein.

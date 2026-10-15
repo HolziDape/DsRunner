@@ -2,6 +2,7 @@
 # Builds DsRunner inside the pinned BlocksDS docker image (same as CI).
 # Usage: ./build.sh [make args]      e.g. ./build.sh clean
 #        ./build.sh package          build + SD package for the M3 DS Real in sd-package/
+#                                    (with DsRunner Stream from stream/ds in Games/Apps)
 #                                    (builds the Pico Loader from loader/ when needed, see loader/README.md)
 set -e
 
@@ -9,6 +10,8 @@ BLOCKSDS_IMAGE="${BLOCKSDS_IMAGE:-skylyrac/blocksds:slim-v1.16.0}"
 
 if [ "$1" = "package" ]; then
 	sh ./build.sh
+	# DsRunner Stream (experimental) goes into Games/Apps of the package, like in the release
+	sh stream/ds/build.sh
 	# packaging only downloads and copies files, so it runs outside the container
 	# (https from inside docker on WSL can be unreliable)
 	sh tools/make-sd-package.sh sd-package

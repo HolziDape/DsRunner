@@ -109,7 +109,7 @@ def subnet_broadcast(ip: str) -> str:
 class StreamServer(asyncio.DatagramProtocol):
     def __init__(self, browser, mapping: Mapping, mode: int, *, port: int = P.DEFAULT_PORT,
                  name: str | None = None, palette: str = "adaptive", use_lz4: bool = True,
-                 max_fps: float = 20.0, rate_kbs: float = 120.0, min_rate_kbs: float = 40.0,
+                 max_fps: float = 30.0, rate_kbs: float = 120.0, min_rate_kbs: float = 40.0,
                  max_rate_kbs: float = 220.0, stats_every: float = 5.0,
                  broadcast: bool = False, packet_size: int = P.MAX_CHUNK, noise: int = 0):
         self.browser = browser

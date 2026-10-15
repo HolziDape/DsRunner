@@ -37,7 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--bind", default="0.0.0.0", help="nur an dieser IP lauschen (dann klappt die automatische Suche nicht, "
                     "host= in stream.ini eintragen)")
     ap.add_argument("--name", default=None, help="Name, den der DS bei der Suche anzeigt")
-    ap.add_argument("--fps", type=float, default=20.0, help="hoechstens so viele Bilder pro Sekunde (Standard 20)")
+    ap.add_argument("--fps", type=float, default=30.0,
+                    help="hoechstens so viele Bilder pro Sekunde (Standard 30; DS Lite + Pi 5 schaffen etwa 18-25)")
     ap.add_argument("--rate", type=float, default=120.0, help="Start-Senderate in KB/s (Standard 120)")
     ap.add_argument("--min-rate", type=float, default=40.0, help="kleinste Senderate in KB/s")
     ap.add_argument("--max-rate", type=float, default=200.0, help="groesste Senderate in KB/s (Standard 200)")
@@ -58,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="groesste UDP-Paketgroesse in Bytes (Standard 1200, hoechstens 1272: der DS nimmt nur "
                          "IP-Pakete bis 1300 Byte an; bei Empfangsproblemen 1000 oder 600 probieren)")
     ap.add_argument("--jpeg", action="store_true",
-                    help="Chromium liefert die Bilder als JPEG statt PNG (auf dem Pi oft mehr Bilder pro Sekunde)")
+                    help="Chromium liefert die Bilder als JPEG statt PNG (optional; brachte im Test auf dem Pi 5 nichts)")
     ap.add_argument("--allow-popups", action="store_true",
                     help="neue Fenster/Pop-ups streamen statt sie zu schliessen (Standard: schliessen)")
     ap.add_argument("--chromium-arg", action="append", default=[], help="zusaetzliches Chromium-Argument")

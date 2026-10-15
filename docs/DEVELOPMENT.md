@@ -7,8 +7,10 @@ Voraussetzung: Docker (unter Windows in WSL2). Die Toolchain ist auf `skylyrac/b
 ```sh
 ./build.sh            # → DsRunner.nds
 ./build.sh clean
-./build.sh package    # Build + fertiges SD-Paket für die M3 DS Real in sd-package/
+./build.sh package    # Build + fertiges SD-Paket für die M3 DS Real in sd-package/ (mit DsRunner Stream)
 loader/build.sh       # Pico Loader mit DsRunner-Patches → loader/out/ (siehe unten)
+stream/ds/build.sh    # DsRunner Stream → stream/ds/DsRunnerStream.nds (siehe stream/README.md)
+stream/host/tools/make-host-bundle.sh   # DsRunnerStream-Host.zip für den Raspberry Pi
 ```
 
 Das SD-Paket (`tools/make-sd-package.sh`) enthält:
@@ -20,6 +22,7 @@ Das SD-Paket (`tools/make-sd-package.sh`) enthält:
 | `_pico/` | Themes aus diesem Repo + Pico Loader `M3DS`: standardmäßig der eigene Build aus `loader/out/` (mit Rückkehr aus Spielen, Infodatei `_pico/picoLoader-DsRunner.txt`), mit `DSRUNNER_LOADER=upstream` das unveränderte Release (Version und SHA-256 im Skript) |
 | `SYSTEM/g6dsload.*`, `boot.*`, `loader.eng`, `_system_/_sys_data/r4i.sys`, `SRESET.dat` | Autostart-Dateien der M3 DS Real aus dem TWiLight-Menu++-Release (Version und SHA-256 im Skript festgelegt) |
 | `_dsrunner/emulators/`, `snemul.cfg` | `tools/fetch-emulators.sh`: GBARunner2 (Release des Autors), nesDS, GameYob, SNEmulDS-legacy und `snemul.cfg` (Virtual-Console-Add-on von TWiLight Menu++), Versionen und SHA-256 im Skript; dazu `LIZENZEN.txt` und Lizenztexte aus `licenses/emulators/`. Kein GBA-BIOS. Dasselbe kommt auch in `DsRunner.zip` |
+| `Games/Apps/DsRunnerStream.nds` | DsRunner Stream (experimentell), nur wenn `stream/ds/build.sh` gelaufen ist; `./build.sh package` und die Release-CI bauen es immer mit. Dieselbe Datei kommt auch in `DsRunner.zip` |
 | `LIESMICH.txt` | kurze Anleitung (Installation, Emulatoren, Update, Zurück zu YSMenu) mit der Version |
 
 Autostart-Kette der M3 DS Real: Firmware → `SYSTEM/g6dsload.eng` → `_system_/_sys_data/r4i.sys` (Startprogramm von TWiLight mit M3-DLDI-Treiber) → `/_nds/TWiLightMenu/main.srldr`. Der Pfad ist im TWiLight-Startprogramm fest eingebaut. Später können wir ein eigenes Startprogramm bauen, das direkt `/DsRunner.nds` lädt.
