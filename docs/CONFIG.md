@@ -11,6 +11,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
   "lastUsedFilePath": "/Games/NDS/Cars GER.nds",
   "libraryPath": "/Games",
   "showClock": true,
+  "cleanNames": true,
   "inGameReset": true,
   "inGameResetKeys": "L+R+DOWN+B",
   "fileAssociations": {
@@ -27,6 +28,7 @@ DsRunner liest `/_pico/settings.json` auf der SD-Karte (das Format kommt von Pic
 | `romBrowserSortMode` | `NameAscending` (A–Z), `NameDescending` (Z–A), `LastPlayed` (zuletzt gespielt zuerst, siehe [Spielverlauf](#spielverlauf)). Ordner stehen immer vorne und sind nach Namen sortiert. `LastModified` von Pico ist nicht umgesetzt und sortiert wie A–Z. |
 | `lastUsedFilePath` | Zuletzt gestartetes Spiel, wird automatisch gesetzt. |
 | `showClock` | `true` (Standard): Uhrzeit oben rechts in der Statusleiste. `false`: nur die Akkuanzeige. Umschalten im Menü (Zahnrad → Uhr). Gilt nur im DsRunner-Theme. |
+| `cleanNames` | `true` (Standard): Spielnamen ohne die Zusätze von No-Intro und GoodTools, siehe [Spielnamen](#spielnamen). `false`: der Dateiname ohne Endung, sonst unverändert. |
 | `inGameReset` | `true` (Standard): im Spiel L+R+Unten+B 2 s halten führt zurück zu DsRunner (nur mit dem Pico Loader aus dem M3-Paket, siehe [LOADER.md](LOADER.md)). `false`: DsRunner legt vor jedem Spielstart `/_pico/igr.off` an, Pico Loader baut den Hotkey dann nicht ein. |
 | `inGameResetKeys` | Tasten für „zurück zu DsRunner“, Standard `"L+R+DOWN+B"`. Mit `+`, Komma oder Leerzeichen getrennt, Groß-/Kleinschreibung egal: `A`, `B`, `SELECT`, `START`, `UP`, `DOWN`, `LEFT`, `RIGHT`, `L`, `R` (auch `OBEN`, `UNTEN`, `LINKS`, `RECHTS`). Mindestens 3 Tasten, **X und Y gehen nicht**. Ungültig → Standard (steht im Log von DsRunner). Gut ohne L/R, z. B. bei ausgeleierten Schultertasten: `"SELECT+START+DOWN"` oder `"SELECT+DOWN+B"`. Nicht `L+R+START+SELECT`, das ist in vielen Spielen der eigene Soft-Reset. Weicht die Angabe vom Standard ab, schreibt DsRunner vor jedem Spielstart `/_pico/igr.keys` (sonst wird die Datei gelöscht); welche Tasten Pico Loader benutzt hat, steht in `/_pico/igr-log.txt`. |
 | `language` | Stammt von Pico Launcher und wird nicht ausgewertet. Die Oberfläche von DsRunner ist immer deutsch (siehe [Sprache](#sprache)). |
@@ -185,6 +187,34 @@ Für alle drei Ansichten zeigt der obere Bildschirm das [Artwork](#artworks) des
 ```
 
 DsRunner schreibt die Datei bei jedem Start eines Spiels. Ein Laufwerk vor dem Pfad (`fat:/Games/...`) wird ignoriert. Die Sortierung `LastPlayed` nutzt die Reihenfolge; Spiele, die nicht in der Liste stehen, folgen danach von A bis Z.
+
+### Spielstatistik
+
+Oben unter dem Namen des ausgewählten Spiels steht, wie oft es gestartet wurde und wann zuletzt, z. B. „12× gespielt · zuletzt gestern“ (auch „heute“, „vor 3 Tagen“, „am 03.10.“, aus einem anderen Jahr „am 24.12.2025“). Nie gestartete Spiele zeigen „Noch nie gespielt“, Spiele, die nur im Spielverlauf von früher stehen, „Schon gespielt“. Hat das Banner eines DS-Spiels drei Zeilen, steht die Statistik in der untersten Zeile vor dem Dateinamen. Die Spielzeit kann DsRunner nicht messen, es läuft während des Spiels nicht.
+
+Die Daten liegen in `/_dsrunner/stats.txt`, eine Zeile pro Spiel, das zuletzt gestartete zuerst (UTF-8, höchstens 500 Einträge, ältere fallen heraus):
+
+```
+/Games/NES/Zelda.nes|12|2026-10-14 18:30
+/Games/NDS/Mario Kart DS.nds|5|2026-10-12 20:05
+```
+
+Pfad, Anzahl der Starts (höchstens 9999) und Datum mit Uhrzeit des letzten Starts, getrennt durch `|` (kann in Dateinamen nicht vorkommen). Datum und Uhrzeit kommen von der Uhr des DS (Systemeinstellungen), ein leeres oder ungültiges Datum wird ignoriert. DsRunner schreibt die Datei bei jedem Spielstart, man kann sie aber auch von Hand bearbeiten oder löschen. `recent.txt` bleibt wie bisher und wird weiter für die Sortierung und [Weiterspielen](#weiterspielen) benutzt.
+
+## Spielnamen
+
+Spiele ohne DS-Banner (alle anderen Konsolen und DS-Homebrew ohne Banner) zeigt DsRunner oben mit dem Dateinamen ohne Endung: `Zelda.nes` erscheint als „Zelda“. Mit `"cleanNames": true` (Standard) fallen zusätzlich die Zusätze weg, mit denen No-Intro- und GoodTools-Sets Region, Sprachen und Dump-Status angeben:
+
+| Dateiname | angezeigt |
+|---|---|
+| `Mario Kart - Super Circuit (Europe).gba` | Mario Kart - Super Circuit |
+| `Golden Sun (Europe) (En,Fr,De).gba` | Golden Sun |
+| `Pokemon Emerald (U) [!].gba` | Pokemon Emerald |
+| `Legend of Zelda, The (USA) (Rev 1).nes` | Legend of Zelda, The (Rev 1) |
+
+Entfernt werden am Ende des Namens: Klammern `( )`, die nur Regionen (`USA`, `Europe`, `Japan`, `World`, `Germany`, … auch mehrere mit Komma), Sprachkürzel (`En,Fr,De`, `Zh-Hant`), GoodTools-Regionen (`U`, `E`, `J`, `JUE`, …) oder `M3`/`M5` enthalten, und alles in eckigen Klammern (`[!]`, `[b1]`, `[T+Ger]`). Andere Zusätze wie `(Rev 1)`, `(Beta)`, `(Proto)` oder `(Disc 1)` bleiben, damit man Versionen unterscheiden kann. Mit `"cleanNames": false` bleibt der Name bis auf die Endung, wie er ist.
+
+Das betrifft nur die Anzeige. Die unterste Zeile oben zeigt weiter den echten Dateinamen; Sortierung, Suche, Favoriten, Spielverlauf, Bilder (`/_dsrunner/art`, `/_dsrunner/tiles`) und Statistik benutzen den echten Dateinamen. Ordnernamen und die Titel aus DS-Bannern bleiben unverändert.
 
 ## Favoriten
 

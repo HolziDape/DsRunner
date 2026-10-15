@@ -15,6 +15,8 @@ public:
     String<char, 256> libraryPath = "/Games";
     /// DsRunner: show the clock in the status bar of the DsRunner theme.
     bool showClock = true;
+    /// DsRunner: show games without the No-Intro/GoodTools tags like "(Europe)" or "[!]" (only the shown name).
+    bool cleanNames = true;
     /// DsRunner: L+R+Down+B held for two seconds in a game returns to DsRunner (DsRunner Pico Loader).
     bool inGameReset = true;
     /// DsRunner: keys of the in-game reset, e.g. "SELECT+START+DOWN" (DsRunnerInGameResetKeys).

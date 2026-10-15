@@ -106,9 +106,14 @@ private:
     TCHAR _fileName[256] = { 0 };
     TaskQueueBase* _fileNameTaskQueue = nullptr;
     u32 _favoriteVersion = 0;
+    // "12× gespielt · zuletzt gestern" of the selected game, below the title or in the bottom line
+    char _playStatsText[64] = { 0 };
+    bool _playStatsOnFileNameLine = false;
 
     void RequestArt(const TCHAR* fileName);
     void UpdateFileNameLine();
+    void ShowPlayStats(TaskQueueBase* taskQueue);
+    void FormatPlayStats(char* text, u32 textSize) const;
     bool ShowGameCount(TaskQueueBase* taskQueue, const TCHAR* folderName);
 
     DsRunnerFileInfoCardView(const MaterialColorScheme* colorScheme, const IFontRepository* fontRepository,
